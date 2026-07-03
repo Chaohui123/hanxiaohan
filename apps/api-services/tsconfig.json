@@ -1,0 +1,15 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "outDir": "./dist",
+    "rootDir": "./src"
+  },
+  "include": ["src"],
+  "references": [
+    { "path": "../../packages/shared-types" },
+    { "path": "../../packages/ozon-api-wrapper" },
+    { "path": "../../packages/ai" },
+    { "path": "../../packages/scraper" },
+    { "path": "../../packages/validator" }
+  ]
+}

@@ -1,0 +1,29 @@
+{
+  "name": "onzo",
+  "version": "0.1.0",
+  "private": true,
+  "description": "ONZO - Ozon Russian cross-border e-commerce AI automation",
+  "scripts": {
+    "build": "tsc -b",
+    "build:watch": "tsc -b --watch",
+    "test": "vitest run",
+    "test:watch": "vitest",
+    "lint": "eslint packages/*/src apps/*/src",
+    "clean": "rm -rf packages/*/dist apps/*/dist",
+    "dev:api": "tsx watch apps/api-services/src/index.ts"
+  },
+  "devDependencies": {
+    "@types/cors": "^2.8.19",
+    "@types/express": "^5.0.6",
+    "@types/node": "^20.14.0",
+    "tsx": "^4.19.0",
+    "typescript": "^5.5.0",
+    "vitest": "^2.0.0"
+  },
+  "dependencies": {
+    "cors": "^2.8.6",
+    "dotenv": "^17.4.2",
+    "express": "^5.2.1",
+    "pino": "^10.3.1"
+  }
+}

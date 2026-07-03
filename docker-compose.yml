@@ -1,0 +1,50 @@
+version: "3.8"
+
+services:
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: onzo-n8n
+    ports:
+      - "5678:5678"
+    volumes:
+      - ./data/n8n:/home/node/.n8n
+      - ./n8n/workflows:/home/node/.n8n/workflows
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=${N8N_BASIC_AUTH_ACTIVE:-true}
+      - N8N_BASIC_AUTH_USER=${N8N_USER:-admin}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD:-onzo2026}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-changeMeToRandom32Characters!!}
+      - N8N_EXECUTIONS_DATA_PRUNE=true
+      - N8N_EXECUTIONS_DATA_MAX_AGE=168
+      - WEBHOOK_URL=http://localhost:5678/
+    restart: unless-stopped
+    networks:
+      - onzo-network
+    extra_hosts:
+      - "host.docker.internal:host-gateway"
+
+  api-services:
+    build:
+      context: .
+      dockerfile: docker/api-services/Dockerfile
+    container_name: onzo-api-services
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./data:/app/data
+      - ./logs:/app/logs
+    environment:
+      - NODE_ENV=${NODE_ENV:-development}
+      - PORT=3000
+      - OZON_CLIENT_ID=${OZON_CLIENT_ID}
+      - OZON_API_KEY=${OZON_API_KEY}
+      - GLM_API_KEY=${GLM_API_KEY}
+      - LOG_LEVEL=${LOG_LEVEL:-info}
+      - LOG_DIR=/app/logs
+    restart: unless-stopped
+    networks:
+      - onzo-network
+
+networks:
+  onzo-network:
+    driver: bridge

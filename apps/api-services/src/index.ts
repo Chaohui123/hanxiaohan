@@ -1,0 +1,65 @@
+// ============================================================
+// ONZO API Services — Express HTTP server
+// Phase 1: single-store MVP
+// ============================================================
+
+import express from "express";
+import cors from "cors";
+import { loadConfig } from "./config.js";
+import { correlationIdMiddleware } from "./middleware/correlation-id.js";
+import { errorHandler } from "./middleware/error-handler.js";
+import { createLogger } from "./middleware/logger.js";
+import { createHealthRouter } from "./routes/health.route.js";
+import { createTaskRouter } from "./routes/task.route.js";
+import { createProcessRouter } from "./routes/process.route.js";
+import { getDb } from "./db/connection.js";
+
+const config = loadConfig();
+const logger = createLogger(config);
+const app = express();
+
+// ---- Middleware ----
+app.use(cors());
+app.use(express.json({ limit: "10mb" }));
+app.use(correlationIdMiddleware);
+
+// ---- Routes ----
+app.use(createHealthRouter());
+
+// ---- Init DB & Queue ----
+async function start(): Promise<void> {
+  const db = await getDb().catch((err) => {
+    logger.warn({ err }, "DB not available — running without persistence");
+    return null;
+  });
+
+  // Dynamic import for task-queue (requires DB)
+  const { TaskQueue } = await import("./db/task-queue.js");
+  const taskQueue = new TaskQueue(db);
+  await taskQueue.init();
+  logger.info({ stats: taskQueue.getStats() }, "Task queue initialized");
+
+  // Mount task routes (depends on queue)
+  app.use("/api/task", createTaskRouter(taskQueue));
+
+  // Mount process routes
+  app.use("/api", createProcessRouter(config, taskQueue));
+
+  // ---- Error handling ----
+  app.use(errorHandler);
+
+  // ---- Start ----
+  app.listen(config.port, () => {
+    logger.info(`ONZO API Services running on http://localhost:${config.port}`);
+    logger.info(`Environment: ${config.nodeEnv}`);
+  });
+}
+
+start().catch((err) => {
+  logger.fatal({ err }, "Failed to start server");
+  process.exit(1);
+});
+
+// Note: routes are mounted asynchronously via start().
+// Do not import this module for programmatic use — use a child process or Docker.
+export { app };
