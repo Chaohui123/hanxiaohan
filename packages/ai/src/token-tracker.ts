@@ -80,10 +80,11 @@ export class TokenTracker {
     return this.getTodayUsage() >= this.dailyLimit;
   }
 
-  /** Reset today's counter (for testing). */
+  /** Reset today's counter and unblock (for testing/admin). */
   resetToday(): void {
     const date = new Date().toISOString().split("T")[0];
     this.dailyUsage.delete(date);
+    this.blocked = false;
   }
 }
 

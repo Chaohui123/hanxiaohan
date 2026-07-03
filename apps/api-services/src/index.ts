@@ -18,6 +18,8 @@ import { createOrderRouter } from "./routes/order.route.js";
 import { createWebhookRouter } from "./routes/webhook.route.js";
 import { createBulkRouter } from "./routes/bulk.route.js";
 import { createDashboardRouter } from "./routes/dashboard.route.js";
+import { timeoutMiddleware } from "./middleware/timeout.js";
+import { idempotencyMiddleware } from "./middleware/idempotency.js";
 import { mockMiddleware } from "./routes/mock.middleware.js";
 import { swaggerSpec } from "./swagger.js";
 import { getDb } from "./db/connection.js";
@@ -35,8 +37,10 @@ const app = express();
 // ---- Middleware ----
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
+app.use(timeoutMiddleware(120_000));
 app.use(correlationIdMiddleware);
-app.use(mockMiddleware); // ENV=dev: mock all external APIs
+app.use(idempotencyMiddleware);
+app.use(mockMiddleware);
 
 // ---- Routes ----
 app.use(createHealthRouter());
