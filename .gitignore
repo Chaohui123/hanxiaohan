@@ -16,3 +16,4 @@ server.log
 *.log
 
 
+packages/ozon-order/tests/sync.integration.test.ts
