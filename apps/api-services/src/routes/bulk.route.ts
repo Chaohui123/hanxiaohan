@@ -115,7 +115,117 @@ export function createBulkRouter(taskQueue: TaskQueue): Router {
     }
   });
 
+  // POST /api/bulk/import/csv — CSV text or file upload
+  router.post("/bulk/import/csv", async (req, res) => {
+    try {
+      const { csvText, fileBase64 } = req.body as { csvText?: string; fileBase64?: string };
+
+      let raw: string;
+      if (fileBase64) {
+        raw = Buffer.from(fileBase64, "base64").toString("utf-8");
+      } else if (csvText) {
+        // Handle both literal \n and actual newlines
+        raw = csvText.replace(/\\n/g, "\n");
+      } else {
+        res.status(400).json({
+          success: false, error: { code: "MISSING_DATA", message: "csvText or fileBase64 required", retryable: false },
+          correlationId: req.correlationId,
+        });
+        return;
+      }
+
+      // Parse CSV (simple line-by-line, handles quoted fields)
+      const lines = raw.split(/\r?\n/).filter((l) => l.trim());
+      if (lines.length < 2) {
+        res.status(400).json({
+          success: false, error: { code: "EMPTY_CSV", message: "CSV must have header + at least 1 data row", retryable: false },
+          correlationId: req.correlationId,
+        });
+        return;
+      }
+
+      const headers = parseCSVLine(lines[0]);
+      const titleIdx = headers.findIndex((h) => ["标题","title","Title","商品名称"].includes(h));
+      const priceIdx = headers.findIndex((h) => ["价格(元)","priceCny","price","价格"].includes(h));
+      const imagesIdx = headers.findIndex((h) => ["图片URL","specImages","images","图片"].includes(h));
+      const specsIdx = headers.findIndex((h) => ["规格","specifications","specs"].includes(h));
+      const descIdx = headers.findIndex((h) => ["描述","descriptionText","description","描述"].includes(h));
+
+      if (titleIdx < 0 || priceIdx < 0) {
+        res.status(400).json({
+          success: false, error: { code: "MISSING_COLUMNS", message: "CSV must have 标题 + 价格(元) columns", retryable: false },
+          correlationId: req.correlationId,
+        });
+        return;
+      }
+
+      const products: Array<{ title: string; priceCny: number; specImages: string[]; specifications?: Array<{ name: string; value: string }>; descriptionText?: string }> = [];
+
+      for (let i = 1; i < lines.length && products.length < 100; i++) {
+        const cols = parseCSVLine(lines[i]);
+        const title = cols[titleIdx]?.trim();
+        const price = parseFloat(cols[priceIdx] || "0");
+        if (!title || price <= 0) continue;
+
+        const images = imagesIdx >= 0 ? cols[imagesIdx]?.split(/[,;\s]+/).filter(Boolean) || [] : [];
+
+        let specs: Array<{ name: string; value: string }> = [];
+        if (specsIdx >= 0 && cols[specsIdx]) {
+          specs = cols[specsIdx].split(/[;；]/).filter(Boolean).map((s) => {
+            const [n, v] = s.split(/[:：]/);
+            return { name: n?.trim() || "", value: v?.trim() || "" };
+          });
+        }
+
+        products.push({
+          title,
+          priceCny: price,
+          specImages: images as string[],
+          specifications: specs,
+          descriptionText: descIdx >= 0 ? cols[descIdx]?.trim() : title,
+        });
+      }
+
+      if (!products.length) {
+        res.status(400).json({
+          success: false, error: { code: "NO_VALID_ROWS", message: "No valid products after CSV parsing", retryable: false },
+          correlationId: req.correlationId,
+        });
+        return;
+      }
+
+      const taskIds = await enqueueProducts(products, taskQueue, req.correlationId);
+
+      res.status(202).json({
+        success: true,
+        data: { enqueued: taskIds.length, totalRows: lines.length - 1, validRows: products.length, taskIds },
+        correlationId: req.correlationId,
+      });
+    } catch (err) {
+      res.status(500).json({
+        success: false,
+        error: { code: "CSV_PARSE_FAILED", message: (err as Error).message, retryable: false },
+        correlationId: req.correlationId,
+      });
+    }
+  });
+
   return router;
+}
+
+/** Parse a single CSV line, respecting quoted fields */
+function parseCSVLine(line: string): string[] {
+  const result: string[] = [];
+  let current = "";
+  let inQuotes = false;
+
+  for (const ch of line) {
+    if (ch === '"') { inQuotes = !inQuotes; continue; }
+    if (ch === "," && !inQuotes) { result.push(current.trim()); current = ""; continue; }
+    current += ch;
+  }
+  result.push(current.trim());
+  return result;
 }
 
 async function enqueueProducts(
@@ -125,15 +235,19 @@ async function enqueueProducts(
 ): Promise<string[]> {
   const taskIds: string[] = [];
   for (const p of products) {
-    // Split comma-separated image URLs
-    const specImages = p.specImages
-      ? p.specImages.split(/[,;\n]+/).map((s) => s.trim()).filter(Boolean)
-      : [] as string[];
+    // Handle both string (xlsx) and array (csv) input
+    const specImages: string[] = Array.isArray(p.specImages)
+      ? (p.specImages as unknown as string[])
+      : typeof p.specImages === "string"
+      ? p.specImages.split(/[,;\n]+/).map((s: string) => s.trim()).filter(Boolean)
+      : [];
 
-    const specifications = p.specifications
+    const specifications: Array<{ name: string; value: string }> = Array.isArray(p.specifications)
+      ? (p.specifications as unknown as Array<{ name: string; value: string }>).filter((s) => s.name)
+      : typeof p.specifications === "string"
       ? p.specifications.split(/[;；\n]+/).map((s) => s.trim()).filter(Boolean)
           .map((s) => { const [name, value] = s.split(/[:：]/); return { name: name?.trim() || "", value: value?.trim() || "" }; })
-      : [] as Array<{ name: string; value: string }>;
+      : [];
 
     const queued = await taskQueue.enqueue({
       type: "batch_listing",

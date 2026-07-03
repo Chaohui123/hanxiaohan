@@ -44,15 +44,18 @@ export class InventoryManager {
 
   async deduct(postingNumber: string, items: StockItem[]): Promise<DeductResult> {
     for (const item of items) {
-      const record = await this.db.all<InventoryRecord>(
-        "SELECT stock_available, stock_reserved FROM inventory WHERE offer_id = ? AND sku = ?",
+      const rows = await this.db.all<Record<string, unknown>>(
+        "SELECT stock_available, stock_reserved, stockAvailable, stockReserved FROM inventory WHERE offer_id = ? AND sku = ?",
         [item.offerId, item.sku]
       );
-      if (!record.length || record[0].stockAvailable < item.quantity) {
+      const row = rows[0];
+      const stockAvailable = row?.stock_available ?? row?.stockAvailable ?? row?.avail ?? 0;
+      const stockReserved = row?.stock_reserved ?? row?.stockReserved ?? row?.reserved ?? 0;
+      if (!row || stockAvailable < item.quantity) {
         return { success: false, reason: `Insufficient stock for ${item.offerId}:${item.sku}` };
       }
-      const na = record[0].stockAvailable - item.quantity;
-      const nr = record[0].stockReserved + item.quantity;
+      const na = (stockAvailable as number) - item.quantity;
+      const nr = (stockReserved as number) + item.quantity;
       await this.db.run("UPDATE inventory SET stock_available=?, stock_reserved=?, updated_at=datetime('now') WHERE offer_id=? AND sku=?", [na, nr, item.offerId, item.sku]);
       await this.db.run("INSERT INTO stock_movements (posting_number,offer_id,sku,quantity,type,created_at) VALUES (?,?,?,?,'deduct',datetime('now'))", [postingNumber, item.offerId, item.sku, -item.quantity]);
     }

@@ -20,6 +20,7 @@ import { createBulkRouter } from "./routes/bulk.route.js";
 import { createDashboardRouter } from "./routes/dashboard.route.js";
 import { createPriceRouter } from "./routes/price.route.js";
 import { createStoreRouter } from "./routes/store.route.js";
+import { createDashboardHtmlRouter } from "./routes/dashboard-html.route.js";
 import { timeoutMiddleware } from "./middleware/timeout.js";
 import { idempotencyMiddleware } from "./middleware/idempotency.js";
 import { mockMiddleware } from "./routes/mock.middleware.js";
@@ -51,6 +52,9 @@ app.use("/api", createBackupRouter());
 app.use("/api", createWebhookRouter());
 app.use("/api", createPriceRouter());
 app.use("/api", createStoreRouter());
+
+// ---- HTML Dashboard (GET /) ----
+app.use(createDashboardHtmlRouter());
 
 // ---- Swagger docs ----
 await loadSwagger();
