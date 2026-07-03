@@ -20,6 +20,7 @@ import { createBulkRouter } from "./routes/bulk.route.js";
 import { createDashboardRouter } from "./routes/dashboard.route.js";
 import { createPriceRouter } from "./routes/price.route.js";
 import { createStoreRouter } from "./routes/store.route.js";
+import { createStoreAdminRouter } from "./routes/store-admin.route.js";
 import { createDashboardHtmlRouter } from "./routes/dashboard-html.route.js";
 import { timeoutMiddleware } from "./middleware/timeout.js";
 import { idempotencyMiddleware } from "./middleware/idempotency.js";
@@ -52,6 +53,7 @@ app.use("/api", createBackupRouter());
 app.use("/api", createWebhookRouter());
 app.use("/api", createPriceRouter());
 app.use("/api", createStoreRouter());
+app.use("/api", createStoreAdminRouter());
 
 // ---- HTML Dashboard (GET /) ----
 app.use(createDashboardHtmlRouter());
