@@ -42,6 +42,7 @@ export interface ProcessedProduct {
 
   // From GLM category matching
   categoryId: number;
+  categoryTypeId?: number;
   categoryName: string;
   categoryPath: string[];
   attributes: Array<{

@@ -13,7 +13,7 @@ import type {
 
 /** Raw API response item shapes */
 interface OzonProductInfoApi { id: number; offer_id: string; name: string; status: string; images: string[]; category_id: number; price: string; commissions?: { sales_percent_fbo?: number } }
-interface OzonCategoryApi { category_id: number; title: string; children?: OzonCategoryApi[] }
+interface OzonCategoryApi { description_category_id: number; category_name: string; type_name?: string; type_id?: number; disabled?: boolean; children?: OzonCategoryApi[] }
 interface OzonAttributeApi { id: number; name: string; description: string; type: string; is_required: boolean; is_collection: boolean; dictionary?: Array<{ id: number; value: string }> }
 interface OzonUploadApi { id: number | string; file_name?: string; url?: string }
 
@@ -102,10 +102,11 @@ export class OzonClient {
           name: product.name,
           description: product.description,
           category_id: product.categoryId,
-          price: product.price.toFixed(2),
+          type_id: product.typeId ?? product.categoryId,
+          price: typeof product.price === "number" ? product.price.toFixed(2) : String(product.price),
           old_price: product.oldPrice
-            ? product.oldPrice.toFixed(2)
-            : (Math.round(product.price * 1.3 * 100) / 100).toFixed(2),
+            ? (typeof product.oldPrice === "number" ? product.oldPrice.toFixed(2) : String(product.oldPrice))
+            : (typeof product.price === "number" ? (Math.round(product.price * 1.3 * 100) / 100).toFixed(2) : String(Math.round((parseFloat(String(product.price)) || 0) * 1.3 * 100) / 100)),
           vat: product.vat,
           images: product.specImageUrls,
           attributes: product.attributes,

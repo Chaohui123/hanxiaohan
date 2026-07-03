@@ -24,6 +24,7 @@ export interface PipelineContext {
   ocrTexts?: string[];
   translated?: TranslationResult;
   category?: CategoryMatchResult;
+  categoryTree?: OzonCategoryNode[];
   attributes?: Array<{ attributeId: number; name: string; value: string | number | string[] }>;
   processed?: ProcessedProduct;
   imageIds?: string[];
@@ -189,11 +190,17 @@ export async function stepCreateDraft(
   processed: ProcessedProduct
 ): Promise<{ productId: number; offerId: string }> {
   try {
+    // Resolve type_id from the category tree (leaf nodes have type_id for product/import)
+    const resolvedTypeId = processed.categoryTypeId
+      || (ctx.categoryTree ? findLeafTypeId(ctx.categoryTree, processed.categoryId) : null)
+      || processed.categoryId;
+
     const draftInput = {
       name: processed.titleRu,
       description: processed.descriptionRu,
       categoryId: processed.categoryId,
-      price: processed.priceRub.toFixed(2),
+      typeId: resolvedTypeId,
+      price: processed.priceRub,
       vat: "0" as const,
       images: processed.specImageUrls, // 1688 URLs — Ozon downloads directly
       attributes: processed.attributes.map((a) => ({
@@ -276,6 +283,29 @@ export async function recordPipelineFailure(
 /**
  * Record pipeline success to the listing_records table.
  */
+/** Recursively find the leaf type_id for a description_category_id. */
+export function findLeafTypeId(
+  nodes: OzonCategoryNode[],
+  targetCategoryId: number
+): number | null {
+  for (const node of nodes) {
+    if (node.categoryId === targetCategoryId) {
+      // If this node has typeId, return it; otherwise search children
+      if (node.typeId) return node.typeId;
+      // Search children for a leaf with typeId
+      for (const child of node.children) {
+        const found = findLeafTypeId([child], child.categoryId);
+        if (found) return found;
+      }
+    }
+    if (node.children.length > 0) {
+      const found = findLeafTypeId(node.children, targetCategoryId);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
 export async function recordPipelineSuccess(ctx: PipelineContext): Promise<void> {
   await saveListingRecord({
     id: ctx.taskId,

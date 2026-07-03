@@ -214,6 +214,7 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
         throw err;
       }
       const category = await stepMatchCategory(ctx, deepseekTranslator, scraped, categoryTree);
+      ctx.categoryTree = categoryTree;
 
       let requiredAttributes: Awaited<ReturnType<OzonClient["getCategoryAttributes"]>> = [];
       if (category.categoryId > 0) {
@@ -316,6 +317,7 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
         throw err;
       }
       const category = await stepMatchCategory(ctx, deepseekTranslator, scraped, categoryTree);
+      ctx.categoryTree = categoryTree;
 
       let requiredAttributes: Awaited<ReturnType<OzonClient["getCategoryAttributes"]>> = [];
       if (category.categoryId > 0) {

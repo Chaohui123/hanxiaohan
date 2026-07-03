@@ -9,10 +9,11 @@ export interface OzonCredentials {
 }
 
 export interface OzonDraftInput {
-  name: string; // title in Russian
+  name: string;
   description: string;
   categoryId: number;
-  price: number; // in RUB (decimal, e.g. 1500.00)
+  typeId?: number;
+  price: number | string;
   oldPrice?: number;
   vat: string; // "0" | "0.1" | "0.2"
   images: string[]; // 1688 image URLs — Ozon downloads directly
@@ -44,6 +45,7 @@ export interface OzonImageUploadResult {
 export interface OzonCategoryNode {
   categoryId: number;
   title: string;
+  typeId?: number; // leaf nodes have type_id for product/import
   children: OzonCategoryNode[];
 }
 
