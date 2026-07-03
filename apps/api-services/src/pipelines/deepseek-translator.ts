@@ -71,11 +71,54 @@ export class DeepSeekTranslator {
     console.log("[DeepSeek] Category match response content:", response.content.substring(0, 200));
     if (response.parsed) {
       console.log("[DeepSeek] Parsed category:", response.parsed.categoryId, response.parsed.categoryName);
-      return response.parsed;
+
+      // Validate categoryId is a real positive number
+      if (response.parsed.categoryId > 0) {
+        return response.parsed;
+      }
+
+      // categoryId=0 — retry once with stronger prompt
+      console.warn("[DeepSeek] categoryId=0 on first attempt, retrying...");
+      return await this.retryMatchCategory(product, categoryTree);
     }
 
     console.warn("[DeepSeek] Failed to parse category match. Raw:", response.content.substring(0, 300));
     return { categoryId: 0, categoryName: "Unknown", categoryPath: [], confidence: 0, reasoning: "Failed to parse" };
+  }
+
+  /** Retry category match with a stricter prompt when first attempt returns 0. */
+  private async retryMatchCategory(
+    product: { title: string; categoryPath?: string[]; specifications: Array<{ name: string; value: string }> },
+    categoryTree: OzonCategoryNode[]
+  ): Promise<CategoryMatchResult> {
+    const treePreview = formatCategoryTree(categoryTree as Array<{ categoryId: number; title: string; children: unknown[] }>);
+
+    // Truncate tree for retry to avoid token limits
+    const shortTree = treePreview.split("\n").slice(0, 100).join("\n");
+
+    const strictPrompt = `Previous attempt returned categoryId=0. This is INVALID.
+Pick a REAL category ID from [brackets] in the tree below.
+Product: ${product.title}
+Tree (first 100 lines):\n${shortTree}\n\nReturn JSON with a valid categoryId (NOT 0):`;
+
+    const response = await this.client.chatCompletion<CategoryMatchResult>({
+      model: "flash",
+      messages: [
+        { role: "system", content: "You are an Ozon category specialist. Return a REAL numeric categoryId from the tree. Never return 0." },
+        { role: "user", content: strictPrompt },
+      ],
+      temperature: 0.1,
+      maxTokens: 4000,
+      responseFormat: { type: "json_object" },
+    });
+
+    if (response.parsed?.categoryId && response.parsed.categoryId > 0) {
+      console.log("[DeepSeek] Retry successful, categoryId:", response.parsed.categoryId);
+      return response.parsed;
+    }
+
+    console.error("[DeepSeek] Retry also failed. categoryId:", response.parsed?.categoryId ?? "undefined");
+    return { categoryId: 0, categoryName: "Unknown", categoryPath: [], confidence: 0, reasoning: "Retry failed — manual review needed" };
   }
 
   async fillAttributes(

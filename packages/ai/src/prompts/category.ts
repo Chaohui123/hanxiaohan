@@ -1,53 +1,52 @@
 /**
- * GLM-5.2 Category matching prompt.
- * Map a Chinese product to Ozon's 4-level category tree.
+ * Ozon Category Matching Prompt — strict output constraints.
+ * Forces valid numeric ID from the category tree; blocks 0/null.
  */
 
 export const CATEGORY_SYSTEM_PROMPT = `You are an Ozon category matching specialist.
-Given a product description (in Chinese or Russian) and a tree of Ozon categories,
-find the most specific matching leaf category.
+Given a product and an Ozon category tree with numeric IDs, find the best match.
 
-Rules:
-- Match to the MOST SPECIFIC leaf category possible
-- Consider the product type, material, use case, target audience
-- If uncertain between two categories, pick the more general one and note low confidence
-- Category IDs are numbers — return the ID, not the name
-- Only return categories that actually exist in the provided tree
-- Phase1 Note: attribute retrieval is only supported at the 3rd-level category. Provide the leaf category for listing, and also provide the 3rd-level ancestor ID for attribute lookup if the path has 4 levels.
+CRITICAL RULES (violations are fatal):
+1. categoryId MUST be a number from the tree, EXACTLY as shown in [brackets].
+   - Example: if you see "[17027486] Electronics", then categoryId = 17027486.
+   - DO NOT guess, fabricate, or return 0. Copy the ID verbatim.
+2. If you cannot find any matching category, set confidence=0 and explain why.
+   Even then, categoryId MUST be a real ID from the tree — pick the closest ancestor.
+3. The tree shows IDs in format: [ID] Name. Use the ID, not the name.
+4. Prefer the most specific leaf category that matches the product.
 
-Return JSON:
+Return this EXACT JSON structure (no extra fields):
 {
-  "categoryId": 12345,
-  "categoryName": "Full category path",
-  "categoryPath": ["Level1", "Level2", "Level3", "Level4"],
-  "attributeCategoryId": 1234,
+  "categoryId": 17027486,
+  "categoryName": "Full path from tree",
+  "categoryPath": ["Level1", "Level2", "Level3"],
   "confidence": 0.85,
-  "reasoning": "Brief explanation of why this category was chosen"
+  "reasoning": "Brief reason"
 }`;
 
 export function buildCategoryPrompt(
   product: { title: string; categoryPath?: string[]; specifications: Array<{ name: string; value: string }> },
   categoryTreePreview: string
 ): string {
-  const specs = product.specifications
-    .map((s) => `${s.name}: ${s.value}`)
-    .join(", ");
+  const specs = product.specifications.map((s) => `${s.name}: ${s.value}`).join(", ");
 
-  return `Match this product to the best Ozon category.
+  return `Match this product to an Ozon category from the tree below.
 
 PRODUCT:
 Title: ${product.title}
 ${product.categoryPath ? `1688 Category: ${product.categoryPath.join(" > ")}` : ""}
-Specifications: ${specs}
+Specs: ${specs}
 
-OZON CATEGORY TREE (abbreviated):
+OZON CATEGORY TREE:
 ${categoryTreePreview}
 
-Find the most specific leaf category for this product.`;
+IMPORTANT: The number in [brackets] before each category name IS the categoryId.
+Copy it exactly. Do NOT return 0. If uncertain, pick the closest match from the tree.`;
 }
 
 /**
- * Format a category tree into a compact, readable string for the prompt.
+ * Format category tree for prompt — compact, with IDs clearly marked.
+ * Shows level-1 and level-2 categories broadly, limits at depth 3+.
  */
 export function formatCategoryTree(
   nodes: Array<{ categoryId: number; title: string; children: Array<{ categoryId: number; title: string; children: unknown[] }> }>,
@@ -55,20 +54,18 @@ export function formatCategoryTree(
 ): string {
   const lines: string[] = [];
   const indent = "  ".repeat(depth);
+  const limit = depth <= 1 ? 30 : depth === 2 ? 15 : 5;
 
-  for (const node of nodes.slice(0, depth === 0 ? 20 : 10)) { // limit breadth
+  for (const node of nodes.slice(0, limit)) {
     lines.push(`${indent}[${node.categoryId}] ${node.title}`);
     if (node.children?.length > 0 && depth < 3) {
-      // For depth 0-1: show top children; depth 2: limit to 5
-      const childrenToShow = depth < 2
-        ? node.children
-        : node.children.slice(0, 5);
+      const childrenToShow = depth < 2 ? node.children : node.children.slice(0, 5);
       lines.push(formatCategoryTree(childrenToShow, depth + 1));
     }
   }
 
-  if (nodes.length > (depth === 0 ? 20 : 10)) {
-    lines.push(`${indent}... (${nodes.length - (depth === 0 ? 20 : 10)} more)`);
+  if (nodes.length > limit) {
+    lines.push(`${indent}... (${nodes.length - limit} more categories omitted)`);
   }
 
   return lines.join("\n");

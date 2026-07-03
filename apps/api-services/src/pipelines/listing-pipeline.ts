@@ -116,6 +116,14 @@ export async function stepMatchCategory(
       categoryTree
     );
     const attributeCategoryId = findAttributeCategoryId(categoryTree, match.categoryId);
+
+    // Block-level check: if categoryId is still 0 after retry, log fatal error
+    if (match.categoryId <= 0) {
+      const msg = `Category matching returned invalid ID (0) after retry — blocking pipeline`;
+      ctx.errors.push({ step: "category", message: msg });
+      throw new Error(msg);
+    }
+
     ctx.category = { ...match, attributeCategoryId };
     return ctx.category;
   } catch (err) {
