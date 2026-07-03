@@ -5,7 +5,7 @@
 import { Router } from "express";
 import { OzonOrderClient } from "@onzo/ozon-order";
 import { getDb } from "../db/connection.js";
-import type { LocalOrder, OzonPosting } from "@onzo/shared-types";
+import type { LocalOrder, OzonPosting, OzonOrderStatus } from "@onzo/shared-types";
 import type { OzonClient } from "@onzo/ozon-api-wrapper";
 
 export function createOrderRouter(ozonClient: OzonClient): Router {
@@ -16,10 +16,15 @@ export function createOrderRouter(ozonClient: OzonClient): Router {
   router.post("/orders/sync", async (req, res) => {
     const { status, since, until } = req.body as { status?: string; since?: string; until?: string };
 
+    const validStatuses: OzonOrderStatus[] = ["awaiting_packaging", "awaiting_deliver", "delivering", "delivered", "cancelled"];
+    const orderStatus: OzonOrderStatus | undefined = validStatuses.includes(status as OzonOrderStatus)
+      ? (status as OzonOrderStatus) : undefined;
+
     try {
+      const filter = { status: orderStatus, since, until, limit: 50 };
       const [fbsOrders, fboOrders] = await Promise.all([
-        orderClient.listPostings({ status: status as any, since, until, limit: 50 }),
-        orderClient.listFboPostings({ status: status as any, since, until, limit: 50 }).catch(() => [] as OzonPosting[]),
+        orderClient.listPostings(filter),
+        orderClient.listFboPostings(filter).catch(() => [] as OzonPosting[]),
       ]);
 
       const allOrders = [...fbsOrders, ...fboOrders];

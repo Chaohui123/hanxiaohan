@@ -38,6 +38,38 @@ Output: { success: true, titleRu, categoryName, priceRub, imagesUploaded }
 - [ ] Ozon 订单同步 (packages/ozon-order)
 - [ ] 物流履约校验 + 库存扣减
 
+#### P1 订单迭代任务清单（细化）
+- [ ] 初始化 `packages/ozon-order` 包结构，包含 `client`, `sync`, `webhook`, `tests` 子模块
+- [ ] 复用 `packages/ozon-api-wrapper` 的 `AuthManager` / 限流逻辑，支持多店铺凭证
+- [ ] 实现订单同步（分页游标），支持 `ORDER_SYNC_PAGE_SIZE` 配置与抖动
+- [ ] 设计并实现幂等处理：以 `storeId:orderId` 为幂等键记录处理状态（数据库唯一索引）
+- [ ] 库存扣减在事务内完成，失败回滚并写入死信队列
+- [ ] 提供手工/自动重跑接口，支持对死信订单批量重试
+- [ ] 实现 webhook 消费逻辑（事件去重、签名校验、脱敏日志）
+- [ ] 单元 + 集成测试：模拟 Ozon 成功/429/5xx/重复事件场景
+- [ ] 本地 Mock 服务（ENV=dev）用于开发、CI 不调用线上接口
+- [ ] 安全审计：日志脱敏规则、权限白名单、错误上报策略文档化
+
+#### 分支与自测建议
+1. 新建独立功能分支以隔离开发：
+
+```powershell
+git checkout -b feature/p1-ozon-order-sync
+```
+
+2. 本地自测步骤（建议）：
+- 安装依赖并运行单元测试： `pnpm install && pnpm -w test --filter packages/ozon-order`
+- 启动 dev 环境（Mock 模式）：`ENV=dev pnpm --filter apps/api-services dev`
+- 运行集成测试：使用提供的 Mock 服务模拟 Ozon 返回场景
+
+3. 合并规范：完成自测 + 全量 44 测试通过 + 新增订单测试通过后提交 PR，进行代码评审并合入 `master`。
+
+#### 前置提醒（规避踩坑）
+1. 订单接口同样需要 `Client-Id + Api-Key` 鉴权，复用现有多店铺密钥逻辑
+2. 订单同步增加幂等设计，避免重复拉取重复扣减库存
+3. 拉取订单接口做分页限流，防止高频调用触发 Ozon 风控封禁店铺
+4. 开发环境自动 Mock 订单接口，不请求线上真实订单数据
+
 ### P2 (体验优化)
 - [ ] n8n Token 监控/备份巡检工作流
 - [ ] Excel 批量铺货
