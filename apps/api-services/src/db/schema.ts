@@ -83,6 +83,27 @@ export async function initSchema(db: Database): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_orders_status ON local_orders(status);
     CREATE INDEX IF NOT EXISTS idx_orders_posting ON local_orders(posting_number);
 
+    -- Inventory management
+    CREATE TABLE IF NOT EXISTS inventory (
+      offer_id TEXT NOT NULL,
+      sku INTEGER NOT NULL,
+      stock_available INTEGER DEFAULT 0,
+      stock_reserved INTEGER DEFAULT 0,
+      updated_at TEXT DEFAULT (datetime('now')),
+      PRIMARY KEY (offer_id, sku)
+    );
+
+    CREATE TABLE IF NOT EXISTS stock_movements (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      posting_number TEXT NOT NULL,
+      offer_id TEXT NOT NULL,
+      sku INTEGER NOT NULL,
+      quantity INTEGER NOT NULL,
+      type TEXT NOT NULL CHECK(type IN ('deduct', 'restore', 'confirm')),
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_stock_mov_posting ON stock_movements(posting_number);
+
     -- Token usage tracking (LLM cost monitoring)
     CREATE TABLE IF NOT EXISTS token_usage (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
