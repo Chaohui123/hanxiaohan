@@ -188,3 +188,19 @@
 3. 本地二进制图片上传域名固定为 upload.ozon.ru，端点 /v1/upload，不可使用api-seller域名传文件
 4. 铺货流水线优先使用URL导入接口，减少本地文件上传开销
 5. 所有图片接口统一封装至 ozon-api-wrapper，内置URL校验、图片格式拦截、重试限流
+
+## 本次E2E验证新增强制约束
+1. Ozon接口固定可用端点
+   - 类目树：仅使用 /v1/description-category/tree，禁止 /v3/category/tree（404）
+   - 商品图片外链导入：POST /v1/product/pictures/import，废弃所有 /media/upload 路径
+   - 本地文件上传域名 upload.ozon.ru/v1/upload，不可复用api-seller域名
+2. DeepSeek v4 输出兼容逻辑
+   解析模型返回优先读取content，为空时自动降级读取reasoning_content提取结构化内容
+3. 定价换算规则
+   人民币转卢布公式：售价 = 成本 × 汇率 × 利润率，禁止额外 *100 放大倍率
+4. 资源池管控
+   所有爬虫抓取统一走BrowserPool实例，手动输入场景不可绕过浏览器池限流、回收逻辑
+5. 测试覆盖强制要求
+   ai/validator/scraper模块必须配套单元测试，新增功能同步补充Vitest用例
+6. 降级机制
+   所有外部API（LLM/Ozon/爬虫）必须引入fallback.ts降级逻辑，失败不直接中断全链路

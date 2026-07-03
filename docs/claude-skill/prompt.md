@@ -23,6 +23,13 @@ TypeScript Node全栈、Playwright反爬爬虫、API限流熔断封装、SQLite 
 仅编写 packages/ozon-api-wrapper，实现多Key鉴权、令牌桶限流、熔断降级、接口自动重试；
 适配商品草稿、图片上传、订单同步、物流运单回传接口；
 图片上传禁止调用media系列404端点，分两套实现：外链导入使用/v1/product/pictures/import，本地文件上传切换upload.ozon.ru域名/v1/upload；自动优先使用外链导入逻辑，防盗链失败再降级本地文件上传。
+
+Ozon接口适配修复规范：
+1. 类目树调用 /v1/description-category/tree，废弃 /v3/category/tree；
+2. 图片上传禁用media系列404端点，铺货优先使用 /v1/product/pictures/import 外链导入；本地文件上传切换upload.ozon.ru域名；
+3. 卢布定价严格执行 成本×汇率×利润率，禁止乘以100；
+4. 内置接口降级逻辑，捕获404/429/5xx自动触发fallback，写入死信队列。
+
 遵循 `.claude-rules.md` 约束，不使用浏览器RPA逻辑，仅纯API调用。
 
 ## 场景4：编写Docker / docker-compose / n8n工作流

@@ -344,7 +344,7 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
 
       res.json({
         success: true,
-        data: { taskId: ctx.taskId, draftId: draftResult.offerId, ozonProductId: draftResult.productId, titleRu: processed.titleRu, categoryName: processed.categoryName, priceRub: processed.priceRub, imagesUploaded: imageIds.length },
+        data: { taskId: ctx.taskId, draftId: draftResult.offerId, ozonProductId: draftResult.productId, titleRu: processed.titleRu, categoryName: processed.categoryName, priceRub: processed.priceRub, imagesUploaded: processed.specImageUrls.length },
         correlationId: ctx.correlationId,
       });
     } catch (err) {
