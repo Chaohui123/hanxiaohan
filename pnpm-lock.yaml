@@ -45,12 +45,18 @@ importers:
       '@onzo/glm-integration':
         specifier: workspace:*
         version: link:../../packages/ai
+      '@onzo/logger':
+        specifier: workspace:*
+        version: link:../../packages/logger
       '@onzo/ozon-api-wrapper':
         specifier: workspace:*
         version: link:../../packages/ozon-api-wrapper
       '@onzo/ozon-order':
         specifier: workspace:*
         version: link:../../packages/ozon-order
+      '@onzo/price-monitor':
+        specifier: workspace:*
+        version: link:../../packages/price-monitor
       '@onzo/scraper-1688':
         specifier: workspace:*
         version: link:../../packages/scraper
@@ -111,6 +117,15 @@ importers:
         version: link:../shared-types
 
   packages/ozon-order:
+    dependencies:
+      '@onzo/ozon-api-wrapper':
+        specifier: workspace:*
+        version: link:../ozon-api-wrapper
+      '@onzo/shared-types':
+        specifier: workspace:*
+        version: link:../shared-types
+
+  packages/price-monitor:
     dependencies:
       '@onzo/ozon-api-wrapper':
         specifier: workspace:*

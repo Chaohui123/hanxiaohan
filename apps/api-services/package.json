@@ -15,6 +15,8 @@
     "@onzo/scraper-1688": "workspace:*",
     "@onzo/shared-types": "workspace:*",
     "@onzo/validation-layer": "workspace:*",
+    "@onzo/logger": "workspace:*",
+    "@onzo/price-monitor": "workspace:*",
     "cors": "^2.8.6",
     "dotenv": "^17.0.0",
     "drizzle-orm": "^0.45.2",

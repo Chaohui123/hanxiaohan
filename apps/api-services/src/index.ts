@@ -18,6 +18,7 @@ import { createOrderRouter } from "./routes/order.route.js";
 import { createWebhookRouter } from "./routes/webhook.route.js";
 import { createBulkRouter } from "./routes/bulk.route.js";
 import { createDashboardRouter } from "./routes/dashboard.route.js";
+import { createPriceRouter } from "./routes/price.route.js";
 import { timeoutMiddleware } from "./middleware/timeout.js";
 import { idempotencyMiddleware } from "./middleware/idempotency.js";
 import { mockMiddleware } from "./routes/mock.middleware.js";
@@ -47,6 +48,7 @@ app.use(createHealthRouter());
 app.use("/api", createStatsRouter());
 app.use("/api", createBackupRouter());
 app.use("/api", createWebhookRouter());
+app.use("/api", createPriceRouter());
 
 // ---- Swagger docs ----
 await loadSwagger();
