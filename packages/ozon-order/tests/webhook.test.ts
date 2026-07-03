@@ -1,3 +1,14 @@
+import { describe, it, expect } from 'vitest'
+import { parseWebhook } from '../src/webhook'
+
+describe('webhook', () => {
+  it('parseWebhook returns idempotencyKey', () => {
+    const body = { event: 'order.created', order_id: '123' }
+    const headers = { 'x-store-id': 'store1' } as any
+    const res = parseWebhook(body, headers)
+    expect(res.idempotencyKey).toBe('store1:123')
+  })
+})
 import { describe, it, expect } from "vitest";
 import { parseWebhookPayload, verifySignature } from "../src/webhook.js";
 

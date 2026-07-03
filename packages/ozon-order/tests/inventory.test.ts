@@ -1,3 +1,12 @@
+import { describe, it, expect } from 'vitest'
+import { deductInventory } from '../src/inventory'
+
+describe('inventory', () => {
+  it('deductInventory should be callable and return success boolean', async () => {
+    const res = await deductInventory('store1', 'SKU1', 1, 'store1:order1')
+    expect(res).toHaveProperty('success')
+  })
+})
 import { describe, it, expect, beforeEach, vi } from "vitest";
 
 describe("InventoryManager", () => {
