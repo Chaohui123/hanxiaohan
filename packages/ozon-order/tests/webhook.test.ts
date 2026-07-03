@@ -1,14 +1,3 @@
-import { describe, it, expect } from 'vitest'
-import { parseWebhook } from '../src/webhook'
-
-describe('webhook', () => {
-  it('parseWebhook returns idempotencyKey', () => {
-    const body = { event: 'order.created', order_id: '123' }
-    const headers = { 'x-store-id': 'store1' } as any
-    const res = parseWebhook(body, headers)
-    expect(res.idempotencyKey).toBe('store1:123')
-  })
-})
 import { describe, it, expect } from "vitest";
 import { parseWebhookPayload, verifySignature } from "../src/webhook.js";
 
@@ -58,17 +47,15 @@ describe("Webhook payload parsing", () => {
 
   it("deduplicates repeated events", () => {
     const body = JSON.stringify({
-      event_id: "evt-002-dedup",
+      event_id: "evt-002-dedup-2",
       event_type: "order.delivered",
       posting_number: "P456-DEF",
       status: "delivered",
     });
 
-    // First call
     const r1 = parseWebhookPayload(body);
     expect("eventId" in r1).toBe(true);
 
-    // Second call with same event_id
     const r2 = parseWebhookPayload(body);
     expect("eventId" in r2).toBe(false);
     if (!("eventId" in r2)) {
