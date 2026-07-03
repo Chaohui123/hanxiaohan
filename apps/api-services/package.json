@@ -14,6 +14,7 @@
     "@onzo/scraper-1688": "workspace:*",
     "@onzo/shared-types": "workspace:*",
     "@onzo/validation-layer": "workspace:*",
+    "@onzo/ozon-order": "workspace:*",
     "cors": "^2.8.6",
     "dotenv": "^17.0.0",
     "drizzle-orm": "^0.45.2",

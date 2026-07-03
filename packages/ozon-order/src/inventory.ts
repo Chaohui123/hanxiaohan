@@ -1,15 +1,63 @@
 // Inventory helper: handles transactional stock deduction and idempotency
-import { drizzle } from 'drizzle-orm' // placeholder import (project uses Drizzle)
+import type { DbAdapter } from '../../apps/api-services/src/db/connection.js'
+import { getDb, serializedWrite } from '../../apps/api-services/src/db/connection.js'
 
 export interface DeductResult {
   success: boolean
   reason?: string
 }
 
+/**
+ * Deduct inventory in a serialized write to avoid SQLite write locks.
+ * Idempotency is enforced by recording a stock_movements row with posting_number=idempotencyKey.
+ * If the same idempotencyKey was already used for a 'deduct', the function is a no-op and returns success.
+ */
 export async function deductInventory(storeId: string, sku: string, qty: number, idempotencyKey: string): Promise<DeductResult> {
-  // Placeholder: implement using Drizzle transactions and write a processed key record
-  // Ensure idempotency by checking processed idempotencyKey before deducting
-  return { success: true }
+  const db = await getDb();
+  if (!db) return { success: false, reason: 'no_db' }
+
+  return serializedWrite(async () => {
+    // Check idempotency: has this posting_number been processed as a deduct?
+    const existing = await db.all<{ cnt: number }>(
+      `SELECT COUNT(*) as cnt FROM stock_movements WHERE posting_number = ? AND type = 'deduct'`,
+      [idempotencyKey]
+    );
+    if (existing?.[0]?.cnt && existing[0].cnt > 0) {
+      return { success: true }
+    }
+
+    // For simplicity, use sku as offer_id when offer_id is not available
+    const offerId = String(sku)
+
+    // Read current stock
+    const rows = await db.all<{ stock_available: number }>(
+      `SELECT stock_available FROM inventory WHERE offer_id = ? AND sku = ?`,
+      [offerId, sku]
+    );
+    const current = rows?.[0]?.stock_available ?? 0
+
+    if (current < qty) {
+      // Record attempted movement for audit
+      await db.run(
+        `INSERT INTO stock_movements (posting_number, offer_id, sku, quantity, type) VALUES (?, ?, ?, ?, 'deduct')`,
+        [idempotencyKey, offerId, sku, 0]
+      )
+      return { success: false, reason: 'insufficient_stock' }
+    }
+
+    // Deduct stock and record movement
+    await db.run(
+      `UPDATE inventory SET stock_available = stock_available - ?, updated_at = (datetime('now')) WHERE offer_id = ? AND sku = ?`,
+      [qty, offerId, sku]
+    )
+
+    await db.run(
+      `INSERT INTO stock_movements (posting_number, offer_id, sku, quantity, type) VALUES (?, ?, ?, ?, 'deduct')`,
+      [idempotencyKey, offerId, sku, qty]
+    )
+
+    return { success: true }
+  })
 }
 // ============================================================
 // Inventory Manager — stock deduction with transaction safety

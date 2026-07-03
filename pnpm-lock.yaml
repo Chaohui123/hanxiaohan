@@ -48,6 +48,9 @@ importers:
       '@onzo/ozon-api-wrapper':
         specifier: workspace:*
         version: link:../../packages/ozon-api-wrapper
+      '@onzo/ozon-order':
+        specifier: workspace:*
+        version: link:../../packages/ozon-order
       '@onzo/scraper-1688':
         specifier: workspace:*
         version: link:../../packages/scraper
@@ -88,6 +91,15 @@ importers:
 
   packages/ozon-api-wrapper:
     dependencies:
+      '@onzo/shared-types':
+        specifier: workspace:*
+        version: link:../shared-types
+
+  packages/ozon-order:
+    dependencies:
+      '@onzo/ozon-api-wrapper':
+        specifier: workspace:*
+        version: link:../ozon-api-wrapper
       '@onzo/shared-types':
         specifier: workspace:*
         version: link:../shared-types

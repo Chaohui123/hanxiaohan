@@ -36,24 +36,6 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
     maxDelayMs: config.scraper.requestDelayMax,
   });
 
-  // Vision OCR → GLM-4.6V-Flash (per rules.md)
-  const visionClient = new GlmVisionClient({
-    apiKey: config.glm.apiKey,
-    baseUrl: `${config.glm.baseUrl}/chat/completions`,
-    model: config.glm.visionModel,
-    tokenTracker,
-  });
-
-  // Text tasks → DeepSeek V4 Flash (per rules.md: P0 listing = deepseek-v4-flash)
-  const deepseekClient = new DeepSeekClient({
-    apiKey: config.deepseek.apiKey,
-    baseUrl: config.deepseek.baseUrl,
-    flashModel: config.deepseek.flashModel,
-    proModel: config.deepseek.proModel,
-    tokenTracker,
-  });
-  const deepseekTranslator = new DeepSeekTranslator(deepseekClient);
-
   const validator = new ProductValidator();
   const ozonClient = new OzonClient({
     auth: new AuthManager({
@@ -68,7 +50,7 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
     tokensPerMinute: 60,
   });
 
-  // Token tracker — persists to SQLite, enforces daily limit
+  // Token tracker — must be created BEFORE AI clients
   const dailyLimit = parseInt(process.env.LLM_DAILY_TOKEN_LIMIT || "0", 10);
   const tokenTracker = new TokenTracker({
     dailyLimit,
@@ -86,6 +68,24 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
       ).catch(() => {});
     },
   });
+
+  // Vision OCR → GLM-4.6V-Flash (per rules.md)
+  const visionClient = new GlmVisionClient({
+    apiKey: config.glm.apiKey,
+    baseUrl: `${config.glm.baseUrl}/chat/completions`,
+    model: config.glm.visionModel,
+    tokenTracker,
+  });
+
+  // Text tasks → DeepSeek V4 Flash (per rules.md: P0 listing = deepseek-v4-flash)
+  const deepseekClient = new DeepSeekClient({
+    apiKey: config.deepseek.apiKey,
+    baseUrl: config.deepseek.baseUrl,
+    flashModel: config.deepseek.flashModel,
+    proModel: config.deepseek.proModel,
+    tokenTracker,
+  });
+  const deepseekTranslator = new DeepSeekTranslator(deepseekClient);
 
   // POST /api/process
   router.post("/process", async (req, res) => {
