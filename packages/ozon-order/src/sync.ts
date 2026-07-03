@@ -14,7 +14,7 @@ export interface SyncResult {
   errors: string[];
 }
 
-export type ProcessPostingFn = (posting: OzonPosting, ctx: { db?: any; idempotencyKey: string }) => Promise<void>;
+export type ProcessPostingFn = (posting: OzonPosting, ctx: { db?: { all: (sql: string, params?: unknown[]) => Promise<Array<Record<string, unknown>>> }; idempotencyKey: string }) => Promise<void>;
 
 /**
  * Sync orders from Ozon (FBS + FBO) with pagination and idempotency checks.
@@ -27,7 +27,7 @@ export async function syncOrders(
     since?: string
     until?: string
     client?: OzonOrderClient
-    db?: { all: (sql: string, params?: any[]) => Promise<any[]> }
+    db?: { all: (sql: string, params?: unknown[]) => Promise<Array<Record<string, unknown>>> }
     processPosting?: ProcessPostingFn
     pageSize?: number
   }
@@ -40,7 +40,7 @@ export async function syncOrders(
   const pageSize = options?.pageSize ?? 100;
 
   // Helper to iterate paged postings
-  async function iterateList(listFn: (filter?: any) => Promise<OzonPosting[]>) {
+  async function iterateList(listFn: (filter?: Record<string, unknown>) => Promise<OzonPosting[]>) {
     let offset = 0
     let localCount = 0
     while (true) {

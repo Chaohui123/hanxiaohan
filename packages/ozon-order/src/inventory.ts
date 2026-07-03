@@ -72,7 +72,7 @@ export class InventoryManager {
   }
 
   async getStock(offerId: string, sku: number): Promise<InventoryRecord | null> {
-    const rows = await this.db.all<any>("SELECT * FROM inventory WHERE offer_id=? AND sku=?", [offerId, sku]);
+    const rows = await this.db.all<InventoryRecord>("SELECT * FROM inventory WHERE offer_id=? AND sku=?", [offerId, sku]);
     const r = rows[0]
     if (!r) return null
     // Normalize possible column names from different adapters/mocks
