@@ -4,6 +4,8 @@
 // Model routing: deepseek-v4-flash (P0 listing), deepseek-v4-pro (P2 comparison only)
 // ============================================================
 
+import type { TokenTracker } from "./token-tracker.js";
+
 export interface DeepSeekConfig {
   apiKey: string;
   baseUrl: string;
@@ -11,6 +13,7 @@ export interface DeepSeekConfig {
   proModel: string;
   timeout?: number;
   maxRetries?: number;
+  tokenTracker?: TokenTracker;
 }
 
 export type DeepSeekModelTier = "flash" | "pro";
@@ -28,9 +31,11 @@ export interface DeepSeekRequestOptions {
 
 export class DeepSeekClient {
   private config: DeepSeekClientResolved;
+  private tokenTracker?: TokenTracker;
 
   constructor(config: DeepSeekConfig) {
     this.config = { ...config, timeout: config.timeout ?? 60000, maxRetries: config.maxRetries ?? 2 };
+    this.tokenTracker = config.tokenTracker;
   }
 
   async chatCompletion<T = Record<string, unknown>>(options: DeepSeekRequestOptions): Promise<{
@@ -92,14 +97,25 @@ export class DeepSeekClient {
           parsed = JSON.parse(jsonStr.trim()) as T;
         } catch { /* non-JSON content — caller handles */ }
 
+        const tokensUsed = {
+          prompt: data.usage?.prompt_tokens ?? 0,
+          completion: data.usage?.completion_tokens ?? 0,
+          total: data.usage?.total_tokens ?? 0,
+        };
+
+        // Track token usage for cost monitoring
+        this.tokenTracker?.record({
+          model: data.model ?? modelName,
+          promptTokens: tokensUsed.prompt,
+          completionTokens: tokensUsed.completion,
+          totalTokens: tokensUsed.total,
+          provider: "deepseek",
+        });
+
         return {
           content: content.trim(),
           parsed,
-          tokensUsed: {
-            prompt: data.usage?.prompt_tokens ?? 0,
-            completion: data.usage?.completion_tokens ?? 0,
-            total: data.usage?.total_tokens ?? 0,
-          },
+          tokensUsed,
           model: data.model ?? modelName,
         };
       } catch (error) {

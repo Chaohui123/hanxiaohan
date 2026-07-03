@@ -85,5 +85,30 @@ export function createTaskRouter(taskQueue: TaskQueue): Router {
     }
   });
 
+  // POST /api/task/deadletter/retry-batch — batch retry failed tasks
+  router.post("/deadletter/retry-batch", async (req, res) => {
+    const { taskIds } = req.body as { taskIds?: string[] };
+    if (!taskIds || taskIds.length === 0) {
+      res.status(400).json({
+        success: false,
+        error: { code: "MISSING_IDS", message: "taskIds array required", retryable: false },
+        correlationId: req.correlationId,
+      });
+      return;
+    }
+
+    const results: Array<{ taskId: string; requeued: boolean }> = [];
+    for (const tid of taskIds) {
+      const task = await taskQueue.retry(tid);
+      results.push({ taskId: tid, requeued: !!task });
+    }
+
+    res.json({
+      success: true,
+      data: { results, retried: results.filter((r) => r.requeued).length, total: taskIds.length },
+      correlationId: req.correlationId,
+    });
+  });
+
   return router;
 }
