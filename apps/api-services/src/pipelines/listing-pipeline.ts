@@ -205,7 +205,7 @@ export async function stepCreateDraft(
       price: processed.priceRub,
       vat: "0" as const,
       images: processed.specImageUrls, // 1688 URLs — Ozon downloads directly
-      attributes: processed.attributes.map((a) => ({
+      attributes: (processed.attributes ?? []).map((a) => ({
         id: a.attributeId,
         values: [{ value: a.value as string }],
       })),
