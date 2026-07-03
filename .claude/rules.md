@@ -204,3 +204,19 @@
    ai/validator/scraper模块必须配套单元测试，新增功能同步补充Vitest用例
 6. 降级机制
    所有外部API（LLM/Ozon/爬虫）必须引入fallback.ts降级逻辑，失败不直接中断全链路
+
+## Phase1 P0 遗留优化强制规范
+1. LLM Token 统计
+   - 所有 DeepSeek/GLM 调用必须写入 token_usage 统计表（model, prompt_tokens, completion_tokens, timestamp）
+   - .env 配置 LLM_DAILY_TOKEN_LIMIT，超出阈值自动拦截并告警
+   - 提供 /api/stats/llm 接口导出每日消耗
+2. SQLite 自动备份
+   - 封装备份逻辑至 packages/common-utils
+   - 自动备份到 ./data/backups/，保留 7 天滚动清理
+   - n8n 每日凌晨定时触发 POST /api/db/backup
+3. 死信队列批量重试
+   - POST /api/task/deadletter/retry-batch 批量重跑失败任务
+   - n8n 失败分支增加批量重试节点
+4. 开发环境 Mock 隔离
+   - ENV=dev 时 Mock 全部外部接口（Ozon/DeepSeek/GLM）
+   - 不消耗线上 API 额度，不真实创建草稿
