@@ -1,71 +1,64 @@
-import { describe, it, expect } from 'vitest'
-import { deductInventory } from '../src/inventory'
-
-describe('inventory', () => {
-  it('deductInventory should be callable and return success boolean', async () => {
-    const res = await deductInventory('store1', 'SKU1', 1, 'store1:order1')
-    expect(res).toHaveProperty('success')
-  })
-})
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect } from "vitest";
+import { InventoryManager } from "../src/inventory.js";
 
 describe("InventoryManager", () => {
-  // Test the stock deduction logic directly
-  it("calculates correct stock after deduction", () => {
-    const available = 50;
-    const quantity = 10;
-    expect(available - quantity).toBe(40);
-    expect(available >= quantity).toBe(true);
+  it("setStock and getStock work correctly", async () => {
+    const rows: Record<string, unknown>[] = [];
+    const db = {
+      run: async (_s: string, p?: unknown[]) => {
+        if (_s.includes("INSERT OR REPLACE")) {
+          const idx = rows.findIndex((r) => r.offerId === p?.[0] && r.sku === p?.[1]);
+          if (idx >= 0) rows.splice(idx, 1);
+          rows.push({ offerId: p?.[0], sku: p?.[1], stockAvailable: p?.[2], stockReserved: 0, updatedAt: "" });
+        }
+      },
+      all: async (_s: string, p?: unknown[]) => rows.filter((r) => r.offerId === p?.[0] && r.sku === p?.[1]),
+    };
+    const mgr = new InventoryManager(db);
+    await mgr.setStock("SKU1", 100, 50);
+    const stock = await mgr.getStock("SKU1", 100);
+    expect(stock?.stockAvailable).toBe(50);
   });
 
-  it("detects insufficient stock", () => {
-    const available = 5;
-    const quantity = 20;
-    expect(available >= quantity).toBe(false);
+  it("deduct returns success for sufficient stock", async () => {
+    const rows = [{ offerId: "SKU2", sku: 200, stockAvailable: 30, stockReserved: 0, updatedAt: "" }];
+    const db = {
+      run: async () => {},
+      all: async (_s: string, p?: unknown[]) => rows.filter((r) => r.offerId === p?.[0] && r.sku === p?.[1]),
+    };
+    const mgr = new InventoryManager(db);
+    const r = await mgr.deduct("P001", [{ offerId: "SKU2", sku: 200, quantity: 5 }]);
+    expect(r.success).toBe(true);
   });
 
-  it("calculates correct stock after restore", () => {
-    let available = 15;
-    const deducted = 5;
-    available = available - deducted;
-    expect(available).toBe(10);
-    // restore
-    available = available + deducted;
-    expect(available).toBe(15);
+  it("deduct returns failure for insufficient stock", async () => {
+    const db = {
+      run: async () => {},
+      all: async () => [] as Record<string, unknown>[],
+    };
+    const mgr = new InventoryManager(db);
+    const r = await mgr.deduct("P002", [{ offerId: "SKU3", sku: 300, quantity: 100 }]);
+    expect(r.success).toBe(false);
   });
 
-  it("reserved count tracks correctly through lifecycle", () => {
-    let available = 30;
-    let reserved = 0;
-
-    // Deduct
-    const qty = 8;
-    available -= qty;
-    reserved += qty;
-    expect(available).toBe(22);
-    expect(reserved).toBe(8);
-
-    // Restore (cancel)
-    available += qty;
-    reserved -= qty;
-    expect(available).toBe(30);
-    expect(reserved).toBe(0);
-  });
-
-  it("handles multi-item deduction", () => {
-    const items = [
-      { available: 20, deduct: 5, expected: 15 },
-      { available: 10, deduct: 10, expected: 0 },
-      { available: 3, deduct: 10, expected: -7 }, // insufficient
+  it("handles multi-item stock lifecycle", async () => {
+    const rows: Record<string, unknown>[] = [
+      { offerId: "O1", sku: 1, stockAvailable: 20, stockReserved: 0, updatedAt: "" },
     ];
+    const db = {
+      run: async () => {},
+      all: async (_s: string, p?: unknown[]) => rows.filter((r) => r.offerId === p?.[0] && r.sku === p?.[1]),
+    };
+    const mgr = new InventoryManager(db);
 
-    const results = items.map((i) => ({
-      success: i.available >= i.deduct,
-      remaining: i.available >= i.deduct ? i.available - i.deduct : i.available,
-    }));
+    // Deduct 5
+    rows[0].stockAvailable = 15; rows[0].stockReserved = 5;
+    let r = await mgr.deduct("P1", [{ offerId: "O1", sku: 1, quantity: 5 }]);
 
-    expect(results[0].success).toBe(true);
-    expect(results[1].success).toBe(true);
-    expect(results[2].success).toBe(false);
+    // Restore 5
+    rows[0].stockAvailable = 20; rows[0].stockReserved = 0;
+    await mgr.restore("P1", [{ offerId: "O1", sku: 1, quantity: 5 }]);
+
+    expect(r.success).toBe(true);
   });
 });

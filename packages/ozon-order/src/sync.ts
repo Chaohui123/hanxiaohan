@@ -14,40 +14,78 @@ export interface SyncResult {
   errors: string[];
 }
 
+export type ProcessPostingFn = (posting: OzonPosting, ctx: { db?: any; idempotencyKey: string }) => Promise<void>;
+
 /**
- * Sync orders from Ozon (FBS + FBO) with pagination.
- * Calls the order route's business logic.
+ * Sync orders from Ozon (FBS + FBO) with pagination and idempotency checks.
+ * - `processPosting` will be called for each new posting (not present in `local_orders` when `db` provided).
  */
 export async function syncOrders(
   ozonClient: OzonClient,
-  status?: string,
-  since?: string,
-  until?: string
+  options?: {
+    status?: string
+    since?: string
+    until?: string
+    client?: OzonOrderClient
+    db?: { all: (sql: string, params?: any[]) => Promise<any[]> }
+    processPosting?: ProcessPostingFn
+    pageSize?: number
+  }
 ): Promise<SyncResult> {
-  const client = new OzonOrderClient(ozonClient);
+  const client = options?.client ?? new OzonOrderClient(ozonClient);
   const errors: string[] = [];
   let fbsCount = 0;
   let fboCount = 0;
 
-  try {
-    const fbsOrders = await client.listPostings({ status: status as OzonPosting["status"] | undefined, since, until, limit: 100 });
-    fbsCount = fbsOrders.length;
-  } catch (err) {
-    errors.push(`FBS sync failed: ${(err as Error).message}`);
+  const pageSize = options?.pageSize ?? 100;
+
+  // Helper to iterate paged postings
+  async function iterateList(listFn: (filter?: any) => Promise<OzonPosting[]>) {
+    let offset = 0
+    let localCount = 0
+    while (true) {
+      const postings = await listFn({ status: options?.status as OzonPosting["status"] | undefined, since: options?.since, until: options?.until, limit: pageSize, offset })
+      if (!postings || postings.length === 0) break
+
+      for (const p of postings) {
+        // idempotency check
+        const postingNumber = p.postingNumber
+        const idempotencyKey = `${postingNumber}`
+        if (options?.db) {
+          const rows = await options.db.all(`SELECT COUNT(*) as cnt FROM local_orders WHERE posting_number = ?`, [postingNumber])
+          if (rows?.[0]?.cnt && rows[0].cnt > 0) continue
+        }
+
+        if (options?.processPosting) {
+          await options.processPosting(p, { db: options.db, idempotencyKey })
+        }
+
+        localCount++
+      }
+
+      if (postings.length < pageSize) break
+      offset += postings.length
+    }
+    return localCount
   }
 
   try {
-    const fboOrders = await client.listFboPostings({ status: status as OzonPosting["status"] | undefined, since, until, limit: 100 });
-    fboCount = fboOrders.length;
+    fbsCount = await iterateList((filter) => client.listPostings(filter))
   } catch (err) {
-    errors.push(`FBO sync failed: ${(err as Error).message}`);
+    errors.push(`FBS sync failed: ${(err as Error).message}`)
+  }
+
+  try {
+    fboCount = await iterateList((filter) => client.listFboPostings(filter))
+  } catch (err) {
+    errors.push(`FBO sync failed: ${(err as Error).message}`)
   }
 
   return {
     fbsCount,
     fboCount,
     total: fbsCount + fboCount,
-    upserted: 0, // set by caller
+    upserted: fbsCount + fboCount,
     errors,
-  };
+  }
 }
