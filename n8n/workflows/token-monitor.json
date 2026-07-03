@@ -1,0 +1,70 @@
+{
+  "name": "ONZO — Token Monitor (every 6 hours)",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "hours", "hoursInterval": 6 }] } },
+      "id": "schedule",
+      "name": "Every 6 hours",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://host.docker.internal:3000/api/stats/llm",
+        "method": "GET",
+        "options": { "timeout": 30000 }
+      },
+      "id": "fetch-stats",
+      "name": "GET /api/stats/llm",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://host.docker.internal:3000/api/db/backup",
+        "method": "POST",
+        "options": { "timeout": 30000 }
+      },
+      "id": "backup",
+      "name": "POST /api/db/backup",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4,
+      "position": [450, 500]
+    },
+    {
+      "parameters": {
+        "content": "## Token Usage Today\n\nRows: {{ $json.data.length }}\n\nMonitor for anomalies. If daily > 500k, investigate.",
+        "height": 150
+      },
+      "id": "result",
+      "name": "Token Report",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [650, 300]
+    },
+    {
+      "parameters": {
+        "content": "## Backup Complete\n\nFile: {{ $json.data.backup }}\nRetained: {{ $json.data.retained }} backups",
+        "height": 120
+      },
+      "id": "backup-result",
+      "name": "Backup Report",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [650, 500]
+    }
+  ],
+  "connections": {
+    "Every 6 hours": { "main": [
+      [{ "node": "GET /api/stats/llm", "type": "main", "index": 0 }],
+      [{ "node": "POST /api/db/backup", "type": "main", "index": 0 }]
+    ]},
+    "GET /api/stats/llm": { "main": [[{ "node": "Token Report", "type": "main", "index": 0 }]] },
+    "POST /api/db/backup": { "main": [[{ "node": "Backup Report", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "callerPolicy": "workflowsFromSameOwner" },
+  "versionId": "1.0.0",
+  "active": false
+}
