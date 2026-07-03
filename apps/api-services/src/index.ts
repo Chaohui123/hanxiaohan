@@ -15,6 +15,7 @@ import { createProcessRouter } from "./routes/process.route.js";
 import { createStatsRouter } from "./routes/stats.route.js";
 import { createBackupRouter } from "./routes/backup.route.js";
 import { createOrderRouter } from "./routes/order.route.js";
+import { createWebhookRouter } from "./routes/webhook.route.js";
 import { mockMiddleware } from "./routes/mock.middleware.js";
 import { getDb } from "./db/connection.js";
 
@@ -32,6 +33,7 @@ app.use(mockMiddleware); // ENV=dev: mock all external APIs
 app.use(createHealthRouter());
 app.use("/api", createStatsRouter());
 app.use("/api", createBackupRouter());
+app.use("/api", createWebhookRouter());
 
 // ---- Init DB & Queue ----
 async function start(): Promise<void> {
