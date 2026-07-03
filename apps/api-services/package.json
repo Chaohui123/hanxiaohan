@@ -11,18 +11,21 @@
   "dependencies": {
     "@onzo/glm-integration": "workspace:*",
     "@onzo/ozon-api-wrapper": "workspace:*",
+    "@onzo/ozon-order": "workspace:*",
     "@onzo/scraper-1688": "workspace:*",
     "@onzo/shared-types": "workspace:*",
     "@onzo/validation-layer": "workspace:*",
-    "@onzo/ozon-order": "workspace:*",
     "cors": "^2.8.6",
     "dotenv": "^17.0.0",
     "drizzle-orm": "^0.45.2",
     "express": "^5.0.0",
-    "pino": "^10.0.0"
+    "pino": "^10.0.0",
+    "swagger-ui-express": "^5.0.1",
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
-    "@types/express": "^5.0.0"
+    "@types/express": "^5.0.0",
+    "@types/swagger-ui-express": "^4.1.8"
   }
 }

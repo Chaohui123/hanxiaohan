@@ -3,7 +3,7 @@
 // Phase 1: single-store MVP
 // ============================================================
 
-import express from "express";
+import express, { type RequestHandler } from "express";
 import cors from "cors";
 import { loadConfig } from "./config.js";
 import { correlationIdMiddleware } from "./middleware/correlation-id.js";
@@ -19,7 +19,14 @@ import { createWebhookRouter } from "./routes/webhook.route.js";
 import { createBulkRouter } from "./routes/bulk.route.js";
 import { createDashboardRouter } from "./routes/dashboard.route.js";
 import { mockMiddleware } from "./routes/mock.middleware.js";
+import { swaggerSpec } from "./swagger.js";
 import { getDb } from "./db/connection.js";
+
+// Dynamic import for swagger-ui-express (optional dependency)
+let swaggerUi: { serve: unknown; setup: (spec: unknown) => unknown } | null = null;
+async function loadSwagger() {
+  try { swaggerUi = (await import("swagger-ui-express")).default as typeof swaggerUi; } catch { /* optional */ }
+}
 
 const config = loadConfig();
 const logger = createLogger(config);
@@ -36,6 +43,12 @@ app.use(createHealthRouter());
 app.use("/api", createStatsRouter());
 app.use("/api", createBackupRouter());
 app.use("/api", createWebhookRouter());
+
+// ---- Swagger docs ----
+await loadSwagger();
+if (swaggerUi) {
+  app.use("/api/docs", swaggerUi.serve as express.RequestHandler, swaggerUi.setup(swaggerSpec));
+}
 
 // ---- Init DB & Queue ----
 async function start(): Promise<void> {
