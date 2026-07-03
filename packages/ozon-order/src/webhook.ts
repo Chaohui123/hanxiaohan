@@ -81,15 +81,15 @@ export function parseWebhookPayload(
     if (!result.valid) return result;
   }
 
-  let parsed: any;
+  let parsed: Record<string, unknown>;
   try {
     parsed = JSON.parse(rawBody);
   } catch {
     return { valid: false, reason: "Invalid JSON body" };
   }
 
-  const eventId = parsed.event_id || parsed.id || crypto.randomUUID();
-  const eventType = parsed.event_type || parsed.type || "order.status_changed";
+  const eventId = (parsed.event_id || parsed.id || crypto.randomUUID()) as string;
+  const eventType = (parsed.event_type || parsed.type || "order.status_changed") as string;
 
   // Dedup check
   if (isDuplicate(eventId)) {
@@ -97,7 +97,8 @@ export function parseWebhookPayload(
   }
 
   // Validate required fields
-  if (!parsed.posting_number && !parsed.postingNumber) {
+  const postingNumber = (parsed.posting_number || parsed.postingNumber) as string | undefined;
+  if (!postingNumber) {
     return { valid: false, reason: "Missing posting_number" };
   }
 
@@ -106,10 +107,10 @@ export function parseWebhookPayload(
   return {
     eventId,
     eventType: eventType as WebhookEventType,
-    postingNumber: parsed.posting_number || parsed.postingNumber,
-    orderId: parsed.order_id || parsed.orderId || 0,
-    status: (parsed.status || parsed.new_status || "delivering") as OzonOrderStatus,
-    timestamp: parsed.timestamp || new Date().toISOString(),
+    postingNumber,
+    orderId: (parsed.order_id || parsed.orderId || 0) as number,
+    status: ((parsed.status || parsed.new_status || "delivering") as string) as OzonOrderStatus,
+    timestamp: (parsed.timestamp as string) || new Date().toISOString(),
     rawBody,
     signature,
   };
