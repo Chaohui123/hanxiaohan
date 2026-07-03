@@ -62,6 +62,27 @@ export async function initSchema(db: Database): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_price_history_sku ON price_history(product_sku, platform);
 
+    -- Orders (synced from Ozon FBO/FBS)
+    CREATE TABLE IF NOT EXISTS local_orders (
+      id TEXT PRIMARY KEY,
+      posting_number TEXT UNIQUE NOT NULL,
+      order_id INTEGER NOT NULL,
+      status TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT DEFAULT (datetime('now')),
+      buyer_name_masked TEXT,
+      buyer_phone_masked TEXT,
+      total_price_rub REAL DEFAULT 0,
+      commission_rub REAL DEFAULT 0,
+      payout_rub REAL DEFAULT 0,
+      product_count INTEGER DEFAULT 0,
+      tracking_number TEXT,
+      raw_json TEXT,
+      synced_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_orders_status ON local_orders(status);
+    CREATE INDEX IF NOT EXISTS idx_orders_posting ON local_orders(posting_number);
+
     -- Token usage tracking (LLM cost monitoring)
     CREATE TABLE IF NOT EXISTS token_usage (
       id INTEGER PRIMARY KEY AUTOINCREMENT,

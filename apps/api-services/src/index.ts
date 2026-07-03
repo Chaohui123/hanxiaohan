@@ -14,6 +14,7 @@ import { createTaskRouter } from "./routes/task.route.js";
 import { createProcessRouter } from "./routes/process.route.js";
 import { createStatsRouter } from "./routes/stats.route.js";
 import { createBackupRouter } from "./routes/backup.route.js";
+import { createOrderRouter } from "./routes/order.route.js";
 import { mockMiddleware } from "./routes/mock.middleware.js";
 import { getDb } from "./db/connection.js";
 
@@ -50,6 +51,14 @@ async function start(): Promise<void> {
 
   // Mount process routes
   app.use("/api", createProcessRouter(config, taskQueue));
+
+  // Mount order routes
+  const { OzonClient, AuthManager } = await import("@onzo/ozon-api-wrapper");
+  const ozonClient = new OzonClient({
+    auth: new AuthManager({ clients: [{ clientId: config.ozon.clientId, apiKey: config.ozon.apiKey }] }),
+    baseUrl: config.ozon.baseUrl,
+  });
+  app.use("/api", createOrderRouter(ozonClient));
 
   // ---- Error handling ----
   app.use(errorHandler);

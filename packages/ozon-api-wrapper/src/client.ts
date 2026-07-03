@@ -82,6 +82,15 @@ export class OzonClient {
   // Public API Methods
   // ============================================================
 
+  /** Generic API request — exposed for external modules like ozon-order */
+  async request<T = Record<string, unknown>>(
+    method: "GET" | "POST",
+    path: string,
+    body: unknown
+  ): Promise<T> {
+    return this.doRequest<T>(method, path, body);
+  }
+
   /** Health check — simple ping to verify connectivity */
   async ping(): Promise<boolean> {
     try {
