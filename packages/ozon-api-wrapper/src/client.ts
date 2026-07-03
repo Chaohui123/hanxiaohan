@@ -94,28 +94,33 @@ export class OzonClient {
 
   /** Create a product draft (single) */
   async createDraft(product: OzonDraftInput): Promise<OzonDraftResult> {
+    const item: Record<string, unknown> = {
+      name: product.name,
+      description: product.description,
+      category_id: product.categoryId,
+      type_id: product.typeId ?? product.categoryId,
+      price: typeof product.price === "number" ? product.price.toFixed(2) : String(product.price),
+      old_price: product.oldPrice
+        ? (typeof product.oldPrice === "number" ? product.oldPrice.toFixed(2) : String(product.oldPrice))
+        : (typeof product.price === "number" ? (Math.round(product.price * 1.3 * 100) / 100).toFixed(2) : String(Math.round((parseFloat(String(product.price)) || 0) * 1.3 * 100) / 100)),
+      vat: product.vat,
+      images: product.images,
+      depth: product.dimensions.length,
+      width: product.dimensions.width,
+      height: product.dimensions.height,
+      weight: product.dimensions.weight,
+      barcode: product.barcode ?? undefined,
+    };
+
+    if (product.attributes && product.attributes.length > 0) {
+      item.attributes = product.attributes;
+    }
+
     const response = await this.doRequest<{ result: { product_id: number; offer_id: string } }>(
       "POST",
       "/v3/product/import",
       {
-        items: [{
-          name: product.name,
-          description: product.description,
-          category_id: product.categoryId,
-          type_id: product.typeId ?? product.categoryId,
-          price: typeof product.price === "number" ? product.price.toFixed(2) : String(product.price),
-          old_price: product.oldPrice
-            ? (typeof product.oldPrice === "number" ? product.oldPrice.toFixed(2) : String(product.oldPrice))
-            : (typeof product.price === "number" ? (Math.round(product.price * 1.3 * 100) / 100).toFixed(2) : String(Math.round((parseFloat(String(product.price)) || 0) * 1.3 * 100) / 100)),
-          vat: product.vat,
-          images: product.specImageUrls,
-          attributes: product.attributes,
-          depth: product.dimensions.length,
-          width: product.dimensions.width,
-          height: product.dimensions.height,
-          weight: product.dimensions.weight,
-          barcode: product.barcode ?? undefined,
-        }],
+        items: [item],
       }
     );
 
@@ -141,23 +146,34 @@ export class OzonClient {
         "POST",
         "/v3/product/import",
         {
-          items: chunk.map((p) => ({
-            name: p.name,
-            description: p.description,
-            category_id: p.categoryId,
-            price: p.price.toFixed(2),
-            old_price: p.oldPrice
-              ? p.oldPrice.toFixed(2)
-              : (Math.round(p.price * 1.3 * 100) / 100).toFixed(2),
-            vat: p.vat,
-            images: p.images,
-            attributes: p.attributes,
-            depth: p.dimensions.length,
-            width: p.dimensions.width,
-            height: p.dimensions.height,
-            weight: p.dimensions.weight,
-            barcode: p.barcode ?? undefined,
-          })),
+          items: chunk.map((p) => {
+            const item: Record<string, unknown> = {
+              name: p.name,
+              description: p.description,
+              category_id: p.categoryId,
+              price: typeof p.price === "number" ? p.price.toFixed(2) : String(p.price),
+              old_price: p.oldPrice
+                ? (typeof p.oldPrice === "number" ? p.oldPrice.toFixed(2) : String(p.oldPrice))
+                : (typeof p.price === "number" ? (Math.round(p.price * 1.3 * 100) / 100).toFixed(2) : String(Math.round((parseFloat(String(p.price)) || 0) * 1.3 * 100) / 100)),
+              vat: p.vat,
+              images: p.images,
+              depth: p.dimensions.length,
+              width: p.dimensions.width,
+              height: p.dimensions.height,
+              weight: p.dimensions.weight,
+              barcode: p.barcode ?? undefined,
+            };
+
+            if (p.typeId) {
+              item.type_id = p.typeId;
+            }
+
+            if (p.attributes && p.attributes.length > 0) {
+              item.attributes = p.attributes;
+            }
+
+            return item;
+          }),
         }
       );
 
@@ -216,25 +232,30 @@ export class OzonClient {
 
   /** Get required attributes for a category */
   async getCategoryAttributes(categoryId: number): Promise<OzonAttribute[]> {
-    const response = await this.doRequest<{ result: OzonAttributeApi[] }>(
-      "POST",
-      "/v1/description-category/attribute",
-      {
-        attribute_type: "ALL",
-        category_id: categoryId,
-        language: "RU",
-      }
-    );
+    try {
+      const response = await this.doRequest<{ result: OzonAttributeApi[] }>(
+        "POST",
+        "/v1/description-category/attribute",
+        {
+          attribute_type: "ALL",
+          category_id: categoryId,
+          language: "RU",
+        }
+      );
 
-    return response.result.map((a) => ({
-      id: a.id,
-      name: a.name,
-      description: a.description ?? "",
-      type: a.type as OzonAttribute["type"],
-      isRequired: a.is_required ?? false,
-      isCollection: a.is_collection ?? false,
-      dictionary: a.dictionary?.map((d) => ({ id: d.id, value: d.value })),
-    }));
+      return response.result.map((a) => ({
+        id: a.id,
+        name: a.name,
+        description: a.description ?? "",
+        type: a.type as OzonAttribute["type"],
+        isRequired: a.is_required ?? false,
+        isCollection: a.is_collection ?? false,
+        dictionary: a.dictionary?.map((d) => ({ id: d.id, value: d.value })),
+      }));
+    } catch (err) {
+      console.warn(`[OzonClient] Failed to fetch category attributes for ${categoryId}: ${(err as Error).message}`);
+      return [];
+    }
   }
 
   // ---- Image Upload (two channels per Ozon spec) ----
@@ -397,7 +418,8 @@ export class OzonClient {
   private mapCategoryNode(node: OzonCategoryApi): OzonCategoryNode {
     return {
       categoryId: node.category_id,
-      title: node.title,
+      title: node.category_name,
+      typeId: node.type_id,
       children: (node.children ?? []).map((c) => this.mapCategoryNode(c)),
     };
   }

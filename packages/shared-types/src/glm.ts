@@ -26,6 +26,7 @@ export interface CategoryMatchResult {
   categoryPath: string[];
   confidence: number; // 0.0 - 1.0
   reasoning: string;
+  attributeCategoryId?: number;
 }
 
 export interface AttributeFillResult {

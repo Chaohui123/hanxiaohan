@@ -115,8 +115,9 @@ export async function stepMatchCategory(
       },
       categoryTree
     );
-    ctx.category = match;
-    return match;
+    const attributeCategoryId = findAttributeCategoryId(categoryTree, match.categoryId);
+    ctx.category = { ...match, attributeCategoryId };
+    return ctx.category;
   } catch (err) {
     const msg = `Category matching failed: ${(err as Error).message}`;
     ctx.errors.push({ step: "category", message: msg });
@@ -131,12 +132,12 @@ export async function stepFillAttributes(
   categoryId: number,
   requiredAttributes: OzonAttribute[]
 ): Promise<Array<{ attributeId: number; name: string; value: string | number | string[] }>> {
-  try {
-    if (requiredAttributes.length === 0) {
-      ctx.attributes = [];
-      return [];
-    }
+  if (requiredAttributes.length === 0) {
+    ctx.attributes = [];
+    return [];
+  }
 
+  try {
     const result = await textClient.fillAttributes(
       {
         titleRu: translated.titleRu,
@@ -151,7 +152,8 @@ export async function stepFillAttributes(
   } catch (err) {
     const msg = `Attribute fill failed: ${(err as Error).message}`;
     ctx.errors.push({ step: "fill_attributes", message: msg });
-    throw err;
+    ctx.attributes = [];
+    return [];
   }
 }
 
@@ -203,7 +205,7 @@ export async function stepCreateDraft(
       price: processed.priceRub,
       vat: "0" as const,
       images: processed.specImageUrls, // 1688 URLs — Ozon downloads directly
-      attributes: processed.attributes.map((a) => ({
+      attributes: (processed.attributes ?? []).map((a) => ({
         id: a.attributeId,
         values: [{ value: a.value as string }],
       })),
@@ -283,6 +285,19 @@ export async function recordPipelineFailure(
 /**
  * Record pipeline success to the listing_records table.
  */
+/** Find the 3rd-level category ID for attribute lookup.
+ * When a leaf category is 4 levels deep, return its level-3 ancestor.
+ * Otherwise return the selected leaf category itself.
+ */
+export function findAttributeCategoryId(
+  nodes: OzonCategoryNode[],
+  targetCategoryId: number
+): number | null {
+  const path = findCategoryPath(nodes, targetCategoryId);
+  if (!path) return null;
+  return path.length >= 3 ? path[2].categoryId : path[path.length - 1].categoryId;
+}
+
 /** Recursively find the leaf type_id for a description_category_id. */
 export function findLeafTypeId(
   nodes: OzonCategoryNode[],
@@ -290,9 +305,7 @@ export function findLeafTypeId(
 ): number | null {
   for (const node of nodes) {
     if (node.categoryId === targetCategoryId) {
-      // If this node has typeId, return it; otherwise search children
       if (node.typeId) return node.typeId;
-      // Search children for a leaf with typeId
       for (const child of node.children) {
         const found = findLeafTypeId([child], child.categoryId);
         if (found) return found;
@@ -300,6 +313,24 @@ export function findLeafTypeId(
     }
     if (node.children.length > 0) {
       const found = findLeafTypeId(node.children, targetCategoryId);
+      if (found) return found;
+    }
+  }
+  return null;
+}
+
+function findCategoryPath(
+  nodes: OzonCategoryNode[],
+  targetCategoryId: number,
+  currentPath: OzonCategoryNode[] = []
+): OzonCategoryNode[] | null {
+  for (const node of nodes) {
+    const nextPath = [...currentPath, node];
+    if (node.categoryId === targetCategoryId) {
+      return nextPath;
+    }
+    if (node.children.length > 0) {
+      const found = findCategoryPath(node.children, targetCategoryId, nextPath);
       if (found) return found;
     }
   }

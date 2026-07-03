@@ -13,12 +13,14 @@ Rules:
 - If uncertain between two categories, pick the more general one and note low confidence
 - Category IDs are numbers — return the ID, not the name
 - Only return categories that actually exist in the provided tree
+- Phase1 Note: attribute retrieval is only supported at the 3rd-level category. Provide the leaf category for listing, and also provide the 3rd-level ancestor ID for attribute lookup if the path has 4 levels.
 
 Return JSON:
 {
   "categoryId": 12345,
   "categoryName": "Full category path",
   "categoryPath": ["Level1", "Level2", "Level3", "Level4"],
+  "attributeCategoryId": 1234,
   "confidence": 0.85,
   "reasoning": "Brief explanation of why this category was chosen"
 }`;
