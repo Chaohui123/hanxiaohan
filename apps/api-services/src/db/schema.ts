@@ -62,6 +62,19 @@ export async function initSchema(db: Database): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_price_history_sku ON price_history(product_sku, platform);
 
+    -- Token usage tracking (LLM cost monitoring)
+    CREATE TABLE IF NOT EXISTS token_usage (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      model TEXT NOT NULL,
+      prompt_tokens INTEGER DEFAULT 0,
+      completion_tokens INTEGER DEFAULT 0,
+      total_tokens INTEGER DEFAULT 0,
+      provider TEXT NOT NULL,
+      cost_estimate REAL DEFAULT 0.0,
+      timestamp TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_token_usage_date ON token_usage(date(timestamp));
+
     -- Store configs (multi-key management)
     CREATE TABLE IF NOT EXISTS store_configs (
       store_id TEXT PRIMARY KEY,

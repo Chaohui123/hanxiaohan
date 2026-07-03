@@ -7,7 +7,7 @@ import { Router } from "express";
 import type { TaskQueue } from "../db/task-queue.js";
 import type { AppConfig } from "../config.js";
 import { ProductScraper, BrowserPool } from "@onzo/scraper-1688";
-import { GlmVisionClient, DeepSeekClient, GlmRateLimiter } from "@onzo/glm-integration";
+import { GlmVisionClient, DeepSeekClient, GlmRateLimiter, TokenTracker, estimateCost } from "@onzo/glm-integration";
 import { DeepSeekTranslator } from "../pipelines/deepseek-translator.js";
 import { ProductValidator } from "@onzo/validation-layer";
 import { OzonClient, AuthManager } from "@onzo/ozon-api-wrapper";
@@ -41,6 +41,7 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
     apiKey: config.glm.apiKey,
     baseUrl: `${config.glm.baseUrl}/chat/completions`,
     model: config.glm.visionModel,
+    tokenTracker,
   });
 
   // Text tasks → DeepSeek V4 Flash (per rules.md: P0 listing = deepseek-v4-flash)
@@ -49,6 +50,7 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
     baseUrl: config.deepseek.baseUrl,
     flashModel: config.deepseek.flashModel,
     proModel: config.deepseek.proModel,
+    tokenTracker,
   });
   const deepseekTranslator = new DeepSeekTranslator(deepseekClient);
 
@@ -64,6 +66,25 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
   const glmLimiter = new GlmRateLimiter({
     maxConcurrent: config.maxAiConcurrency,
     tokensPerMinute: 60,
+  });
+
+  // Token tracker — persists to SQLite, enforces daily limit
+  const dailyLimit = parseInt(process.env.LLM_DAILY_TOKEN_LIMIT || "0", 10);
+  const tokenTracker = new TokenTracker({
+    dailyLimit,
+    onLimitExceeded: (usage) => {
+      console.error(`[TOKEN LIMIT] Daily limit (${dailyLimit}) exceeded! Total: ${usage.totalTokens}`);
+    },
+    persistFn: async (usage) => {
+      const { getDb } = await import("../db/connection.js");
+      const db = await getDb().catch(() => null);
+      if (!db) return;
+      const cost = estimateCost(usage);
+      await db.run(
+        "INSERT INTO token_usage (model, prompt_tokens, completion_tokens, total_tokens, provider, cost_estimate) VALUES (?, ?, ?, ?, ?, ?)",
+        [usage.model, usage.promptTokens, usage.completionTokens, usage.totalTokens, usage.provider, cost]
+      ).catch(() => {});
+    },
   });
 
   // POST /api/process

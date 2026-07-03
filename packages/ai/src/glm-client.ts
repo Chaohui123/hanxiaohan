@@ -4,11 +4,14 @@
 
 const ZHIPU_BASE_URL = "https://open.bigmodel.cn/api/paas/v4/chat/completions";
 
+import type { TokenTracker } from "./token-tracker.js";
+
 export interface GlmClientConfig {
   apiKey: string;
   baseUrl?: string;
   timeout?: number;
   maxRetries?: number;
+  tokenTracker?: TokenTracker;
 }
 
 export interface GlmRequestOptions {
@@ -28,12 +31,14 @@ export class GlmClient {
   private baseUrl: string;
   private timeout: number;
   private maxRetries: number;
+  private tokenTracker?: TokenTracker;
 
   constructor(config: GlmClientConfig) {
     this.apiKey = config.apiKey;
     this.baseUrl = config.baseUrl ?? ZHIPU_BASE_URL;
     this.timeout = config.timeout ?? 60000;
     this.maxRetries = config.maxRetries ?? 2;
+    this.tokenTracker = config.tokenTracker;
   }
 
   /**
@@ -89,14 +94,25 @@ export class GlmClient {
           // Content not valid JSON — caller should handle
         }
 
+        const tokensUsed = {
+          prompt: data.usage?.prompt_tokens ?? 0,
+          completion: data.usage?.completion_tokens ?? 0,
+          total: data.usage?.total_tokens ?? 0,
+        };
+
+        // Track token usage for cost monitoring
+        this.tokenTracker?.record({
+          model: data.model ?? options.model,
+          promptTokens: tokensUsed.prompt,
+          completionTokens: tokensUsed.completion,
+          totalTokens: tokensUsed.total,
+          provider: "glm",
+        });
+
         return {
           content: content.trim(),
           parsed,
-          tokensUsed: {
-            prompt: data.usage?.prompt_tokens ?? 0,
-            completion: data.usage?.completion_tokens ?? 0,
-            total: data.usage?.total_tokens ?? 0,
-          },
+          tokensUsed,
           model: data.model ?? options.model,
         };
       } catch (error) {

@@ -12,6 +12,9 @@ import { createLogger } from "./middleware/logger.js";
 import { createHealthRouter } from "./routes/health.route.js";
 import { createTaskRouter } from "./routes/task.route.js";
 import { createProcessRouter } from "./routes/process.route.js";
+import { createStatsRouter } from "./routes/stats.route.js";
+import { createBackupRouter } from "./routes/backup.route.js";
+import { mockMiddleware } from "./routes/mock.middleware.js";
 import { getDb } from "./db/connection.js";
 
 const config = loadConfig();
@@ -22,9 +25,12 @@ const app = express();
 app.use(cors());
 app.use(express.json({ limit: "10mb" }));
 app.use(correlationIdMiddleware);
+app.use(mockMiddleware); // ENV=dev: mock all external APIs
 
 // ---- Routes ----
 app.use(createHealthRouter());
+app.use("/api", createStatsRouter());
+app.use("/api", createBackupRouter());
 
 // ---- Init DB & Queue ----
 async function start(): Promise<void> {
