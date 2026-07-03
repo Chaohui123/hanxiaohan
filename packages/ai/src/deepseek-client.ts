@@ -48,6 +48,9 @@ export class DeepSeekClient {
       ? this.config.proModel
       : this.config.flashModel;
 
+    // Check token limit before ANY API call
+    this.tokenTracker?.checkLimit();
+
     let lastError: Error | undefined;
 
     for (let attempt = 1; attempt <= this.config.maxRetries + 1; attempt++) {

@@ -19,8 +19,9 @@ export interface TokenTrackerConfig {
 }
 
 export class TokenTracker {
-  private dailyUsage: Map<string, number> = new Map(); // date → total tokens
+  private dailyUsage: Map<string, number> = new Map();
   private dailyLimit: number;
+  private blocked: boolean = false;
   private onLimitExceeded?: (usage: TokenUsage) => void;
   private persistFn?: (usage: TokenUsage) => Promise<void>;
 
@@ -30,22 +31,36 @@ export class TokenTracker {
     this.persistFn = config?.persistFn;
   }
 
+  /** Check BEFORE making an API call. Throws if daily limit exceeded. */
+  checkLimit(): void {
+    if (this.blocked) {
+      throw new TokenLimitExceededError(
+        `Daily token limit (${this.dailyLimit}) exceeded. All AI calls blocked until midnight UTC.`
+      );
+    }
+  }
+
   /** Record a single API call's token usage. Returns false if limit exceeded. */
   async record(usage: Omit<TokenUsage, "timestamp">): Promise<boolean> {
     const date = new Date().toISOString().split("T")[0];
+    // Reset block at midnight
+    const today = date;
+    if (this.dailyUsage.get(today) === undefined) {
+      this.blocked = false;
+    }
+
     const current = this.dailyUsage.get(date) ?? 0;
     const newTotal = current + usage.totalTokens;
     this.dailyUsage.set(date, newTotal);
 
     const entry: TokenUsage = { ...usage, timestamp: new Date().toISOString() };
 
-    // Persist to DB
     if (this.persistFn) {
       await this.persistFn(entry).catch(() => {});
     }
 
-    // Check daily limit
     if (this.dailyLimit > 0 && newTotal > this.dailyLimit) {
+      this.blocked = true;
       this.onLimitExceeded?.(entry);
       return false;
     }
@@ -69,6 +84,13 @@ export class TokenTracker {
   resetToday(): void {
     const date = new Date().toISOString().split("T")[0];
     this.dailyUsage.delete(date);
+  }
+}
+
+export class TokenLimitExceededError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = "TokenLimitExceededError";
   }
 }
 

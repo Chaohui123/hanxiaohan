@@ -85,27 +85,57 @@ export function createTaskRouter(taskQueue: TaskQueue): Router {
     }
   });
 
-  // POST /api/task/deadletter/retry-batch — batch retry failed tasks
+  // POST /api/task/deadletter/retry-batch — batch retry with optional filtering
   router.post("/deadletter/retry-batch", async (req, res) => {
-    const { taskIds } = req.body as { taskIds?: string[] };
-    if (!taskIds || taskIds.length === 0) {
-      res.status(400).json({
-        success: false,
-        error: { code: "MISSING_IDS", message: "taskIds array required", retryable: false },
+    const { taskIds, filterType } = req.body as { taskIds?: string[]; filterType?: string };
+
+    // If filterType specified, get tasks from DB filtered by error type
+    let idsToRetry = taskIds;
+    if (filterType && !taskIds) {
+      const db = await import("../db/models.js");
+      const failed = await db.getFailedTasks("store_1");
+      if (filterType === "api_error") {
+        idsToRetry = failed
+          .filter((t: { errorMessage: string; status: string }) =>
+            t.status === "pending_retry" &&
+            (t.errorMessage.includes("fetch failed") || t.errorMessage.includes("429") || t.errorMessage.includes("5xx") || t.errorMessage.includes("Ozon API error"))
+          )
+          .map((t: { id: string }) => t.id);
+      } else if (filterType === "validation") {
+        idsToRetry = failed
+          .filter((t: { errorMessage: string; status: string }) =>
+            t.status === "pending_retry" && t.errorMessage.includes("Validation")
+          )
+          .map((t: { id: string }) => t.id);
+      } else if (filterType === "all_retryable") {
+        idsToRetry = failed
+          .filter((t: { errorMessage: string; status: string }) =>
+            t.status === "pending_retry" &&
+            !t.errorMessage.includes("insufficient stock") &&
+            !t.errorMessage.includes("permanently")
+          )
+          .map((t: { id: string }) => t.id);
+      }
+    }
+
+    if (!idsToRetry || idsToRetry.length === 0) {
+      res.json({
+        success: true,
+        data: { results: [], retried: 0, total: 0, message: "No matching tasks to retry" },
         correlationId: req.correlationId,
       });
       return;
     }
 
     const results: Array<{ taskId: string; requeued: boolean }> = [];
-    for (const tid of taskIds) {
+    for (const tid of idsToRetry) {
       const task = await taskQueue.retry(tid);
       results.push({ taskId: tid, requeued: !!task });
     }
 
     res.json({
       success: true,
-      data: { results, retried: results.filter((r) => r.requeued).length, total: taskIds.length },
+      data: { results, retried: results.filter((r) => r.requeued).length, total: idsToRetry.length },
       correlationId: req.correlationId,
     });
   });

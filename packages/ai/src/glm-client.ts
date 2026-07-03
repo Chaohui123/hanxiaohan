@@ -50,6 +50,9 @@ export class GlmClient {
     tokensUsed: { prompt: number; completion: number; total: number };
     model: string;
   }> {
+    // Check token limit before ANY API call
+    this.tokenTracker?.checkLimit();
+
     let lastError: Error | undefined;
 
     for (let attempt = 1; attempt <= this.maxRetries + 1; attempt++) {
