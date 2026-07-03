@@ -16,6 +16,8 @@ import { createStatsRouter } from "./routes/stats.route.js";
 import { createBackupRouter } from "./routes/backup.route.js";
 import { createOrderRouter } from "./routes/order.route.js";
 import { createWebhookRouter } from "./routes/webhook.route.js";
+import { createBulkRouter } from "./routes/bulk.route.js";
+import { createDashboardRouter } from "./routes/dashboard.route.js";
 import { mockMiddleware } from "./routes/mock.middleware.js";
 import { getDb } from "./db/connection.js";
 
@@ -61,6 +63,8 @@ async function start(): Promise<void> {
     baseUrl: config.ozon.baseUrl,
   });
   app.use("/api", createOrderRouter(ozonClient));
+  app.use("/api", createBulkRouter(taskQueue));
+  app.use("/api", createDashboardRouter(taskQueue));
 
   // ---- Error handling ----
   app.use(errorHandler);
