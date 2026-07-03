@@ -117,15 +117,17 @@ export async function initSchema(db: Database): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_token_usage_date ON token_usage(date(timestamp));
 
-    -- Store configs (multi-key management)
+    -- Store configs (multi-key management + grouping)
     CREATE TABLE IF NOT EXISTS store_configs (
       store_id TEXT PRIMARY KEY,
       client_id TEXT NOT NULL,
       api_key TEXT NOT NULL,
       store_name TEXT,
       proxy_url TEXT,
+      group_name TEXT,
       active INTEGER DEFAULT 1,
       created_at TEXT DEFAULT (datetime('now'))
     );
+    CREATE INDEX IF NOT EXISTS idx_store_group ON store_configs(group_name);
   `);
 }
