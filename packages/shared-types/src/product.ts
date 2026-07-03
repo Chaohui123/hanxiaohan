@@ -45,7 +45,7 @@ export interface ProcessedProduct {
   categoryTypeId?: number;
   categoryName: string;
   categoryPath: string[];
-  attributes: Array<{
+  attributes?: Array<{
     attributeId: number;
     name: string;
     value: string | number | string[];

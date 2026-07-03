@@ -128,7 +128,8 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
       // Step 5: Fill attributes (DeepSeek Flash)
       let requiredAttributes: Awaited<ReturnType<OzonClient["getCategoryAttributes"]>> = [];
       if (category.categoryId > 0) {
-        requiredAttributes = await ozonClient.getCategoryAttributes(category.categoryId).catch(() => []);
+        const attrCategoryId = category.attributeCategoryId ?? category.categoryId;
+        requiredAttributes = await ozonClient.getCategoryAttributes(attrCategoryId).catch(() => []);
       }
       if (requiredAttributes.length > 0) {
         await glmLimiter.call(() =>
@@ -219,7 +220,8 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
       let requiredAttributes: Awaited<ReturnType<OzonClient["getCategoryAttributes"]>> = [];
       if (category.categoryId > 0) {
         try {
-          requiredAttributes = await ozonClient.getCategoryAttributes(category.categoryId);
+          const attrCategoryId = category.attributeCategoryId ?? category.categoryId;
+          requiredAttributes = await ozonClient.getCategoryAttributes(attrCategoryId);
         } catch (err) {
           const msg = `Ozon category attributes failed: ${(err as Error).message}`;
           ctx.errors.push({ step: "category_attrs", message: msg });
@@ -321,7 +323,12 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
 
       let requiredAttributes: Awaited<ReturnType<OzonClient["getCategoryAttributes"]>> = [];
       if (category.categoryId > 0) {
-        try { requiredAttributes = await ozonClient.getCategoryAttributes(category.categoryId); } catch { requiredAttributes = []; }
+        try {
+          const attrCategoryId = category.attributeCategoryId ?? category.categoryId;
+          requiredAttributes = await ozonClient.getCategoryAttributes(attrCategoryId);
+        } catch {
+          requiredAttributes = [];
+        }
       }
       if (requiredAttributes.length > 0) {
         await stepFillAttributes(ctx, deepseekTranslator, translated, category.categoryId, requiredAttributes);

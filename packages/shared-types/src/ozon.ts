@@ -8,6 +8,11 @@ export interface OzonCredentials {
   storeId?: string;
 }
 
+export interface OzonDraftAttribute {
+  id: number;
+  values: Array<{ value: string | number }>;
+}
+
 export interface OzonDraftInput {
   name: string;
   description: string;
@@ -17,10 +22,7 @@ export interface OzonDraftInput {
   oldPrice?: number;
   vat: string; // "0" | "0.1" | "0.2"
   images: string[]; // 1688 image URLs — Ozon downloads directly
-  attributes: Array<{
-    id: number;
-    values: Array<{ value: string | number }>;
-  }>;
+  attributes?: OzonDraftAttribute[];
   dimensions: {
     length: number; // mm
     width: number;
