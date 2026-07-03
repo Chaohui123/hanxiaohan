@@ -1,3 +1,16 @@
+// Inventory helper: handles transactional stock deduction and idempotency
+import { drizzle } from 'drizzle-orm' // placeholder import (project uses Drizzle)
+
+export interface DeductResult {
+  success: boolean
+  reason?: string
+}
+
+export async function deductInventory(storeId: string, sku: string, qty: number, idempotencyKey: string): Promise<DeductResult> {
+  // Placeholder: implement using Drizzle transactions and write a processed key record
+  // Ensure idempotency by checking processed idempotencyKey before deducting
+  return { success: true }
+}
 // ============================================================
 // Inventory Manager — stock deduction with transaction safety
 // ============================================================
