@@ -1,0 +1,28 @@
+{
+  "name": "ONZO — Auto Ship Pending Orders",
+  "nodes": [
+    {
+      "parameters": { "rule": { "interval": [{ "field": "hours", "hoursInterval": 3 }] } },
+      "id": "schedule", "name": "Every 3 hours",
+      "type": "n8n-nodes-base.scheduleTrigger", "typeVersion": 1.1, "position": [250, 300]
+    },
+    {
+      "parameters": {
+        "url": "http://host.docker.internal:3000/api/orders?status=awaiting_deliver",
+        "method": "GET", "options": {}
+      },
+      "id": "get-orders", "name": "GET /api/orders?status=awaiting_deliver",
+      "type": "n8n-nodes-base.httpRequest", "typeVersion": 4, "position": [450, 300]
+    },
+    {
+      "parameters": { "content": "## Pending Shipments\nOrders ready to ship: {{ $json.data.length }}\n\nConfigure tracking numbers before activating.", "height": 120 },
+      "id": "result", "name": "Shipment Report",
+      "type": "n8n-nodes-base.stickyNote", "typeVersion": 1, "position": [650, 300]
+    }
+  ],
+  "connections": {
+    "Every 3 hours": { "main": [[{ "node": "GET /api/orders?status=awaiting_deliver", "type": "main", "index": 0 }]] },
+    "GET /api/orders?status=awaiting_deliver": { "main": [[{ "node": "Shipment Report", "type": "main", "index": 0 }]] }
+  },
+  "settings": { "callerPolicy": "workflowsFromSameOwner" }, "versionId": "1.0.0", "active": false
+}

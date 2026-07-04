@@ -104,5 +104,26 @@ export function createPriceRouter(): Router {
     }
   });
 
+  // POST /api/price/profit — profit breakdown calculator
+  router.post("/price/profit",
+    validateBody([
+      { field: "costCny", type: "number", required: true },
+      { field: "sellingPriceRub", type: "number", required: true },
+    ]),
+    async (req, res) => {
+      const { costCny, sellingPriceRub, category, weightKg, exchangeRate } = req.body as {
+        costCny: number; sellingPriceRub: number; category?: string; weightKg?: number; exchangeRate?: number;
+      };
+
+      const { getExchangeRate } = await import("../services/exchange-rate.js");
+      const fx = exchangeRate ?? (await getExchangeRate()).rate;
+
+      const { calculateProfit } = await import("../services/profit-calc.js");
+      const result = calculateProfit({ costCny, sellingPriceRub, exchangeRate: fx, category, weightKg });
+
+      res.json({ success: true, data: result, correlationId: req.correlationId });
+    }
+  );
+
   return router;
 }
