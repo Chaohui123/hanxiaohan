@@ -36,8 +36,8 @@ export class InventoryManager {
 
   async setStock(offerId: string, sku: number, quantity: number): Promise<void> {
     await this.db.run(
-      `INSERT OR REPLACE INTO inventory (offer_id, sku, stock_available, stock_reserved, updated_at)
-       VALUES (?, ?, ?, 0, datetime('now'))`,
+      `INSERT INTO inventory (offer_id, sku, stock_available, stock_reserved, updated_at)
+       VALUES (?, ?, ?, 0, NOW()) ON CONFLICT(offer_id, sku) DO UPDATE SET stock_available=EXCLUDED.stock_available, updated_at=NOW()`,
       [offerId, sku, quantity]
     );
   }
@@ -59,7 +59,7 @@ export class InventoryManager {
 
     // Execute all deductions in a single transaction (BEGIN/COMMIT)
     // If any step fails, the entire batch is rolled back
-    await this.db.run("BEGIN IMMEDIATE");
+    await this.db.run("BEGIN");
     try {
       for (const item of items) {
         const rows = await this.db.all<Record<string, unknown>>(
@@ -78,11 +78,11 @@ export class InventoryManager {
         const na = stockAvailable - item.quantity;
         const nr = stockReserved + item.quantity;
         await this.db.run(
-          "UPDATE inventory SET stock_available=?, stock_reserved=?, updated_at=datetime('now') WHERE offer_id=? AND sku=?",
+          "UPDATE inventory SET stock_available=?, stock_reserved=?, updated_at=NOW() WHERE offer_id=? AND sku=?",
           [na, nr, item.offerId, item.sku]
         );
         await this.db.run(
-          "INSERT INTO stock_movements (posting_number,offer_id,sku,quantity,type,created_at) VALUES (?,?,?,?,'deduct',datetime('now'))",
+          "INSERT INTO stock_movements (posting_number,offer_id,sku,quantity,type,created_at) VALUES (?,?,?,?,'deduct',NOW())",
           [postingNumber, item.offerId, item.sku, -item.quantity]
         );
       }
@@ -99,14 +99,14 @@ export class InventoryManager {
 
   async restore(postingNumber: string, items: StockItem[]): Promise<void> {
     for (const item of items) {
-      await this.db.run("UPDATE inventory SET stock_available=stock_available+?, stock_reserved=stock_reserved-?, updated_at=datetime('now') WHERE offer_id=? AND sku=?", [item.quantity, item.quantity, item.offerId, item.sku]);
-      await this.db.run("INSERT INTO stock_movements (posting_number,offer_id,sku,quantity,type,created_at) VALUES (?,?,?,?,'restore',datetime('now'))", [postingNumber, item.offerId, item.sku, item.quantity]);
+      await this.db.run("UPDATE inventory SET stock_available=stock_available+?, stock_reserved=stock_reserved-?, updated_at=NOW() WHERE offer_id=? AND sku=?", [item.quantity, item.quantity, item.offerId, item.sku]);
+      await this.db.run("INSERT INTO stock_movements (posting_number,offer_id,sku,quantity,type,created_at) VALUES (?,?,?,?,'restore',NOW())", [postingNumber, item.offerId, item.sku, item.quantity]);
     }
   }
 
   async confirmDelivery(postingNumber: string): Promise<void> {
     const m = await this.db.all<{offer_id:string;sku:number;quantity:number}>("SELECT offer_id,sku,quantity FROM stock_movements WHERE posting_number=? AND type='deduct'", [postingNumber]);
-    for (const r of m) await this.db.run("UPDATE inventory SET stock_reserved=stock_reserved+?, updated_at=datetime('now') WHERE offer_id=? AND sku=?", [r.quantity, r.offer_id, r.sku]);
+    for (const r of m) await this.db.run("UPDATE inventory SET stock_reserved=stock_reserved+?, updated_at=NOW() WHERE offer_id=? AND sku=?", [r.quantity, r.offer_id, r.sku]);
   }
 
   async getStock(offerId: string, sku: number): Promise<InventoryRecord | null> {

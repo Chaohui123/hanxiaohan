@@ -117,7 +117,7 @@ export async function syncOrders(
             if (localStatus !== p.status) {
               // remote_wins by default
               await options.db.run(
-                "UPDATE local_orders SET status = ?, updated_at = datetime('now') WHERE store_id = ? AND order_id = ?",
+                "UPDATE local_orders SET status = ?, updated_at = NOW() WHERE store_id = ? AND order_id = ?",
                 [p.status, storeId, p.orderId]
               );
               upsertedCount++;

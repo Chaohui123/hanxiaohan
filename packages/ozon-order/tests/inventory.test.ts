@@ -6,7 +6,7 @@ describe("InventoryManager", () => {
     const rows: Record<string, unknown>[] = [];
     const db = {
       run: async (_s: string, p?: unknown[]) => {
-        if (_s.includes("INSERT OR REPLACE")) {
+        if (_s.includes("ON CONFLICT")) {
           const idx = rows.findIndex((r) => r.offerId === p?.[0] && r.sku === p?.[1]);
           if (idx >= 0) rows.splice(idx, 1);
           rows.push({ offerId: p?.[0], sku: p?.[1], stockAvailable: p?.[2], stockReserved: 0, updatedAt: "" });
