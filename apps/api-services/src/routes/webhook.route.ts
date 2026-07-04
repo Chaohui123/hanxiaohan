@@ -191,6 +191,16 @@ export function createWebhookRouter(): Router {
         payload: { eventId: payload.eventId },
         correlationId: req.correlationId,
       }).catch(() => {});
+
+      // Enqueue a retry task — stuck-task-recovery will pick it up
+      const db = await getDb().catch(() => null);
+      if (db) {
+        await db.run(
+          `INSERT INTO task_queue (id, type, status, payload_json, store_id, priority, max_retries, created_at)
+           VALUES (?, 'webhook_retry', 'queued', ?, 'store_1', 5, 3, NOW())`,
+          [`wr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, JSON.stringify({ eventType: payload.eventType, body: JSON.parse(rawBody) })]
+        ).catch(() => {});
+      }
     }
   });
 
