@@ -5,6 +5,7 @@
 
 import { getDb, serializedWrite } from "../db/connection.js";
 import { emitEvent, EVENT_KEYS } from "./notification-events.js";
+import { logger } from "@onzo/logger";
 
 export type AlertLevel = "normal" | "warning" | "critical";
 
@@ -61,6 +62,11 @@ export class InventoryManager {
     );
     // Invalidate cache
     cache.delete(cacheKey(offerId, sku));
+
+    // Async sync to Ozon (fire-and-forget — don't block local update)
+    this.syncStockToOzon(offerId, sku, quantity).catch((err) => {
+      logger.warn({ offerId, sku, err: (err as Error).message }, "Failed to sync stock to Ozon");
+    });
   }
 
   async getAlerts(threshold = 5): Promise<InventoryAlert[]> {
