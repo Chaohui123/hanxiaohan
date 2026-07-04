@@ -99,17 +99,18 @@ services:
     build:
       context: .
       dockerfile: apps/web-dashboard/Dockerfile
-    container_name: onzo-dashboard
+    container_name: onzo-web-dashboard
     restart: unless-stopped
     ports:
-      - "80:80"
+      - "8080:80"
     depends_on:
-      - api-services
+      api-services:
+        condition: service_healthy
     networks:
       - onzo-network
     profiles:
-      - dashboard
       - full
+      - production
 
   # ---- Caddy HTTPS Reverse Proxy (production) ----
   caddy:
