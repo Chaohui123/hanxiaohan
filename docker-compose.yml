@@ -156,6 +156,10 @@ volumes:
     driver: local
   caddy_config:
     driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
 
   # ---- Prometheus Metrics ----
   prometheus:
@@ -213,12 +217,6 @@ volumes:
     profiles:
       - tracing
       - full
-
-volumes:
-  prometheus_data:
-    driver: local
-  grafana_data:
-    driver: local
 
 networks:
   onzo-network:
