@@ -7,6 +7,7 @@ import type { OzonCategoryNode } from "@onzo/shared-types";
 import type { OzonClient } from "@onzo/ozon-api-wrapper";
 import { getDb } from "../db/connection.js";
 import { logger } from "@onzo/logger";
+import { cache } from "@onzo/cache";
 
 const CACHE_TABLE = `
   CREATE TABLE IF NOT EXISTS category_cache (
@@ -46,7 +47,15 @@ export async function getCategoryTree(
   await ensureTable();
   const db = await getDb();
 
-  // Check cache
+  // Check Redis first (fast), then SQLite
+  if (!options?.forceRefresh) {
+    const redisCached = await cache.get("ozon:category_tree").catch(() => null);
+    if (redisCached) {
+      try { return JSON.parse(redisCached) as OzonCategoryNode[]; } catch { /* corrupted, fall through */ }
+    }
+  }
+
+  // Check SQLite cache
   if (!options?.forceRefresh && db) {
     try {
       const rows = await db.all(
@@ -74,7 +83,9 @@ export async function getCategoryTree(
         "INSERT OR REPLACE INTO category_cache (id, tree_json, fetched_at, ttl_hours) VALUES (1, ?, datetime('now'), ?)",
         [JSON.stringify(tree), ttlHours]
       );
-      logger.info({ rootCategories: tree.length }, "Category cache stored");
+      logger.info({ rootCategories: tree.length }, "Category cache stored in SQLite");
+      // Also cache in Redis (1h TTL)
+      cache.set("ozon:category_tree", JSON.stringify(tree), 3600).catch(() => {});
     } catch (err) {
       logger.warn({ err: (err as Error).message }, "Category cache write failed");
     }

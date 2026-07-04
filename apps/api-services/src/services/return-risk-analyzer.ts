@@ -106,3 +106,6 @@ export function analyzeReturnRisk(params: {
     recommendations,
   };
 }
+
+export function calculateReturnCost(priceRub: number, weightKg?: number, _cat?: string) { const base=300; const w=(weightKg||0.5)*150; return { costRub: base+Math.round(w), insuranceRub: Math.round(priceRub*0.03), totalRub: base+Math.round(w)+Math.round(priceRub*0.03) } }
+export function getPriorityCategories(): string[] { return ['auto_parts','tools','home_storage','hardware','car_cleaning'] }

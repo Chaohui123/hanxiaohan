@@ -78,6 +78,7 @@ vi.mock("@onzo/ozon-order", () => ({ OzonOrderClient: vi.fn(), syncOrders: vi.fn
 vi.mock("@onzo/ozon-order/webhook", () => ({ parseWebhookPayload: vi.fn(), handleWebhookEvent: vi.fn() }));
 vi.mock("@onzo/validation-layer", () => ({ ProductValidator: vi.fn().mockImplementation(() => ({ validate: vi.fn().mockReturnValue({ valid: true, errors: [], warnings: [], stats: { totalChecks: 16, passed: 16, failed: 0, warned: 0 } }) })) }));
 vi.mock("@onzo/logistics", () => ({ getLogisticsProvider: vi.fn().mockResolvedValue(null), selectBestProvider: vi.fn().mockResolvedValue(null) }));
+vi.mock("@onzo/cache", () => ({ cache: { get: vi.fn().mockResolvedValue(null), set: vi.fn().mockResolvedValue(undefined), del: vi.fn().mockResolvedValue(undefined), mget: vi.fn().mockResolvedValue([]), mset: vi.fn().mockResolvedValue(undefined), incr: vi.fn().mockResolvedValue(1), expire: vi.fn().mockResolvedValue(undefined), ping: vi.fn().mockResolvedValue(true), healthCheck: vi.fn().mockResolvedValue({ available: true, latencyMs: 1 }) } }));
 
 process.env.OZON_CLIENT_IDS = "test";
 process.env.OZON_API_KEYS = "test";
