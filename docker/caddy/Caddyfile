@@ -1,0 +1,70 @@
+# ============================================================
+# ONZO Caddy Reverse Proxy — Automatic HTTPS via Let's Encrypt
+# Domain: set CADDY_DOMAIN in .env.production
+# ============================================================
+
+{$CADDY_DOMAIN:localhost} {
+	# ---- Ozon Webhook Receiver (must be public, no auth) ----
+	# Ozon pushes order status changes to this endpoint.
+	# Registered via: npx tsx scripts/setup-webhook.ts
+	handle /api/webhook/ozon {
+		reverse_proxy api-services:3000 {
+			# Forward original client IP for IP whitelist validation
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Real-IP {remote_host}
+		}
+	}
+
+	# ---- API Endpoints ----
+	handle /api/* {
+		reverse_proxy api-services:3000 {
+			header_up X-Forwarded-For {remote_host}
+		}
+	}
+
+	# ---- Health Check (no auth required) ----
+	handle /health {
+		reverse_proxy api-services:3000
+	}
+
+	# ---- Metrics Endpoint ----
+	handle /metrics {
+		reverse_proxy api-services:3000
+	}
+
+	# ---- HTML Dashboard ----
+	handle {
+		reverse_proxy api-services:3000
+	}
+
+	# ---- Security Headers ----
+	header {
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Strict-Transport-Security "max-age=31536000; includeSubDomains"
+		# Disable FLoC / Topics API
+		Permissions-Policy "interest-cohort=()"
+	}
+
+	# ---- Access Log (JSON format, rotated) ----
+	log {
+		output file /data/caddy/access.log {
+			roll_size 10mb
+			roll_keep 10
+		}
+		format json
+	}
+}
+
+# ---- WebSocket Support (future frontend) ----
+# Uncomment when adding a real-time dashboard frontend:
+#
+# {$CADDY_DOMAIN:localhost} {
+#   handle /ws/* {
+#     reverse_proxy api-services:3000 {
+#       header_up Connection {>Connection}
+#       header_up Upgrade {>Upgrade}
+#     }
+#   }
+# }

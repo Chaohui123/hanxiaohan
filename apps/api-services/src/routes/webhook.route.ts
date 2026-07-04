@@ -1,5 +1,16 @@
 // ============================================================
 // Ozon Webhook receiver — POST /api/webhook/ozon
+//
+// Configuration:
+//   1. Set PUBLIC_DOMAIN in .env (e.g. onzo.example.com)
+//   2. The webhook URL Ozon will call:
+//      https://{PUBLIC_DOMAIN}/api/webhook/ozon
+//   3. Register via: npx tsx scripts/setup-webhook.ts
+//   4. Ozon signs requests with HMAC-SHA256 using OZON_API_KEYS
+//
+// Ozon webhook source IPs (optional whitelist):
+//   These are documented at https://docs.ozon.ru/api/seller/#section/Obshie-svedeniya
+//   Add to OZON_WEBHOOK_IPS in .env (comma-separated) to enable validation.
 // ============================================================
 
 import { Router } from "express";
@@ -13,6 +24,35 @@ const API_SECRET = process.env.OZON_API_KEYS || "";
 // In production, reject webhooks without HMAC-SHA256 signature verification
 const ENFORCE_WEBHOOK_SIGNATURE = (process.env.ENV || process.env.NODE_ENV) !== "dev";
 
+// Optional: Ozon webhook IP whitelist (comma-separated CIDR or IPs)
+const ALLOWED_WEBHOOK_IPS = (process.env.OZON_WEBHOOK_IPS || "")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+function isIpAllowed(clientIp: string): boolean {
+  if (ALLOWED_WEBHOOK_IPS.length === 0) return true; // whitelist not configured
+
+  // Simple prefix matching for CIDR-like or exact IPs
+  return ALLOWED_WEBHOOK_IPS.some((allowed) => {
+    if (allowed.includes("/")) {
+      // Basic CIDR check: compare network prefix
+      const [network, bits] = allowed.split("/");
+      const prefix = parseInt(bits, 10);
+      if (isNaN(prefix)) return clientIp === network;
+      // Simple prefix byte comparison
+      const clientParts = clientIp.split(".").map(Number);
+      const netParts = network.split(".").map(Number);
+      const matchBytes = Math.floor(prefix / 8);
+      for (let i = 0; i < matchBytes; i++) {
+        if (clientParts[i] !== netParts[i]) return false;
+      }
+      return true;
+    }
+    return clientIp === allowed;
+  });
+}
+
 export function createWebhookRouter(): Router {
   const router = Router();
 
@@ -20,10 +60,30 @@ export function createWebhookRouter(): Router {
     const rawBodyBuffer = (req as typeof req & { rawBody?: Buffer }).rawBody;
     const rawBody = rawBodyBuffer ? rawBodyBuffer.toString("utf8") : JSON.stringify(req.body);
     const signature = req.headers["x-ozon-signature"] as string | undefined;
+    const clientIp = (req.headers["x-forwarded-for"] as string || req.socket.remoteAddress || "").split(",")[0].trim();
+
+    // Log every incoming webhook event for audit
+    logger.info({
+      clientIp,
+      hasSignature: !!signature,
+      contentType: req.headers["content-type"],
+      correlationId: req.correlationId,
+    }, "Webhook request received");
+
+    // Optional IP whitelist check
+    if (!isIpAllowed(clientIp)) {
+      logger.warn({ clientIp, correlationId: req.correlationId }, "Webhook rejected — IP not in whitelist");
+      res.status(403).json({
+        success: false,
+        error: { code: "IP_NOT_ALLOWED", message: "Source IP not in OZON_WEBHOOK_IPS whitelist", retryable: false },
+        correlationId: req.correlationId,
+      });
+      return;
+    }
 
     // Reject requests without signature in production — prevents forged webhooks
     if (ENFORCE_WEBHOOK_SIGNATURE && !signature) {
-      logger.warn({ correlationId: req.correlationId }, "Webhook rejected — missing X-Ozon-Signature header");
+      logger.warn({ clientIp, correlationId: req.correlationId }, "Webhook rejected — missing X-Ozon-Signature header");
       res.status(401).json({
         success: false,
         error: { code: "MISSING_SIGNATURE", message: "X-Ozon-Signature header required", retryable: false },
@@ -74,6 +134,15 @@ export function createWebhookRouter(): Router {
     }
 
     const payload: WebhookPayload = parsed;
+
+    // Log event type for monitoring
+    logger.info({
+      eventType: payload.eventType,
+      postingNumber: payload.postingNumber,
+      orderId: payload.orderId,
+      status: payload.status,
+      correlationId: req.correlationId,
+    }, "Webhook event processing");
 
     // Handle the event — update local order status
     try {
