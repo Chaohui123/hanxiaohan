@@ -1,0 +1,45 @@
+name: Staging E2E
+
+on:
+  pull_request:
+    branches: [main]
+    types: [opened, synchronize, reopened]
+
+jobs:
+  e2e:
+    runs-on: ubuntu-latest
+    environment: staging
+
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with: { version: latest }
+      - uses: actions/setup-node@v4
+        with: { node-version: 22, cache: "pnpm" }
+
+      - name: Install
+        run: pnpm install --frozen-lockfile
+
+      - name: Type Check
+        run: pnpm exec tsc -b --noEmit
+
+      - name: Run Tests
+        run: pnpm test
+
+      - name: Build Docker
+        run: docker build -f docker/api-services/Dockerfile -t onzo-staging .
+
+      - name: Smoke Test
+        run: |
+          docker run -d --name onzo-staging -p 3000:3000 \
+            -e OZON_CLIENT_IDS=test -e OZON_API_KEYS=test \
+            -e GLM_API_KEY=test -e DEEPSEEK_API_KEY=test \
+            -e ENV=dev -e ENABLE_MOCK=true \
+            onzo-staging
+          sleep 10
+          curl --retry 5 --retry-delay 5 http://localhost:3000/health | grep '"status":"ok"'
+          echo "Smoke test passed"
+
+      - name: Cleanup
+        if: always()
+        run: docker rm -f onzo-staging || true

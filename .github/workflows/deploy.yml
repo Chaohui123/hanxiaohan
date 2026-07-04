@@ -1,0 +1,68 @@
+name: Deploy Production
+
+on:
+  push:
+    branches: [main]
+    paths-ignore: ["docs/**", "*.md"]
+  workflow_dispatch:
+    inputs:
+      skip-health-check:
+        description: "Skip health check after deploy"
+        type: boolean
+        default: false
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment: production
+    concurrency: production
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            cd /root/onzo
+
+            echo "=== Pulling latest code ==="
+            git pull origin main
+
+            echo "=== Running database migrations ==="
+            bash scripts/migrate.sh up
+
+            echo "=== Building and restarting ==="
+            pkill -f "tsx.*index" || true
+            sleep 2
+            cd apps/api-services
+            nohup npx tsx src/index.ts > /tmp/onzo.log 2>&1 &
+
+            echo "=== Health Check ==="
+            for i in 1 2 3 4 5 6 7 8 9 10; do
+              if curl -s --connect-timeout 3 http://localhost:3000/health | grep -q '"status":"ok"'; then
+                echo "Health OK after ${i}0s"
+                exit 0
+              fi
+              sleep 10
+            done
+            echo "FAILED: Health check did not pass after 100s"
+            exit 1
+
+      - name: Notify Success
+        if: success()
+        run: echo "Deploy successful at $(date -u)"
+
+      - name: Rollback on Failure
+        if: failure()
+        run: |
+          echo "DEPLOY FAILED — manual rollback required"
+          echo "SSH to server and run: cd /root/onzo && bash scripts/deploy.sh rollback"
