@@ -5,6 +5,8 @@
 import type { ScrapedProduct } from "@onzo/shared-types";
 import { parseProductPage, sanitizeUrl } from "./parser.js";
 import { createStealthConfig, randomDelay, sleep } from "./anti-detect.js";
+import { ProxyManager } from "./proxy-manager.js";
+import { CaptchaHandler } from "./captcha-handler.js";
 import { readFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
@@ -111,58 +113,127 @@ export class ProductScraper {
   private config: Required<Omit<ScraperConfig, "proxy">> & { proxy?: ScraperConfig["proxy"] };
   private browser: Browser | null = null;
   private context: BrowserContext | null = null;
+  private proxyManager: ProxyManager;
+  private captchaHandler: CaptchaHandler;
+  private scraperMetrics = { totalRequests: 0, successRequests: 0, failedRequests: 0, captchaTriggers: 0, totalDurationMs: 0 };
 
   constructor(config?: ScraperConfig) {
     this.config = { ...DEFAULT_CONFIG, ...config };
+    this.proxyManager = new ProxyManager();
+    this.captchaHandler = new CaptchaHandler();
+  }
+
+  /** Attach captcha notification callback. */
+  onCaptcha(fn: (event: import("./captcha-handler.js").CaptchaEvent) => Promise<void>): void {
+    this.captchaHandler.onCaptcha(fn);
+  }
+
+  /** Get proxy stats + scraper metrics for monitoring. */
+  getMetrics() {
+    return {
+      ...this.scraperMetrics,
+      successRate: this.scraperMetrics.totalRequests > 0
+        ? (this.scraperMetrics.successRequests / this.scraperMetrics.totalRequests * 100).toFixed(1) + "%"
+        : "N/A",
+      avgDurationMs: this.scraperMetrics.successRequests > 0
+        ? Math.round(this.scraperMetrics.totalDurationMs / this.scraperMetrics.successRequests)
+        : 0,
+      proxy: this.proxyManager.getMetrics(),
+      captcha: this.captchaHandler.metrics,
+    };
   }
 
   /**
-   * Scrape a single 1688 product URL.
+   * Scrape a single 1688 product URL with proxy rotation + captcha detection.
+   * Retries up to 3 times with different proxies on failure.
    */
-  async scrapeProduct(url: string): Promise<ScrapedProduct> {
-    await this.ensureBrowser();
-    console.log("[Scraper] Browser ready, navigating to:", url);
+  async scrapeProduct(url: string, retries = 3): Promise<ScrapedProduct> {
+    this.scraperMetrics.totalRequests++;
+    const startTime = Date.now();
 
-    const page = await this.context.newPage();
-    try {
-      await sleep(randomDelay(this.config.minDelayMs, this.config.maxDelayMs));
-
-      await page.goto(url, {
-        waitUntil: "domcontentloaded",
-        timeout: this.config.timeout,
-      });
-      console.log("[Scraper] Page loaded:", await page.title());
-
-      try {
-        await page.waitForSelector(".mod-detail, .offer-detail, .tab-content-container, [data-mod-config]", {
-          timeout: 10000,
-        });
-      } catch {
-        // continue
-      }
-
-      await this.dismissLoginOverlay(page);
-      console.log("[Scraper] Login overlay handled");
-
-      await this.scrollToLoad(page);
-      console.log("[Scraper] Scroll done");
-
-      const pageData = await this.extractPageData(page, url);
-      console.log("[Scraper] Page data extracted:", pageData.title);
-
-      const detailImages = await this.extractDetailImages(page);
-      console.log("[Scraper] Detail images:", detailImages.length);
-
-      const product = parseProductPage(pageData, url);
-      product.detailImages = detailImages;
-
-      // Persist cookies after successful scrape (maintains login session)
-      await this.saveCookies().catch(() => {});
-
-      return product;
-    } finally {
-      await page.close();
+    // Check captcha cooldown
+    if (this.captchaHandler.paused) {
+      const remaining = this.captchaHandler.cooldownRemaining;
+      throw new Error(`Scraper paused — captcha cooldown active (${remaining}s remaining). Please wait or resolve captcha manually.`);
     }
+
+    let lastError: Error | undefined;
+
+    for (let attempt = 0; attempt < retries; attempt++) {
+      try {
+        // Rotate proxy on retry
+        if (attempt > 0) {
+          await this.close(); // Close old browser context
+          const backoffMs = Math.min(1000 * Math.pow(2, attempt), 10_000);
+          await sleep(backoffMs);
+        }
+
+        await this.ensureBrowser();
+        console.log(`[Scraper] Attempt ${attempt + 1}/${retries}, navigating to:`, url);
+
+        const page = await this.context!.newPage();
+        try {
+          await sleep(randomDelay(this.config.minDelayMs, this.config.maxDelayMs));
+
+          await page.goto(url, {
+            waitUntil: "domcontentloaded",
+            timeout: 60_000, // 60s timeout
+          });
+          console.log("[Scraper] Page loaded:", await page.title());
+
+          // Captcha check
+          const captcha = await this.captchaHandler.detect(page);
+          if (captcha) {
+            this.scraperMetrics.captchaTriggers++;
+            this.proxyManager.markFailed(this.config.proxy?.server || "direct");
+            throw new Error(`Captcha detected: ${captcha.captchaType}. Scraper entering cooldown.`);
+          }
+
+          try {
+            await page.waitForSelector(".mod-detail, .offer-detail, .tab-content-container, [data-mod-config]", {
+              timeout: 10000,
+            });
+          } catch {
+            // continue
+          }
+
+          await this.dismissLoginOverlay(page);
+          await this.scrollToLoad(page);
+
+          const pageData = await this.extractPageData(page, url);
+          const detailImages = await this.extractDetailImages(page);
+
+          const product = parseProductPage(pageData, url);
+          product.detailImages = detailImages;
+
+          await this.saveCookies().catch(() => {});
+          this.proxyManager.markSuccess(this.config.proxy?.server || "direct");
+
+          // Update metrics
+          this.scraperMetrics.successRequests++;
+          this.scraperMetrics.totalDurationMs += (Date.now() - startTime);
+
+          return product;
+        } finally {
+          await page.close();
+        }
+      } catch (err) {
+        lastError = err instanceof Error ? err : new Error(String(err));
+        console.error(`[Scraper] Attempt ${attempt + 1} failed: ${lastError.message}`);
+
+        if (attempt < retries - 1) {
+          // Switch proxy for retry
+          const newProxy = this.proxyManager.getProxy();
+          if (newProxy) {
+            this.config.proxy = newProxy;
+            console.log(`[Scraper] Switching proxy to ${newProxy.server}`);
+          }
+        }
+      }
+    }
+
+    this.scraperMetrics.failedRequests++;
+    throw lastError!;
   }
 
   /**
@@ -321,9 +392,12 @@ export class ProductScraper {
 
     const chrome = await ensurePlaywright();
 
+    // Get proxy from pool if not explicitly configured
+    const proxy = this.config.proxy || this.proxyManager.getProxy() || undefined;
+
     this.browser = await chrome.launch({
       headless: this.config.headless,
-      proxy: this.config.proxy as { server: string } | undefined,
+      proxy: proxy as { server: string } | undefined,
     });
 
     this.context = await this.browser.newContext(createStealthConfig());

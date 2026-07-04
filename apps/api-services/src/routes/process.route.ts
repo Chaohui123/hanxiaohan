@@ -46,6 +46,17 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
     maxDelayMs: config.scraper.requestDelayMax,
   });
 
+  // Wire captcha notifications
+  scraper.onCaptcha(async (event) => {
+    await notifier.notify({
+      level: "warn",
+      event: "1688验证码",
+      message: `${event.captchaType} captcha at ${event.url}. Scraper cooldown active.`,
+      correlationId: `captcha-${Date.now()}`,
+      metadata: { captchaType: event.captchaType, url: event.url },
+    }).catch(() => {});
+  });
+
   // Register cleanup for graceful shutdown
   registerCleanup(async () => {
     await scraper.close();
@@ -527,6 +538,11 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
     } catch (err) {
       res.status(500).json({ success: false, error: (err as Error).message, correlationId: req.correlationId });
     }
+  });
+
+  // GET /api/debug/scraper-metrics — scraper monitoring
+  router.get("/debug/scraper-metrics", (_req, res) => {
+    res.json({ success: true, data: scraper.getMetrics(), correlationId: _req.correlationId });
   });
 
   return router;
