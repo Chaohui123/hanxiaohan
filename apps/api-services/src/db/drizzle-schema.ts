@@ -128,3 +128,30 @@ export const productPerformance = sqliteTable("product_performance", {
   reviewCount: integer("review_count").default(0),
   updatedAt: text("updated_at").default("(datetime('now'))"),
 });
+
+// ---- Market Snapshots (Ozon category data snapshots) ----
+export const marketSnapshots = sqliteTable("market_snapshots", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  categoryId: integer("category_id").notNull(),
+  categoryName: text("category_name"),
+  listingCount: integer("listing_count").default(0),
+  avgPriceRub: real("avg_price_rub").default(0),
+  minPriceRub: real("min_price_rub").default(0),
+  maxPriceRub: real("max_price_rub").default(0),
+  capturedAt: text("captured_at").default("(datetime('now'))"),
+});
+
+// ---- Category Opportunities (cached blue-ocean results) ----
+export const categoryOpportunities = sqliteTable("category_opportunities", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  categoryId: integer("category_id").notNull().unique(),
+  categoryName: text("category_name"),
+  overallScore: integer("overall_score").default(0),
+  listingCount: integer("listing_count").default(0),
+  avgPriceRub: real("avg_price_rub").default(0),
+  estMargin: integer("est_margin").default(0),
+  monthOrders: integer("month_orders").default(0),
+  recommendation: text("recommendation"),
+  dataSource: text("data_source"),
+  updatedAt: text("updated_at").default("(datetime('now'))"),
+});
