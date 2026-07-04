@@ -4,6 +4,7 @@
 
 import { Router } from "express";
 import { getDb } from "../db/connection.js";
+import { checkPipelineHealth } from "../pipelines/pipeline-health.js";
 
 export function createHealthRouter(): Router {
   const router = Router();
@@ -11,6 +12,16 @@ export function createHealthRouter(): Router {
   // GET /health — basic liveness (fast, no deps)
   router.get("/health", (_req, res) => {
     res.json({ status: "ok", uptime: process.uptime(), timestamp: new Date().toISOString() });
+  });
+
+  // GET /ready/pipeline — deep pipeline health (all external deps)
+  router.get("/ready/pipeline", async (_req, res) => {
+    try {
+      const health = await checkPipelineHealth();
+      res.json(health);
+    } catch (err) {
+      res.status(500).json({ status: "unhealthy", error: (err as Error).message });
+    }
   });
 
   // GET /ready — comprehensive readiness (DB + Ozon API + model keys)
