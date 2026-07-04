@@ -1,0 +1,22 @@
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+alerting:
+  alertmanagers:
+    - static_configs:
+        - targets: []
+
+rule_files:
+  - /etc/prometheus/alerts.yml
+
+scrape_configs:
+  - job_name: "onzo-api"
+    metrics_path: /metrics
+    static_configs:
+      - targets: ["api-services:3000"]
+    scrape_interval: 15s
+
+  - job_name: "prometheus"
+    static_configs:
+      - targets: ["localhost:9090"]

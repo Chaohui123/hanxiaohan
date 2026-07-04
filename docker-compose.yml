@@ -139,6 +139,69 @@ volumes:
   caddy_config:
     driver: local
 
+  # ---- Prometheus Metrics ----
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: onzo-prometheus
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.path=/prometheus"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - ./docker/prometheus/alerts.yml:/etc/prometheus/alerts.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks:
+      - onzo-network
+    profiles:
+      - monitoring
+      - full
+
+  # ---- Grafana Dashboards ----
+  grafana:
+    image: grafana/grafana:latest
+    container_name: onzo-grafana
+    restart: unless-stopped
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-onzo2026}
+      - GF_INSTALL_PLUGINS=grafana-piechart-panel
+    volumes:
+      - ./docker/grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
+      - ./docker/grafana/dashboards:/etc/grafana/provisioning/dashboards
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3001:3000"
+    networks:
+      - onzo-network
+    profiles:
+      - monitoring
+      - full
+
+  # ---- Jaeger Tracing (optional) ----
+  jaeger:
+    image: jaegertracing/all-in-one:latest
+    container_name: onzo-jaeger
+    restart: unless-stopped
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    ports:
+      - "16686:16686"
+      - "4318:4318"
+    networks:
+      - onzo-network
+    profiles:
+      - tracing
+      - full
+
+volumes:
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
+
 networks:
   onzo-network:
     driver: bridge

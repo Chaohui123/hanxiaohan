@@ -1,0 +1,29 @@
+{
+  "title": "ONZO Overview",
+  "tags": ["onzo"],
+  "refresh": "15s",
+  "panels": [
+    {
+      "title": "HTTP Request Rate", "type": "graph", "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [{ "expr": "rate(onzo_http_requests_total[1m])", "legendFormat": "{{method}} {{path}} ({{status_code}})" }]
+    },
+    {
+      "title": "Request Duration P99", "type": "graph", "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [{ "expr": "histogram_quantile(0.99, rate(onzo_http_request_duration_seconds_bucket[1m]))", "legendFormat": "{{path}}" }]
+    },
+    {
+      "title": "Error Rate", "type": "stat", "gridPos": { "x": 0, "y": 8, "w": 6, "h": 4 },
+      "targets": [{ "expr": "sum(rate(onzo_http_requests_total{status_code=~\"5..\"}[5m])) / sum(rate(onzo_http_requests_total[5m]))" }],
+      "fieldConfig": { "defaults": { "unit": "percentunit" } }
+    },
+    {
+      "title": "Circuit Breakers", "type": "stat", "gridPos": { "x": 6, "y": 8, "w": 6, "h": 4 },
+      "targets": [{ "expr": "onzo_circuit_breaker_state" }]
+    },
+    {
+      "title": "Task Queue Size", "type": "graph", "gridPos": { "x": 12, "y": 8, "w": 12, "h": 4 },
+      "targets": [{ "expr": "onzo_task_queue_size", "legendFormat": "{{status}}" }]
+    }
+  ],
+  "schemaVersion": 16
+}

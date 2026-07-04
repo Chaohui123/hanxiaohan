@@ -1,0 +1,56 @@
+groups:
+  - name: onzo-business
+    rules:
+      - alert: ListingFailureRateHigh
+        expr: rate(onzo_listing_pipeline_total{status="failed"}[5m]) / rate(onzo_listing_pipeline_total[5m]) > 0.20
+        for: 5m
+        labels: { severity: critical, category: business }
+        annotations: { summary: "上架失败率超过20%", description: "5分钟内上架失败率 {{ $value | humanizePercentage }}" }
+
+      - alert: OrderSyncDelay
+        expr: onzo_order_sync_duration_seconds{quantile="0.5"} > 1800
+        for: 10m
+        labels: { severity: warning, category: business }
+        annotations: { summary: "订单同步延迟超过30分钟", description: "P50 同步延迟 {{ $value }}秒" }
+
+      - alert: DeadLetterBacklog
+        expr: onzo_dead_letter_queue_size > 100
+        for: 5m
+        labels: { severity: critical, category: business }
+        annotations: { summary: "死信队列积压超过100", description: "当前死信队列 {{ $value }} 条" }
+
+  - name: onzo-token
+    rules:
+      - alert: TokenLimitReached
+        expr: increase(onzo_token_usage_total[24h]) > 500000
+        for: 5m
+        labels: { severity: critical, category: cost }
+        annotations: { summary: "Token日用量超限", description: "24小时Token消耗 {{ $value }}" }
+
+  - name: onzo-scraper
+    rules:
+      - alert: ScraperSuccessRateLow
+        expr: rate(onzo_scraper_requests_total{result="success"}[10m]) / rate(onzo_scraper_requests_total[10m]) < 0.50
+        for: 10m
+        labels: { severity: warning, category: scraper }
+        annotations: { summary: "爬虫成功率低于50%", description: "10分钟内爬虫成功率 {{ $value | humanizePercentage }}" }
+
+  - name: onzo-infra
+    rules:
+      - alert: ExchangeRateStale
+        expr: onzo_exchange_rate == 0
+        for: 1h
+        labels: { severity: warning, category: infra }
+        annotations: { summary: "汇率数据缺失超过1小时", description: "汇率gauge值为0" }
+
+      - alert: CircuitBreakerOpen
+        expr: onzo_circuit_breaker_state > 0
+        for: 5m
+        labels: { severity: warning, category: infra }
+        annotations: { summary: "熔断器打开", description: "{{ $labels.name }} 熔断器处于 OPEN/HALF_OPEN 状态" }
+
+      - alert: WebhookFailureRate
+        expr: rate(onzo_webhook_events_total{result="failed"}[10m]) / rate(onzo_webhook_events_total[10m]) > 0.30
+        for: 10m
+        labels: { severity: critical, category: infra }
+        annotations: { summary: "Webhook处理失败率超过30%", description: "10分钟内失败率 {{ $value | humanizePercentage }}" }

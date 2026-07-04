@@ -1,0 +1,36 @@
+{
+  "title": "ONZO Business Metrics",
+  "tags": ["onzo", "business"],
+  "refresh": "30s",
+  "panels": [
+    {
+      "title": "Listing Pipeline", "type": "graph", "gridPos": { "x": 0, "y": 0, "w": 12, "h": 8 },
+      "targets": [
+        { "expr": "rate(onzo_listing_pipeline_total{status=\"success\"}[5m])", "legendFormat": "success" },
+        { "expr": "rate(onzo_listing_pipeline_total{status=\"failed\"}[5m])", "legendFormat": "failed" }
+      ]
+    },
+    {
+      "title": "Listing Duration", "type": "graph", "gridPos": { "x": 12, "y": 0, "w": 12, "h": 8 },
+      "targets": [{ "expr": "onzo_listing_pipeline_duration_seconds", "legendFormat": "{{step}}" }]
+    },
+    {
+      "title": "Orders Synced", "type": "stat", "gridPos": { "x": 0, "y": 8, "w": 6, "h": 4 },
+      "targets": [{ "expr": "increase(onzo_order_sync_total[1h])" }]
+    },
+    {
+      "title": "Token Usage (24h)", "type": "stat", "gridPos": { "x": 6, "y": 8, "w": 6, "h": 4 },
+      "targets": [{ "expr": "sum(increase(onzo_token_usage_total[24h]))" }]
+    },
+    {
+      "title": "Scraper Success Rate", "type": "graph", "gridPos": { "x": 0, "y": 12, "w": 12, "h": 6 },
+      "targets": [{ "expr": "rate(onzo_scraper_requests_total{result=\"success\"}[5m]) / rate(onzo_scraper_requests_total[5m])", "legendFormat": "success rate" }]
+    },
+    {
+      "title": "Exchange Rate", "type": "stat", "gridPos": { "x": 12, "y": 12, "w": 12, "h": 6 },
+      "targets": [{ "expr": "onzo_exchange_rate" }],
+      "fieldConfig": { "defaults": { "unit": "none" } }
+    }
+  ],
+  "schemaVersion": 16
+}
