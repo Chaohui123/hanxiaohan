@@ -53,7 +53,7 @@ export const taskApi = {
 export const inventoryApi = {
   items: () => api.get("/api/inventory/items"),
   alerts: () => api.get("/api/inventory/alerts"),
-  restock: () => api.get("/api/inventory/reorder-recommendations"),
+  restock: () => api.get("/api/inventory/recommendations"),
 };
 
 // ---- Stores ----
