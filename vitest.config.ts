@@ -7,6 +7,7 @@ export default defineConfig({
       "apps/*/tests/**/*.test.ts",
       "apps/*/tests/services/*.test.ts",
       "apps/*/tests/middleware/*.test.ts",
+      "apps/*/src/services/tests/*.test.ts",
     ],
     globals: true,
     coverage: {
