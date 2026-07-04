@@ -94,6 +94,23 @@ services:
     networks:
       - onzo-network
 
+  # ---- Web Dashboard (React frontend) ----
+  web-dashboard:
+    build:
+      context: .
+      dockerfile: apps/web-dashboard/Dockerfile
+    container_name: onzo-dashboard
+    restart: unless-stopped
+    ports:
+      - "80:80"
+    depends_on:
+      - api-services
+    networks:
+      - onzo-network
+    profiles:
+      - dashboard
+      - full
+
   # ---- Caddy HTTPS Reverse Proxy (production) ----
   caddy:
     image: caddy:2-alpine
