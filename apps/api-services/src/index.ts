@@ -2,6 +2,7 @@
 import cors from "cors";
 import { loadConfig } from "./config.js";
 import { validateProductionConfig } from "./config-validation.js";
+import { registerJob, startScheduler, stopScheduler } from "./services/scheduler.js";
 import { correlationIdMiddleware } from "./middleware/correlation-id.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { createLogger } from "./middleware/logger.js";
@@ -115,6 +116,19 @@ if (db) {
   startAutoBackup();
   registerCleanup(async () => { stopAutoBackup(); });
 }
+
+// Register built-in scheduled jobs (replaces n8n for critical periodic tasks)
+registerJob("order-sync", 30 * 60_000, async () => {
+  const { syncOrders } = await import("@onzo/ozon-order");
+  await syncOrders(ozonClient, { storeId: "store_1", pageSize: 50 }).catch((err) =>
+    logger.error({ err }, "Scheduled order sync failed")
+  );
+});
+registerJob("token-monitor", 6 * 3600_000, async () => {
+  try { await import("./routes/backup.route.js").then((m) => m.startAutoBackup()); } catch {}
+});
+startScheduler();
+registerCleanup(async () => { stopScheduler(); });
 
 const { TaskQueue } = await import("./db/task-queue.js");
 const taskQueue = new TaskQueue(db, config.maxTaskConcurrency);
