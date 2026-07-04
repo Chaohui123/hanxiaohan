@@ -381,19 +381,15 @@ export class CosUploader {
   private async recordUpload(record: ImageRecord): Promise<void> {
     if (!this.db) return;
     try {
-      await this.db.exec(`
-        CREATE TABLE IF NOT EXISTS images (
-          id TEXT PRIMARY KEY, product_id TEXT NOT NULL, cos_key TEXT NOT NULL UNIQUE,
-          url TEXT, status TEXT NOT NULL DEFAULT 'pending', retry_count INTEGER DEFAULT 0,
-          dead_letter INTEGER DEFAULT 0, local_path TEXT, error TEXT,
-          created_at TEXT DEFAULT (NOW()), updated_at TEXT DEFAULT (NOW())
-        );
-        CREATE INDEX IF NOT EXISTS idx_images_product ON images(product_id);
-        CREATE INDEX IF NOT EXISTS idx_images_status ON images(status);
-      `);
-      const esc = (s?: string) => (s ? s.replace(/'/g, "''") : "");
-      await this.db.exec(
-        `INSERT OR REPLACE INTO images (id,product_id,cos_key,url,status,retry_count,dead_letter,local_path,error,created_at,updated_at) VALUES ('${record.id}','${record.productId}','${record.cosKey}','${esc(record.url)}','${record.status}',${record.retryCount},${record.deadLetter ? 1 : 0},${record.localPath ? "'" + esc(record.localPath) + "'" : "NULL"},${record.error ? "'" + esc(record.error) + "'" : "NULL"},'${record.createdAt}','${record.updatedAt}')`
+      await this.db.run(
+        `INSERT INTO images (id, product_id, cos_key, url, status, retry_count, dead_letter, local_path, error, created_at, updated_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW(), NOW())
+         ON CONFLICT(id) DO UPDATE SET
+           status=EXCLUDED.status, retry_count=EXCLUDED.retry_count,
+           dead_letter=EXCLUDED.dead_letter, local_path=EXCLUDED.local_path,
+           error=EXCLUDED.error, updated_at=NOW()`,
+        [record.id, record.productId, record.cosKey, record.url || null, record.status,
+         record.retryCount, record.deadLetter ? 1 : 0, record.localPath || null, record.error || null]
       );
     } catch (error) {
       logger.error("[COS] DB record failed:", error);

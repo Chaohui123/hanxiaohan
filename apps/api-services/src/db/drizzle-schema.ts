@@ -156,3 +156,18 @@ export const categoryOpportunities = pgTable("category_opportunities", {
   dataSource: text("data_source"),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
+
+// ---- COS Image Records (cos-uploader.ts) ----
+export const images = pgTable("images", {
+  id: text("id").primaryKey(),
+  productId: text("product_id").notNull(),
+  cosKey: text("cos_key").notNull(),
+  url: text("url"),
+  status: text("status").notNull().default("pending"),
+  retryCount: integer("retry_count").default(0),
+  deadLetter: integer("dead_letter").default(0),
+  localPath: text("local_path"),
+  error: text("error"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
