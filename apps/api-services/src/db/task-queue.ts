@@ -8,7 +8,7 @@ import { logger } from "@onzo/logger";
 
 // ---- Types ----
 
-export type TaskType = "listing" | "ocr" | "translate" | "upload_image" | "create_draft" | "batch_listing";
+export type TaskType = "listing" | "ocr" | "translate" | "upload_image" | "create_draft" | "batch_listing" | "webhook_retry";
 export type TaskStatus = "queued" | "processing" | "done" | "failed";
 
 export interface QueuedTask<T = Record<string, unknown>> {
@@ -49,6 +49,12 @@ export class TaskQueue {
   private initialized = false;
   private maxConcurrency: number;
   private activeWorkers = 0;
+  private handlers = new Map<string, (task: QueuedTask) => Promise<void>>();
+
+  /** Register a handler for a specific task type. */
+  registerHandler(type: TaskType, handler: (task: QueuedTask) => Promise<void>): void {
+    this.handlers.set(type, handler);
+  }
 
   constructor(db?: DbAdapter, maxConcurrency = 5) {
     this.maxConcurrency = maxConcurrency;

@@ -121,6 +121,36 @@ const taskQueue = new TaskQueue(db, config.maxTaskConcurrency);
 await taskQueue.init();
 logger.info({ stats: taskQueue.getStats() }, "Task queue initialized");
 
+// Register webhook retry handler — re-processes failed webhook events
+taskQueue.registerHandler("webhook_retry", async (task) => {
+  try {
+    const data = task.payload as { eventType?: string; body?: Record<string, unknown> } || {};
+    const body = data.body || {};
+    const { handleWebhookEvent } = await import("@onzo/ozon-order/webhook");
+    const { processCancelledOrder, processStatusChange } = await import("./services/order-processor.js");
+    await handleWebhookEvent(
+      {
+        eventType: (data.eventType || "order.status_changed") as "order.status_changed",
+        postingNumber: (body.posting_number as string) || "",
+        orderId: (body.order_id as number) || 0,
+        status: ((body.status as string) || "awaiting_deliver") as "awaiting_deliver",
+        timestamp: new Date().toISOString(),
+        rawBody: JSON.stringify(body),
+        eventId: task.id,
+      },
+      {
+        onStatusChanged: async (p) => { await processStatusChange(p.postingNumber, p.status); },
+        onDelivered: async (p) => { await processStatusChange(p.postingNumber, "delivered"); },
+        onCancelled: async (p) => { await processCancelledOrder(p.postingNumber, "store_1"); },
+      }
+    );
+    logger.info({ taskId: task.id }, "Webhook retry task processed");
+  } catch (err) {
+    logger.error({ taskId: task.id, err: (err as Error).message }, "Webhook retry handler failed");
+    throw err;
+  }
+});
+
 app.use("/api/task", createTaskRouter(taskQueue));
 app.use("/api", createProcessRouter(config, taskQueue));
 
