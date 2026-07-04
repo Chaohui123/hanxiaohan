@@ -48,5 +48,5 @@
     "POST /api/task/deadletter/retry-batch": { "main": [[{ "node": "Send Telegram Report", "type": "main", "index": 0 }]] },
     "GET /api/dashboard": { "main": [[{ "node": "Send Telegram Report", "type": "main", "index": 0 }]] }
   },
-  "settings": { "callerPolicy": "workflowsFromSameOwner" }, "versionId": "1.0.0", "active": false
+  "settings": { "callerPolicy": "workflowsFromSameOwner" }, "versionId": "1.0.0", "active": true
 }

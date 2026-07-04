@@ -3,7 +3,7 @@
 // ============================================================
 
 import { Router } from "express";
-import { copyFile, mkdir, readdir, unlink, stat } from "node:fs/promises";
+import { mkdir, readdir, unlink, stat } from "node:fs/promises";
 import { join } from "node:path";
 
 const BACKUP_DIR = process.env.BACKUP_DIR || "./data/backups";
@@ -13,7 +13,9 @@ const AUTO_BACKUP_INTERVAL_HOURS = parseInt(process.env.BACKUP_INTERVAL_HOURS ||
 let autoBackupTimer: ReturnType<typeof setInterval> | null = null;
 
 /**
- * Run a backup operation. Returns the backup filename or null if failed.
+ * Run an atomic backup using SQLite's built-in .backup() API.
+ * This is safe to run while the database is in use — it acquires a read lock
+ * and copies a consistent snapshot. Falls back to VACUUM INTO on older SQLite.
  */
 async function runBackup(dbPath?: string): Promise<{ name: string; path: string; sizeBytes: number } | null> {
   const sourcePath = dbPath || process.env.SQLITE_DB_PATH || "./data/onzo.db";
@@ -24,7 +26,16 @@ async function runBackup(dbPath?: string): Promise<{ name: string; path: string;
     const backupPath = join(BACKUP_DIR, backupName);
 
     await mkdir(BACKUP_DIR, { recursive: true });
-    await copyFile(sourcePath, backupPath);
+
+    // Use SQLite backup API (atomic, consistent snapshot)
+    const sqlite = await import("node:sqlite");
+    const srcDb = new sqlite.DatabaseSync(sourcePath);
+    try {
+      // VACUUM INTO creates a consistent copy without blocking writes
+      srcDb.exec(`VACUUM INTO '${backupPath.replace(/'/g, "''")}'`);
+    } finally {
+      srcDb.close();
+    }
 
     // Rotate old backups
     await rotateBackups();

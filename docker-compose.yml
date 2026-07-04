@@ -45,6 +45,25 @@ services:
     networks:
       - onzo-network
 
+  # HTTPS reverse proxy — auto Let's Encrypt (optional, set CADDY_DOMAIN to enable)
+  caddy:
+    image: caddy:2-alpine
+    container_name: onzo-caddy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
+      - ./data/caddy/data:/data
+      - ./data/caddy/logs:/var/log/caddy
+    environment:
+      - CADDY_DOMAIN=${CADDY_DOMAIN:-localhost}
+    restart: unless-stopped
+    networks:
+      - onzo-network
+    profiles:
+      - production  # Only starts with: docker compose --profile production up
+
 networks:
   onzo-network:
     driver: bridge

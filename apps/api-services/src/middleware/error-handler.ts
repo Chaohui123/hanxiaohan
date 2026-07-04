@@ -1,8 +1,6 @@
-// ============================================================
-// Unified error handler middleware
-// ============================================================
-
 import type { Request, Response, NextFunction } from "express";
+import { logger } from "@onzo/logger";
+import { AppError } from "../errors/index.js";
 
 export interface ApiErrorResponse {
   success: false;
@@ -20,9 +18,25 @@ export function errorHandler(
   res: Response,
   _next: NextFunction
 ): void {
-  const correlationId = req.correlationId ?? "unknown";
+  const correlationId = (req as Request & { correlationId?: string }).correlationId ?? "unknown";
 
-  console.error(`[${correlationId}] Unhandled error:`, err);
+  if (err instanceof AppError) {
+    logger.warn({ correlationId, code: err.code, message: err.message }, "Application error");
+    
+    const response: ApiErrorResponse = {
+      success: false,
+      error: {
+        code: err.code,
+        message: err.message,
+        retryable: err.retryable,
+      },
+      correlationId,
+    };
+    res.status(err.statusCode).json(response);
+    return;
+  }
+
+  logger.error({ correlationId, err: { message: err.message, name: err.name, stack: err.stack } }, "Unhandled request error");
 
   const response: ApiErrorResponse = {
     success: false,

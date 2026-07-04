@@ -221,15 +221,29 @@ export function createBulkRouter(taskQueue: TaskQueue): Router {
   return router;
 }
 
-/** Parse a single CSV line, respecting quoted fields */
+/** Parse a single CSV line, respecting quoted fields and escaped quotes */
 function parseCSVLine(line: string): string[] {
   const result: string[] = [];
   let current = "";
   let inQuotes = false;
 
-  for (const ch of line) {
-    if (ch === '"') { inQuotes = !inQuotes; continue; }
-    if (ch === "," && !inQuotes) { result.push(current.trim()); current = ""; continue; }
+  for (let i = 0; i < line.length; i++) {
+    const ch = line[i];
+    if (ch === '"') {
+      if (inQuotes && line[i + 1] === '"') {
+        // Escaped quote inside quoted field → literal quote
+        current += '"';
+        i++; // skip next char
+      } else {
+        inQuotes = !inQuotes;
+      }
+      continue;
+    }
+    if (ch === "," && !inQuotes) {
+      result.push(current.trim());
+      current = "";
+      continue;
+    }
     current += ch;
   }
   result.push(current.trim());

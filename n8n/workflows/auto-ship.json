@@ -8,21 +8,46 @@
     },
     {
       "parameters": {
-        "url": "http://host.docker.internal:3000/api/orders?status=awaiting_deliver",
-        "method": "GET", "options": {}
+        "url": "http://host.docker.internal:3000/api/orders/batch-ship",
+        "method": "POST", "sendBody": true, "specifyBody": "json",
+        "jsonBody": "{}",
+        "options": { "timeout": 120000 }
       },
-      "id": "get-orders", "name": "GET /api/orders?status=awaiting_deliver",
+      "id": "batch-ship", "name": "POST /api/orders/batch-ship",
       "type": "n8n-nodes-base.httpRequest", "typeVersion": 4, "position": [450, 300]
     },
     {
-      "parameters": { "content": "## Pending Shipments\nOrders ready to ship: {{ $json.data.length }}\n\nConfigure tracking numbers before activating.", "height": 120 },
+      "parameters": {
+        "conditions": {
+          "options": [
+            {
+              "conditions": [{ "leftValue": "={{ $json.data.shipped }}", "rightValue": 0, "operator": { "type": "number", "operation": "larger" } }],
+              "renameOutput": true, "outputKey": "hasShipped"
+            }
+          ]
+        }
+      },
+      "id": "check", "name": "Shipped > 0?",
+      "type": "n8n-nodes-base.if", "typeVersion": 2, "position": [650, 300]
+    },
+    {
+      "parameters": { "content": "## Shipment Report\n\nShipped: {{ $json.data.shipped }}\nSkipped: {{ $json.data.skipped }}\nFailed: {{ $json.data.failed }}\nTotal: {{ $json.data.total }}", "height": 200 },
       "id": "result", "name": "Shipment Report",
-      "type": "n8n-nodes-base.stickyNote", "typeVersion": 1, "position": [650, 300]
+      "type": "n8n-nodes-base.stickyNote", "typeVersion": 1, "position": [850, 200]
+    },
+    {
+      "parameters": { "content": "No orders to ship", "height": 80 },
+      "id": "none", "name": "No Orders",
+      "type": "n8n-nodes-base.stickyNote", "typeVersion": 1, "position": [850, 500]
     }
   ],
   "connections": {
-    "Every 3 hours": { "main": [[{ "node": "GET /api/orders?status=awaiting_deliver", "type": "main", "index": 0 }]] },
-    "GET /api/orders?status=awaiting_deliver": { "main": [[{ "node": "Shipment Report", "type": "main", "index": 0 }]] }
+    "Every 3 hours": { "main": [[{ "node": "POST /api/orders/batch-ship", "type": "main", "index": 0 }]] },
+    "POST /api/orders/batch-ship": { "main": [[{ "node": "Shipped > 0?", "type": "main", "index": 0 }]] },
+    "Shipped > 0?": { "main": [
+      [{ "node": "Shipment Report", "type": "main", "index": 0 }],
+      [{ "node": "No Orders", "type": "main", "index": 0 }]
+    ]}
   },
-  "settings": { "callerPolicy": "workflowsFromSameOwner" }, "versionId": "1.0.0", "active": false
+  "settings": { "callerPolicy": "workflowsFromSameOwner" }, "versionId": "2.0.0", "active": true
 }

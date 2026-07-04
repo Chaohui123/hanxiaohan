@@ -43,23 +43,58 @@ export class InventoryManager {
   }
 
   async deduct(postingNumber: string, items: StockItem[]): Promise<DeductResult> {
+    // Validate all items have sufficient stock BEFORE starting transaction
     for (const item of items) {
       const rows = await this.db.all<Record<string, unknown>>(
-        "SELECT stock_available, stock_reserved, stockAvailable, stockReserved FROM inventory WHERE offer_id = ? AND sku = ?",
+        "SELECT stock_available, stock_reserved FROM inventory WHERE offer_id = ? AND sku = ?",
         [item.offerId, item.sku]
       );
       const row = rows[0];
-      const stockAvailable = row?.stock_available ?? row?.stockAvailable ?? row?.avail ?? 0;
-      const stockReserved = row?.stock_reserved ?? row?.stockReserved ?? row?.reserved ?? 0;
+      // Support both snake_case (real SQLite) and camelCase (mock adapters)
+      const stockAvailable = (row?.stock_available ?? row?.stockAvailable ?? row?.avail ?? 0) as number;
       if (!row || stockAvailable < item.quantity) {
         return { success: false, reason: `Insufficient stock for ${item.offerId}:${item.sku}` };
       }
-      const na = (stockAvailable as number) - item.quantity;
-      const nr = (stockReserved as number) + item.quantity;
-      await this.db.run("UPDATE inventory SET stock_available=?, stock_reserved=?, updated_at=datetime('now') WHERE offer_id=? AND sku=?", [na, nr, item.offerId, item.sku]);
-      await this.db.run("INSERT INTO stock_movements (posting_number,offer_id,sku,quantity,type,created_at) VALUES (?,?,?,?,'deduct',datetime('now'))", [postingNumber, item.offerId, item.sku, -item.quantity]);
     }
-    return { success: true };
+
+    // Execute all deductions in a single transaction (BEGIN/COMMIT)
+    // If any step fails, the entire batch is rolled back
+    await this.db.run("BEGIN IMMEDIATE");
+    try {
+      for (const item of items) {
+        const rows = await this.db.all<Record<string, unknown>>(
+          "SELECT stock_available, stock_reserved FROM inventory WHERE offer_id = ? AND sku = ?",
+          [item.offerId, item.sku]
+        );
+        const row = rows[0];
+        const stockAvailable = (row?.stock_available ?? row?.stockAvailable ?? row?.avail ?? 0) as number;
+        const stockReserved = (row?.stock_reserved ?? row?.stockReserved ?? row?.reserved ?? 0) as number;
+
+        // Re-check under transaction lock
+        if (!row || stockAvailable < item.quantity) {
+          throw new Error(`Insufficient stock for ${item.offerId}:${item.sku}`);
+        }
+
+        const na = stockAvailable - item.quantity;
+        const nr = stockReserved + item.quantity;
+        await this.db.run(
+          "UPDATE inventory SET stock_available=?, stock_reserved=?, updated_at=datetime('now') WHERE offer_id=? AND sku=?",
+          [na, nr, item.offerId, item.sku]
+        );
+        await this.db.run(
+          "INSERT INTO stock_movements (posting_number,offer_id,sku,quantity,type,created_at) VALUES (?,?,?,?,'deduct',datetime('now'))",
+          [postingNumber, item.offerId, item.sku, -item.quantity]
+        );
+      }
+      await this.db.run("COMMIT");
+      return { success: true };
+    } catch (err) {
+      await this.db.run("ROLLBACK").catch(() => {});
+      if (err instanceof Error) {
+        return { success: false, reason: err.message };
+      }
+      return { success: false, reason: String(err) };
+    }
   }
 
   async restore(postingNumber: string, items: StockItem[]): Promise<void> {

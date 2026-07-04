@@ -12,6 +12,7 @@ import type { DeepSeekTranslator } from "./deepseek-translator.js";
 import { heuristicFillAttributes, buildDefaultAttributes, type FilledAttribute } from "./attribute-filler.js";
 import type { AppConfig } from "../config.js";
 import { saveFailedTask, saveListingRecord } from "../db/models.js";
+import { logger } from "@onzo/logger";
 
 // ---- Pipeline Context (accumulates state across steps) ----
 
@@ -166,7 +167,10 @@ export async function stepFillAttributes(
     ctx.errors.push({ step: "fill_attributes", message: msg });
     ctx.attributes = requiredAttributes.length > 0
       ? heuristicFillAttributes(translated.specificationsRu, requiredAttributes)
-      : buildDefaultAttributes({ title: translated.titleRu, specifications: translated.specificationsRu });
+      : buildDefaultAttributes(
+          { title: translated.titleRu, specifications: translated.specificationsRu },
+          requiredAttributes
+        );
     return ctx.attributes as FilledAttribute[];
   }
 }
@@ -187,64 +191,107 @@ export async function stepDownloadAndUploadImages(
   specImages: string[],
   detailImages: string[] = []
 ): Promise<string[]> {
-  const allImages = [...new Set([...specImages.slice(0, 10), ...detailImages.slice(0, 5)])];
+  // 1. Filter: remove icons, SVGs, logos, tiny images — keep only product photos
+  const rawImages = [...new Set([...specImages, ...detailImages])];
+  const productImages = scraper.filterProductImages(rawImages);
+  const allImages = productImages.slice(0, 15); // Ozon max 15
   if (allImages.length === 0) {
-    throw new Error("No images to upload");
+    throw new Error("No product images found after filtering — all images were icons/logos/SVGs");
   }
+
+  logger.info({ filtered: allImages.length, raw: rawImages.length }, "Images — filtering complete");
 
   const imageIds: string[] = [];
   const failedUrls: string[] = [];
 
-  // Phase 1: Try Ozon URL import (fast path)
+  // Phase 1: Try Ozon URL import (soft — failures don't trip circuit breaker)
   const urlResults = await Promise.allSettled(
-    allImages.map((imgUrl: string) => ozonClient.importImageByUrl(imgUrl))
+    allImages.map((imgUrl: string) => ozonClient.importImageByUrlSoft(imgUrl))
   );
 
   for (let i = 0; i < urlResults.length; i++) {
     const r = urlResults[i];
-    if (r.status === "fulfilled") {
+    if (r.status === "fulfilled" && r.value !== null) {
       imageIds.push(String(r.value.id));
     } else {
       failedUrls.push(allImages[i]);
     }
   }
 
-  // Phase 2: Download failed URLs locally and re-upload
+  // Reset Ozon circuit breaker — image operations shouldn't be blocked by earlier failures
+  (ozonClient as { resetBreaker?: () => void }).resetBreaker?.();
+
+  // Phase 2: Download via Playwright browser, save locally, import via Express URL
   if (failedUrls.length > 0) {
-    console.log(`[Pipeline] ${imageIds.length} images imported by URL, ${failedUrls.length} failed — downloading locally`);
+    logger.info({ urlImported: imageIds.length, toRetry: failedUrls.length }, "Images — URL import partial, trying browser download");
 
     try {
-      const downloaded = await scraper.downloadImages(failedUrls, 3);
+      const downloaded = await scraper.downloadImagesViaBrowser(failedUrls, { maxImages: failedUrls.length });
 
       for (const img of downloaded) {
         try {
-          const base64 = img.buffer.toString("base64");
           const ext = img.contentType.includes("png") ? "png"
             : img.contentType.includes("webp") ? "webp"
             : img.contentType.includes("gif") ? "gif"
             : "jpg";
           const fileName = `product-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
 
-          const result = await ozonClient.uploadLocalImageFile(fileName, base64);
-          imageIds.push(String(result.id));
-          console.log(`[Pipeline] Local upload success: ${fileName} → ${result.id}`);
+          // Save to temp directory served by Express at /tmp-images/
+          const { writeFileSync, mkdirSync, existsSync } = await import("node:fs");
+          const tmpDir = "./data/tmp-images";
+          if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true });
+          writeFileSync(`${tmpDir}/${fileName}`, img.buffer);
+
+          // Import via local Express URL (Ozon only supports URL-based image import)
+          const port = process.env.API_SERVICE_PORT || process.env.PORT || "3000";
+          const localUrl = `http://localhost:${port}/tmp-images/${fileName}`;
+          const result = await ozonClient.importImageByUrlSoft(localUrl);
+          if (result) {
+            imageIds.push(String(result.id));
+            logger.debug({ fileName, imageId: result.id }, "Browser download → local file → Ozon import success");
+          }
         } catch (uploadErr) {
-          console.warn(`[Pipeline] Local upload failed for ${img.url}: ${(uploadErr as Error).message}`);
+          logger.warn({ imgUrl: img.url, err: (uploadErr as Error).message }, "Image pipeline failed");
         }
       }
     } catch (downloadErr) {
-      console.warn(`[Pipeline] Local download batch failed: ${(downloadErr as Error).message}`);
+      logger.warn({ err: (downloadErr as Error).message }, "Browser image download batch failed");
     }
   }
 
+  // Phase 3: Last resort — direct fetch (works for non-hotlink-protected URLs)
+  if (imageIds.length === 0 && failedUrls.length > 0) {
+    logger.warn("Images — browser download also failed, trying direct fetch as last resort");
+    try {
+      const downloaded = await scraper.downloadImages(failedUrls.slice(0, 5), 2);
+      for (const img of downloaded) {
+        try {
+          const base64 = img.buffer.toString("base64");
+          const ext = img.contentType.includes("png") ? "png" : "jpg";
+          const result = await ozonClient.uploadLocalImageFile(
+            `product-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.${ext}`, base64
+          );
+          imageIds.push(String(result.id));
+        } catch { /* exhausted */ }
+      }
+    } catch { /* all methods exhausted */ }
+  }
+
   if (imageIds.length === 0) {
-    const msg = "All image uploads failed — both URL import and local upload";
+    const msg = "All image uploads failed — URL import, browser download, and direct fetch all exhausted";
     ctx.errors.push({ step: "upload_images", message: msg });
     throw new Error(msg);
   }
 
+  // Warn if image count is below Ozon's recommended minimum (3+ images)
+  if (imageIds.length < 3) {
+    const msg = `Only ${imageIds.length} image(s) uploaded (${allImages.length} attempted). Ozon recommends 3+ images per product.`;
+    ctx.errors.push({ step: "upload_images", message: msg });
+    logger.warn({ imageCount: imageIds.length, attempted: allImages.length }, msg);
+  }
+
   ctx.imageIds = imageIds;
-  console.log(`[Pipeline] Total images uploaded: ${imageIds.length}/${allImages.length}`);
+  logger.info({ uploaded: imageIds.length, total: allImages.length }, "Images — upload complete");
   return imageIds;
 }
 
@@ -378,6 +425,26 @@ export async function recordPipelineFailure(
 /**
  * Record pipeline success to the listing_records table.
  */
+/**
+ * Find the nearest ancestor category that can accept attribute queries.
+ * Walks UP the tree from the target to find a non-leaf category.
+ */
+export function findNearestAncestorWithAttributes(
+  nodes: OzonCategoryNode[],
+  targetCategoryId: number
+): number | null {
+  const path = findCategoryPath(nodes, targetCategoryId);
+  if (!path || path.length === 0) return null;
+
+  // Walk backward from the target, return the first ancestor that has children
+  for (let i = path.length - 1; i >= 0; i--) {
+    if (path[i].children?.length > 0 || path[i].typeId) {
+      return path[i].categoryId;
+    }
+  }
+  return path[path.length - 1].categoryId;
+}
+
 /** Find the 3rd-level category ID for attribute lookup.
  * When a leaf category is 4 levels deep, return its level-3 ancestor.
  * Otherwise return the selected leaf category itself.

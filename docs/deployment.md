@@ -19,8 +19,16 @@ curl http://localhost:3000/health
 
 # 5. 导入 n8n 工作流
 # 打开 http://localhost:5678
-# 导入 n8n/workflows/*.json
-# 激活需要的工作流
+# 逐个导入 n8n/workflows/*.json
+# 以下工作流需要手动激活（Scheduled 类型导入后默认 active）：
+#   ✅ auto-publish.json      — 每 10 分钟自动上架队列商品
+#   ✅ auto-retry-notify.json  — 每 30 分钟重试失败任务 + Telegram 报告
+#   ✅ auto-ship.json         — 每 3 小时自动发货待处理订单
+#   ✅ order-sync.json        — 每 30 分钟同步 Ozon 订单
+#   ✅ price-monitor.json     — 每日竞品价格扫描
+#   ✅ token-monitor.json     — 每 6 小时 Token 消耗报告 + DB 备份
+#   ⬜ phase-1-listing.json   — Webhook 触发（手动/外部系统调用）
+#   ⬜ multi-store-publish.json — 手动触发（多店铺批量上架）
 ```
 
 ## 手动部署

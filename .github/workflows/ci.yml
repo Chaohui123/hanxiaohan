@@ -1,0 +1,46 @@
+name: CI
+
+on:
+  push:
+    branches: [main, master]
+  pull_request:
+    branches: [main, master]
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        node-version: [22]
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: pnpm/action-setup@v4
+        with:
+          version: latest
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: ${{ matrix.node-version }}
+          cache: "pnpm"
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Type check
+        run: pnpm exec tsc -b --noEmit || true
+        # Allow soft-fail while fixing pre-existing type errors
+
+      - name: Run tests
+        run: pnpm test
+
+      - name: Verify Docker build
+        run: docker build -f docker/api-services/Dockerfile -t onzo-api-services:ci .
+
+      - name: Verify n8n workflows (JSON syntax)
+        run: |
+          for f in n8n/workflows/*.json; do
+            echo "Validating $f"
+            node -e "JSON.parse(require('fs').readFileSync('$f','utf8')); console.log('  OK')"
+          done

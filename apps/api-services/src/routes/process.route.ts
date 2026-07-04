@@ -30,6 +30,7 @@ import {
   buildProcessedProduct,
   recordPipelineFailure,
   recordPipelineSuccess,
+  findNearestAncestorWithAttributes,
 } from "../pipelines/listing-pipeline.js";
 
 export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Router {
@@ -74,12 +75,17 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
     persistFn: async (usage) => {
       const { getDb } = await import("../db/connection.js");
       const db = await getDb().catch(() => null);
-      if (!db) return;
+      if (!db) {
+        logger.warn("Token usage not persisted — DB unavailable");
+        return;
+      }
       const cost = estimateCost(usage);
       await db.run(
         "INSERT INTO token_usage (model, prompt_tokens, completion_tokens, total_tokens, provider, cost_estimate) VALUES (?, ?, ?, ?, ?, ?)",
         [usage.model, usage.promptTokens, usage.completionTokens, usage.totalTokens, usage.provider, cost]
-      ).catch(() => {});
+      ).catch((err) => {
+        logger.error({ err, model: usage.model, tokens: usage.totalTokens }, "Failed to persist token usage — cost data lost");
+      });
     },
   });
 
@@ -178,6 +184,11 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
 
       // Step 6: Build + validate
       const fx = await getExchangeRate();
+      if (!fx.reliable) {
+        taskQueue.markFailed(queued.id, `Exchange rate unreliable: source=${fx.source}, rate=${fx.rate}. Blocked to prevent pricing errors.`)
+          .catch((dbErr) => logger.error({ correlationId: ctx.correlationId, err: dbErr }, "Failed to mark rate-blocked task"));
+        return;
+      }
       const processed = buildProcessedProduct(ctx, {
         exchangeRate: fx.rate,
         defaultLength: 20,
@@ -190,7 +201,7 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
       const validation = validator.validate(processed);
       if (!validation.valid) {
         taskQueue.markFailed(queued.id, `Validation: ${validation.errors.map((e) => e.message).join("; ")}`)
-          .catch((dbErr) => console.error(`[${ctx.correlationId}] Failed to mark validation failure:`, dbErr));
+          .catch((dbErr) => logger.error({ correlationId: ctx.correlationId, err: dbErr }, "Failed to mark validation failure"));
         return;
       }
 
@@ -205,7 +216,7 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
       if (compliance.blocked) {
         const reason = compliance.blockedReason ?? "Category prohibited";
         taskQueue.markFailed(queued.id, `Compliance: ${reason}`)
-          .catch((dbErr) => console.error(`[${ctx.correlationId}] Failed to mark compliance block:`, dbErr));
+          .catch((dbErr) => logger.error({ correlationId: ctx.correlationId, err: dbErr }, "Failed to mark compliance block"));
         return;
       }
       if (compliance.warnings.length > 0) {
@@ -217,10 +228,10 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
 
       // Success
       recordPipelineSuccess(ctx).catch((dbErr) =>
-        console.error(`[${ctx.correlationId}] Failed to record success:`, dbErr)
+        logger.error({ correlationId: ctx.correlationId, err: dbErr }, "Failed to record success")
       );
       taskQueue.markDone(queued.id).catch((dbErr) =>
-        console.error(`[${ctx.correlationId}] Failed to mark done:`, dbErr)
+        logger.error({ correlationId: ctx.correlationId, err: dbErr }, "Failed to mark done")
       );
 
       logger.info({ correlationId: ctx.correlationId, productId: draftResult.productId }, "Draft created");
@@ -234,10 +245,10 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
 
       // Fire-and-forget error recording — don't let DB errors crash the handler
       recordPipelineFailure(ctx, error).catch((dbErr) =>
-        console.error(`[${ctx.correlationId}] Failed to record pipeline failure:`, dbErr)
+        logger.error({ correlationId: ctx.correlationId, err: dbErr }, "Failed to record pipeline failure")
       );
       taskQueue.markFailed(queued.id, error.message).catch((dbErr) =>
-        console.error(`[${ctx.correlationId}] Failed to mark task as failed:`, dbErr)
+        logger.error({ correlationId: ctx.correlationId, err: dbErr }, "Failed to mark task as failed")
       );
     }
   });
@@ -416,11 +427,23 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
 
       let requiredAttributes: Awaited<ReturnType<OzonClient["getCategoryAttributes"]>> = [];
       if (category.categoryId > 0) {
-        try {
-          const attrCategoryId = category.attributeCategoryId ?? category.categoryId;
-          requiredAttributes = await ozonClient.getCategoryAttributes(attrCategoryId);
-        } catch {
-          requiredAttributes = [];
+        // Try multiple category ID strategies for attribute lookup:
+        // 1. attributeCategoryId (level-3 ancestor found by findAttributeCategoryId)
+        // 2. The matched category's own ID (works for leaf categories)
+        // 3. Level-2 ancestor as last resort
+        const candidateIds = [
+          category.attributeCategoryId,
+          category.categoryId,
+          ...(ctx.categoryTree ? [findNearestAncestorWithAttributes(ctx.categoryTree, category.categoryId)] : []),
+        ].filter((id): id is number => id !== null && id !== undefined && id > 0);
+
+        for (const attrId of [...new Set(candidateIds)]) {
+          try {
+            requiredAttributes = await ozonClient.getCategoryAttributes(attrId);
+            if (requiredAttributes.length > 0) break; // success
+          } catch {
+            // try next candidate
+          }
         }
       }
       if (requiredAttributes.length > 0) {
@@ -432,7 +455,7 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
       await stepDownloadAndUploadImages(ctx, ozonClient, scraper, scraped.specImages, allDetailImages);
 
       const processed = buildProcessedProduct(ctx, {
-        exchangeRate: 11.5, defaultLength: 20, defaultWidth: 15, defaultHeight: 5, defaultWeight: 0.5,
+        exchangeRate: (await getExchangeRate()).rate, defaultLength: 20, defaultWidth: 15, defaultHeight: 5, defaultWeight: 0.5,
       });
       ctx.processed = processed;
 

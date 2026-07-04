@@ -11,6 +11,14 @@ n8n/data/
 node_modules/
 .vite/
 
+# Runtime data & builds
+data/tmp-images/
+apps/api-services/data/
+apps/api-services/dist/
+
+# Local test scripts
+apps/api-services/test-*.ts
+
 # Ignore local logs
 server.log
 *.log

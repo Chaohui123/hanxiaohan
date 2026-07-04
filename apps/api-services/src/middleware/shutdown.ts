@@ -3,6 +3,8 @@
 // Imported by index.ts and any module that needs cleanup hooks
 // ============================================================
 
+import { logger } from "@onzo/logger";
+
 const cleanupFns: Array<() => Promise<void>> = [];
 
 export function registerCleanup(fn: () => Promise<void>): void {
@@ -14,7 +16,7 @@ export async function runCleanup(): Promise<void> {
     try {
       await fn();
     } catch (err) {
-      console.error("[Shutdown] Cleanup hook failed:", err);
+      logger.error({ err }, "Cleanup hook failed");
     }
   }
 }

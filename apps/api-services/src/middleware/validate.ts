@@ -1,10 +1,25 @@
-// ============================================================
-// Request body validation middleware — lightweight JSON Schema
-// No external library; validates required fields + types inline
-// ============================================================
-
+import { z, type ZodTypeAny } from "zod";
 import type { Request, Response, NextFunction } from "express";
+import { ValidationError } from "../errors/index.js";
 
+// ---- Zod-based validation (new) ----
+export function validate<T extends ZodTypeAny>(schema: T) {
+  return (req: Request, res: Response, next: NextFunction): void => {
+    const result = schema.safeParse(req.body);
+    if (!result.success) {
+      const errorMessage = result.error.issues.map(issue =>
+        `${issue.path.join(".")}: ${issue.message}`
+      ).join(", ");
+
+      throw new ValidationError(errorMessage);
+    }
+
+    (req as Request & { validatedBody: z.infer<T> }).validatedBody = result.data;
+    next();
+  };
+}
+
+// ---- Legacy field-rule validation (backward compat) ----
 interface FieldRule {
   field: string;
   type: "string" | "number" | "array" | "boolean";
@@ -30,7 +45,7 @@ export function validateBody(rules: FieldRule[]) {
 
       if (rule.type === "number" && typeof value !== "number") {
         if (typeof value === "string" && !isNaN(Number(value))) {
-          body[rule.field] = Number(value); // coerce
+          body[rule.field] = Number(value);
         } else {
           errors.push(`${rule.field} must be a number`);
         }
@@ -66,3 +81,23 @@ export function validateBody(rules: FieldRule[]) {
     next();
   };
 }
+
+// ---- Zod schemas (for use with validate()) ----
+export const CreateTaskSchema = z.object({
+  type: z.enum(["listing", "ocr", "translate", "upload_image", "create_draft", "batch_listing"]),
+  payload: z.record(z.string(), z.any()).optional(),
+  storeId: z.string().optional().default("store_1"),
+  priority: z.number().int().min(0).max(10).optional().default(0),
+  maxRetries: z.number().int().min(1).max(10).optional().default(3),
+});
+
+export const ProcessListingSchema = z.object({
+  sourceUrl: z.string().url(),
+  storeId: z.string().optional().default("store_1"),
+});
+
+export const BulkUploadSchema = z.object({
+  urls: z.array(z.string().url()).min(1).max(100),
+  storeId: z.string().optional().default("store_1"),
+  skipOcr: z.boolean().optional().default(false),
+});

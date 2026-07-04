@@ -5,8 +5,12 @@
 import { Router } from "express";
 import { parseWebhookPayload, handleWebhookEvent, type WebhookPayload } from "@onzo/ozon-order/webhook";
 import { getDb } from "../db/connection.js";
+import { logger } from "@onzo/logger";
 
 const API_SECRET = process.env.OZON_API_KEYS || "";
+
+// In production, reject webhooks without HMAC-SHA256 signature verification
+const ENFORCE_WEBHOOK_SIGNATURE = (process.env.ENV || process.env.NODE_ENV) !== "dev";
 
 export function createWebhookRouter(): Router {
   const router = Router();
@@ -16,19 +20,41 @@ export function createWebhookRouter(): Router {
     const rawBody = rawBodyBuffer ? rawBodyBuffer.toString("utf8") : JSON.stringify(req.body);
     const signature = req.headers["x-ozon-signature"] as string | undefined;
 
+    // Reject requests without signature in production — prevents forged webhooks
+    if (ENFORCE_WEBHOOK_SIGNATURE && !signature) {
+      logger.warn({ correlationId: req.correlationId }, "Webhook rejected — missing X-Ozon-Signature header");
+      res.status(401).json({
+        success: false,
+        error: { code: "MISSING_SIGNATURE", message: "X-Ozon-Signature header required", retryable: false },
+        correlationId: req.correlationId,
+      });
+      return;
+    }
+
     const dedupStore = {
+      /**
+       * Atomic dedup: INSERT OR IGNORE checks UNIQUE constraint on event_id.
+       * Returns true if already processed (insert ignored = row existed).
+       * This eliminates the race condition between SELECT + INSERT.
+       */
       async isDuplicate(eventId: string): Promise<boolean> {
         const db = await getDb().catch(() => null);
         if (!db) return false;
-        const rows = await db.all("SELECT 1 FROM webhook_events WHERE event_id = ? LIMIT 1", [eventId]);
-        return rows.length > 0;
+        // Try to insert — if it already exists, INSERT OR IGNORE does nothing
+        const result = await db.run(
+          "INSERT OR IGNORE INTO webhook_events (event_id, posting_number, event_type, created_at) VALUES (?, NULL, NULL, datetime('now'))",
+          [eventId]
+        );
+        // changes === 0 means the row already existed → duplicate
+        return result.changes === 0;
       },
       async markProcessed(eventId: string, meta?: { postingNumber?: string; eventType?: string }): Promise<void> {
         const db = await getDb().catch(() => null);
         if (!db) return;
+        // Update metadata for an already-inserted event (from isDuplicate above)
         await db.run(
-          "INSERT OR IGNORE INTO webhook_events (event_id, posting_number, event_type, created_at) VALUES (?, ?, ?, datetime('now'))",
-          [eventId, meta?.postingNumber ?? null, meta?.eventType ?? null]
+          "UPDATE webhook_events SET posting_number = ?, event_type = ? WHERE event_id = ?",
+          [meta?.postingNumber ?? null, meta?.eventType ?? null, eventId]
         );
       },
     };
@@ -58,7 +84,7 @@ export function createWebhookRouter(): Router {
           "UPDATE local_orders SET status = ?, updated_at = datetime('now') WHERE posting_number = ?",
           [p.status, p.postingNumber]
         );
-        console.log(`[Webhook] Order ${p.postingNumber} → ${p.status}`);
+        logger.info({ postingNumber: p.postingNumber, status: p.status }, "Webhook order status update");
       },
 
       onDelivered: async (p) => {
@@ -78,7 +104,7 @@ export function createWebhookRouter(): Router {
           await mgr.confirmDelivery(p.postingNumber);
         });
 
-        console.log(`[Webhook] Order ${p.postingNumber} delivered — inventory updated`);
+        logger.info({ postingNumber: p.postingNumber }, "Webhook order delivered — inventory updated");
       },
 
       onCancelled: async (p) => {
@@ -104,7 +130,7 @@ export function createWebhookRouter(): Router {
           }
         });
 
-        console.log(`[Webhook] Order ${p.postingNumber} cancelled — inventory restored`);
+        logger.info({ postingNumber: p.postingNumber }, "Webhook order cancelled — inventory restored");
       },
     });
 

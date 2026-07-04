@@ -1,0 +1,44 @@
+# Caddy reverse proxy — automatic HTTPS via Let's Encrypt
+# Usage: Add to docker-compose.yml and set CADDY_DOMAIN in .env
+#
+# Development (no HTTPS):
+#   CADDY_DOMAIN=localhost
+#
+# Production (auto Let's Encrypt):
+#   CADDY_DOMAIN=onzo.example.com
+
+{$CADDY_DOMAIN:localhost} {
+	# Ozon webhook receiver (must be public)
+	handle /api/webhook/* {
+		reverse_proxy api-services:3000
+	}
+
+	# API + Dashboard
+	handle /api/* {
+		reverse_proxy api-services:3000
+	}
+
+	# HTML Dashboard
+	handle / {
+		reverse_proxy api-services:3000
+	}
+
+	# n8n (optional, only if exposing n8n publicly)
+	# handle /n8n/* {
+	# 	reverse_proxy n8n:5678
+	# }
+
+	# Security headers
+	header {
+		X-Content-Type-Options nosniff
+		X-Frame-Options DENY
+		Referrer-Policy strict-origin-when-cross-origin
+	}
+
+	log {
+		output file /var/log/caddy/access.log {
+			roll_size 10mb
+			roll_keep 5
+		}
+	}
+}

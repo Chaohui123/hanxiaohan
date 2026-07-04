@@ -1,9 +1,5 @@
-// ============================================================
-// API-level rate limiter — token bucket per IP
-// Prevents abuse of the Express API endpoints
-// ============================================================
-
 import type { Request, Response, NextFunction } from "express";
+import { getRateLimitBucket, setRateLimitBucket } from "../cache/redis.js";
 
 interface Bucket {
   tokens: number;
@@ -12,19 +8,16 @@ interface Bucket {
 
 const buckets = new Map<string, Bucket>();
 
-// Config: max 60 requests per minute per IP
 const MAX_TOKENS = parseInt(process.env.RATE_LIMIT_MAX || "60", 10);
-const REFILL_RATE = MAX_TOKENS / 60_000; // tokens per ms (1 min window)
-const REFILL_INTERVAL_MS = 10_000; // clean stale entries every 10s
+const REFILL_RATE = MAX_TOKENS / 60_000;
+const REFILL_INTERVAL_MS = 10_000;
 
-// Periodic cleanup of stale buckets
 let lastCleanup = Date.now();
 function cleanupStale(): void {
   const now = Date.now();
   if (now - lastCleanup < REFILL_INTERVAL_MS) return;
   lastCleanup = now;
 
-  // Remove buckets not used in the last 5 minutes
   const stale = now - 5 * 60 * 1000;
   for (const [key, bucket] of buckets) {
     if (bucket.lastRefill < stale) {
@@ -41,8 +34,7 @@ function getClientIp(req: Request): string {
   return req.socket.remoteAddress || "unknown";
 }
 
-export function rateLimitMiddleware(req: Request, res: Response, next: NextFunction): void {
-  // Skip rate limiting for health endpoints
+export async function rateLimitMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
   if (req.path === "/health" || req.path === "/ready") {
     next();
     return;
@@ -51,23 +43,34 @@ export function rateLimitMiddleware(req: Request, res: Response, next: NextFunct
   const ip = getClientIp(req);
   const now = Date.now();
 
-  let bucket = buckets.get(ip);
-  if (!bucket) {
-    bucket = { tokens: MAX_TOKENS, lastRefill: now };
-    buckets.set(ip, bucket);
+  let bucket: Bucket | null = null;
+  const redisBucket = await getRateLimitBucket(ip);
+
+  if (redisBucket) {
+    bucket = redisBucket;
+  } else {
+    bucket = buckets.get(ip) || null;
+    if (!bucket) {
+      bucket = { tokens: MAX_TOKENS, lastRefill: now };
+    }
   }
 
-  // Refill tokens based on elapsed time
   const elapsed = now - bucket.lastRefill;
   if (elapsed > 0) {
     bucket.tokens = Math.min(MAX_TOKENS, bucket.tokens + elapsed * REFILL_RATE);
     bucket.lastRefill = now;
   }
 
-  // Consume 1 token
   if (bucket.tokens >= 1) {
     bucket.tokens -= 1;
-    cleanupStale();
+    
+    if (redisBucket !== null) {
+      await setRateLimitBucket(ip, bucket.tokens, bucket.lastRefill);
+    } else {
+      buckets.set(ip, bucket);
+      cleanupStale();
+    }
+    
     next();
   } else {
     const retryAfter = Math.ceil((1 - bucket.tokens) / REFILL_RATE / 1000);

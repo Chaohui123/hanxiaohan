@@ -6,6 +6,7 @@
 import type { OzonCategoryNode } from "@onzo/shared-types";
 import type { OzonClient } from "@onzo/ozon-api-wrapper";
 import { getDb } from "../db/connection.js";
+import { logger } from "@onzo/logger";
 
 const CACHE_TABLE = `
   CREATE TABLE IF NOT EXISTS category_cache (
@@ -54,16 +55,16 @@ export async function getCategoryTree(
       ) as Array<{ tree_json: string; fetched_at: string }>;
 
       if (rows.length > 0) {
-        console.log(`[CategoryCache] Cache hit — fetched ${rows[0].fetched_at}`);
+        logger.debug({ fetchedAt: rows[0].fetched_at }, "Category cache hit");
         return JSON.parse(rows[0].tree_json) as OzonCategoryNode[];
       }
     } catch (err) {
-      console.warn(`[CategoryCache] Cache read failed: ${(err as Error).message}`);
+      logger.warn({ err: (err as Error).message }, "Category cache read failed");
     }
   }
 
   // Fetch from Ozon API
-  console.log("[CategoryCache] Cache miss — fetching from Ozon API...");
+  logger.info("Category cache miss — fetching from Ozon API");
   const tree = await ozonClient.getCategoryTree();
 
   // Store in cache
@@ -73,9 +74,9 @@ export async function getCategoryTree(
         "INSERT OR REPLACE INTO category_cache (id, tree_json, fetched_at, ttl_hours) VALUES (1, ?, datetime('now'), ?)",
         [JSON.stringify(tree), ttlHours]
       );
-      console.log(`[CategoryCache] Stored ${tree.length} root categories`);
+      logger.info({ rootCategories: tree.length }, "Category cache stored");
     } catch (err) {
-      console.warn(`[CategoryCache] Cache write failed: ${(err as Error).message}`);
+      logger.warn({ err: (err as Error).message }, "Category cache write failed");
     }
   }
 
@@ -89,7 +90,7 @@ export async function invalidateCategoryCache(): Promise<void> {
   const db = await getDb();
   if (db) {
     await db.run("DELETE FROM category_cache WHERE id = 1");
-    console.log("[CategoryCache] Cache invalidated");
+    logger.info("Category cache invalidated");
   }
 }
 

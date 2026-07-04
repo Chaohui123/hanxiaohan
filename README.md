@@ -99,7 +99,7 @@ curl http://localhost:3000/api/stores/summary
 | 层 | 技术 |
 |---|---|
 | 语言 | TypeScript (Node.js 22+) |
-| 框架 | Express 5 |
+| 框架 | Express 4 |
 | 数据库 | SQLite (node:sqlite + Drizzle ORM) |
 | 爬虫 | Playwright |
 | AI | GLM-4.6V (OCR) + DeepSeek-V4 (文本) |
@@ -111,17 +111,19 @@ curl http://localhost:3000/api/stores/summary
 
 ```
 packages/
-  ai/              GLM + DeepSeek 统一封装
-  logger/          结构化日志
-  ozon-api-wrapper/ Ozon API SDK (限流/熔断)
-  ozon-order/      订单同步 + 库存 + Webhook
-  price-monitor/   竞品比价 + 选品评分
-  scraper/         1688 Playwright 爬虫
-  shared-types/    全局类型定义
-  validator/       上架前置校验
-apps/api-services/  Express 统一接口服务
-n8n/workflows/     6 条自动化工作流
+  ai/              → @onzo/glm-integration     GLM + DeepSeek 统一封装
+  logger/          → @onzo/logger              结构化日志
+  ozon-api-wrapper/→ @onzo/ozon-api-wrapper    Ozon API SDK (限流/熔断)
+  ozon-order/      → @onzo/ozon-order          订单同步 + 库存 + Webhook
+  price-monitor/   → @onzo/price-monitor       竞品比价 + 选品评分
+  scraper/         → @onzo/scraper-1688        1688 Playwright 爬虫
+  shared-types/    → @onzo/shared-types        全局类型定义
+  validator/       → @onzo/validation-layer    上架前置校验
+apps/api-services/  → @onzo/api-services        Express 统一接口服务
+n8n/workflows/                                 8 条自动化工作流
 ```
+
+> **注意**：三个包的目录名与 npm 包名不同，import 时使用右侧 `@onzo/*` 名称。
 
 ## License
 

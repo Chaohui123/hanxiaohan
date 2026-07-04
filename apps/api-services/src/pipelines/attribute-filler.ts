@@ -11,13 +11,8 @@ export interface FilledAttribute {
   value: string;
 }
 
-// Common Ozon required attribute IDs (may vary per category, these are fallback guesses)
-const COMMON_ATTRIBUTE_MAP: Record<string, number> = {
-  "Цвет": 0, "color": 0, "цвет": 0,
-  "Материал": 0, "material": 0, "материал": 0,
-  "Размер": 0, "size": 0, "размер": 0,
-  "Вес": 0, "weight": 0, "вес": 0,
-};
+// Common Ozon attribute name keywords for Russian/Chinese/English matching
+// Actual IDs come from Ozon's getCategoryAttributes API — never hardcoded to 0
 
 /**
  * Heuristic fill: extract color, material, size, weight from product specs
@@ -82,9 +77,11 @@ export function heuristicFillAttributes(
 /**
  * Default fallback attributes for categories where we can't get required attrs.
  * Covers the most common 4: Цвет, Материал, Размер, Вес.
+ * Matches against Ozon's requiredAttributes to use real attribute IDs.
  */
 export function buildDefaultAttributes(
-  product: { title: string; specifications: Array<{ name: string; value: string }> }
+  product: { title: string; specifications: Array<{ name: string; value: string }> },
+  requiredAttributes?: OzonAttribute[]
 ): FilledAttribute[] {
   const specMap = new Map<string, string>();
   for (const s of product.specifications) specMap.set(s.name, s.value);
@@ -95,11 +92,46 @@ export function buildDefaultAttributes(
   const sizeVal = specMap.get("尺码") || specMap.get("尺寸") || specMap.get("Size") || "Универсальный";
   const weightVal = specMap.get("重量") || specMap.get("Weight") || specMap.get("Вес") || "0.5";
 
-  // These IDs are placeholder — real IDs come from Ozon's getCategoryAttributes response
-  defaults.push({ attributeId: 0, name: "Цвет", value: colorVal });
-  defaults.push({ attributeId: 0, name: "Материал", value: materialVal });
-  defaults.push({ attributeId: 0, name: "Размер", value: sizeVal });
-  defaults.push({ attributeId: 0, name: "Вес", value: weightVal });
+  const fallbackMap: Array<{ keywords: string[]; value: string }> = [
+    { keywords: ["цвет", "color", "颜色"], value: colorVal },
+    { keywords: ["материал", "material", "材质"], value: materialVal },
+    { keywords: ["размер", "size", "尺码", "尺寸"], value: sizeVal },
+    { keywords: ["вес", "weight", "重量"], value: weightVal },
+  ];
+
+  // Match against real Ozon attribute IDs when available
+  for (const fb of fallbackMap) {
+    let attrId = 0;
+    let attrName = fb.keywords[0];
+
+    if (requiredAttributes && requiredAttributes.length > 0) {
+      const matched = requiredAttributes.find((a) =>
+        fb.keywords.some((kw) => a.name.toLowerCase().includes(kw))
+      );
+      if (matched) {
+        attrId = matched.id;
+        attrName = matched.name;
+        // If dictionary exists, try to match the value against it
+        if (matched.dictionary?.length) {
+          const dictMatch = matched.dictionary.find(
+            (d) => d.value.toLowerCase() === fb.value.toLowerCase()
+          );
+          if (dictMatch) {
+            defaults.push({ attributeId: attrId, name: attrName, value: dictMatch.value });
+            continue;
+          }
+          // Use first dictionary value as fallback
+          defaults.push({ attributeId: attrId, name: attrName, value: matched.dictionary[0].value });
+          continue;
+        }
+      }
+    }
+
+    // Only add if we have a real attribute ID (skip 0 — Ozon rejects it)
+    if (attrId > 0) {
+      defaults.push({ attributeId: attrId, name: attrName, value: fb.value });
+    }
+  }
 
   return defaults;
 }

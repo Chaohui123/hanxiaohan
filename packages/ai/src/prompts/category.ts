@@ -70,3 +70,49 @@ export function formatCategoryTree(
 
   return lines.join("\n");
 }
+
+/**
+ * Pre-filter the Ozon category tree to only relevant branches based on
+ * product keywords. This drastically reduces the tree size sent to the LLM
+ * and prevents hallucinated category IDs.
+ */
+export function filterCategoryTree(
+  nodes: Array<{ categoryId: number; title: string; children: Array<{ categoryId: number; title: string; children: unknown[] }> }>,
+  keywords: string[]
+): Array<{ categoryId: number; title: string; children: Array<{ categoryId: number; title: string; children: unknown[] }> }> {
+  if (!keywords.length || keywords.every((k) => k.length < 2)) return nodes;
+
+  const lowerKeywords = keywords.map((k) => k.toLowerCase());
+
+  function matchesKeyword(title: string | undefined): boolean {
+    if (!title) return false;
+    const lower = title.toLowerCase();
+    return lowerKeywords.some((kw) => lower.includes(kw));
+  }
+
+  function filterChildren(
+    children: Array<{ categoryId: number; title: string; children: Array<{ categoryId: number; title: string; children: unknown[] }> }>
+  ): Array<{ categoryId: number; title: string; children: Array<{ categoryId: number; title: string; children: unknown[] }> }> {
+    const results: Array<{ categoryId: number; title: string; children: Array<{ categoryId: number; title: string; children: unknown[] }> }> = [];
+    for (const node of children) {
+      const selfMatch = matchesKeyword(node.title);
+      const filteredChildren = node.children?.length ? filterChildren(node.children) : [];
+
+      if (selfMatch || filteredChildren.length > 0) {
+        results.push({
+          categoryId: node.categoryId,
+          title: node.title,
+          children: filteredChildren.length > 0 ? filteredChildren : node.children,
+        });
+      }
+    }
+    return results;
+  }
+
+  const filtered = filterChildren(nodes);
+
+  // If filtering removed everything, return original (don't send empty tree)
+  if (filtered.length === 0) return nodes;
+
+  return filtered;
+}

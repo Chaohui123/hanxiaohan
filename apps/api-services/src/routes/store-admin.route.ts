@@ -21,10 +21,11 @@ export function createStoreAdminRouter(): Router {
       const tokens = await db.all<Record<string, unknown>>("SELECT COALESCE(SUM(total_tokens),0) as total FROM token_usage WHERE date(timestamp) = date('now')");
       const lowStock = await db.all<Record<string, unknown>>("SELECT COUNT(*) as cnt FROM inventory WHERE stock_available < 5");
 
-      // Per-store breakdown
+      // Per-store breakdown with correlated listing count
       const perStore = await db.all<Record<string, unknown>>(
         "SELECT s.store_id, s.store_name, s.group_name, s.proxy_url, s.active," +
-        " (SELECT COUNT(*) FROM listing_records l WHERE l.created_at >= datetime('now','-1 day')) as listings_24h" +
+        " (SELECT COUNT(*) FROM task_queue t WHERE t.store_id = s.store_id AND t.status IN ('queued','processing')) as activeTasks," +
+        " (SELECT COUNT(*) FROM task_queue t WHERE t.store_id = s.store_id AND t.status = 'failed') as failedTasks" +
         " FROM store_configs s WHERE s.active = 1 ORDER BY s.group_name, s.store_id"
       );
 

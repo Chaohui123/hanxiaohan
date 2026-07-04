@@ -4,7 +4,7 @@
 // ============================================================
 
 import pino from "pino";
-import { createWriteStream, mkdirSync, existsSync, renameSync, statSync } from "node:fs";
+import { createWriteStream, mkdirSync, existsSync, renameSync, statSync, unlinkSync, readdirSync } from "node:fs";
 import { join } from "node:path";
 import type { AppConfig } from "../config.js";
 
@@ -12,11 +12,36 @@ import type { AppConfig } from "../config.js";
 let currentLogDate = "";
 let logStream: ReturnType<typeof createWriteStream> | null = null;
 const LOG_DIR = process.env.LOG_DIR || "./logs";
+const LOG_RETENTION_DAYS = parseInt(process.env.LOG_RETENTION_DAYS || "30", 10);
 
 function getLogFilePath(): string {
   const now = new Date();
   const dateStr = now.toISOString().split("T")[0]; // YYYY-MM-DD
   return join(LOG_DIR, `onzo-${dateStr}.log`);
+}
+
+/** Delete log files older than LOG_RETENTION_DAYS. */
+function cleanupOldLogs(): void {
+  try {
+    if (!existsSync(LOG_DIR)) return;
+    const files = readdirSync(LOG_DIR);
+    const cutoff = Date.now() - LOG_RETENTION_DAYS * 86400_000;
+
+    for (const file of files) {
+      if (!file.startsWith("onzo-") || !file.endsWith(".log")) continue;
+      try {
+        const filePath = join(LOG_DIR, file);
+        const fileStat = statSync(filePath);
+        if (fileStat.mtimeMs < cutoff) {
+          unlinkSync(filePath);
+        }
+      } catch {
+        // skip locked/deleted files
+      }
+    }
+  } catch {
+    // directory may not exist
+  }
 }
 
 function rotateLogIfNeeded(): void {
@@ -34,12 +59,13 @@ function rotateLogIfNeeded(): void {
     mkdirSync(LOG_DIR, { recursive: true });
   }
 
+  // Cleanup old log files on rotation
+  cleanupOldLogs();
+
   // Create new stream for today
   const filePath = getLogFilePath();
   logStream = createWriteStream(filePath, { flags: "a" });
   currentLogDate = today;
-
-  console.log(`[Logger] Writing logs to ${filePath}`);
 }
 
 /**

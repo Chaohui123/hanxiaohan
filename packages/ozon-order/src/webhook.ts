@@ -90,8 +90,11 @@ export async function parseWebhookPayload(
   apiSecret?: string,
   options?: { dedupStore?: WebhookDedupStore }
 ): Promise<WebhookPayload | WebhookVerifyResult> {
-  // Verify signature if secret provided
-  if (signature && apiSecret) {
+  // Verify signature — mandatory when signature header is present
+  if (signature) {
+    if (!apiSecret) {
+      return { valid: false, reason: "Signature provided but no API secret configured" };
+    }
     const result = verifySignature(rawBody, signature, apiSecret);
     if (!result.valid) return result;
   }

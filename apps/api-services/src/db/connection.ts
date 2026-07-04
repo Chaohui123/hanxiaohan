@@ -3,7 +3,23 @@
 // Adapts between Node 22+ built-in DatabaseSync and better-sqlite3
 // ============================================================
 
+import { resolve, dirname } from "node:path";
+import { fileURLToPath } from "node:url";
 import { initSchema } from "./schema.js";
+import { runMigrations } from "./migrate.js";
+import { MIGRATIONS } from "./migrations.js";
+import { logger } from "@onzo/logger";
+
+const __dirname = dirname(fileURLToPath(import.meta.url));
+const projectRoot = resolve(__dirname, "../../../..");
+
+function resolveDbPath(): string {
+  const raw = process.env.SQLITE_DB_PATH || "./data/onzo.db";
+  if (raw.startsWith("./") || raw.startsWith("../")) {
+    return resolve(projectRoot, raw);
+  }
+  return raw;
+}
 
 // ---- Adapter interface ----
 export interface DbAdapter {
@@ -66,19 +82,23 @@ export async function getDb(): Promise<DbAdapter | null> {
 
   try {
     // Node 22+ built-in SQLite
-    const dbPath = process.env.SQLITE_DB_PATH || "./data/onzo.db";
+    const dbPath = resolveDbPath();
     dbInstance = await createNodeSqliteAdapter(dbPath);
     await initSchema(dbInstance);
-    console.log(`[DB] SQLite (node:sqlite) connected: ${dbPath}`);
+    const applied = await runMigrations(dbInstance, MIGRATIONS);
+    if (applied > 0) logger.info({ applied }, "Database migrations complete");
+    logger.info({ dbPath, driver: "node:sqlite" }, "SQLite connected");
   } catch (err) {
-    console.warn("[DB] node:sqlite failed:", (err as Error).message);
+    logger.warn({ err: (err as Error).message }, "node:sqlite unavailable, trying better-sqlite3");
     try {
-      const dbPath = process.env.SQLITE_DB_PATH || "./data/onzo.db";
+      const dbPath = resolveDbPath();
       dbInstance = await createBetterSqlite3Adapter(dbPath);
       await initSchema(dbInstance);
-      console.log(`[DB] better-sqlite3 connected: ${dbPath}`);
+      const applied = await runMigrations(dbInstance, MIGRATIONS);
+      if (applied > 0) logger.info({ applied }, "Database migrations complete");
+      logger.info({ dbPath, driver: "better-sqlite3" }, "SQLite connected");
     } catch {
-      console.error("[DB] No SQLite driver available. Running without persistence.");
+      logger.error("No SQLite driver available — running without persistence");
       dbInstance = null;
     }
   }

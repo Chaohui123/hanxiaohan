@@ -1,15 +1,13 @@
-// ============================================================
-// Task routes — failed task retry, queue status, listing history
-// ============================================================
-
-import { Router } from "express";
+import { Router, type Request } from "express";
+import crypto from "node:crypto";
+import { z } from "zod";
 import type { TaskQueue, TaskStatus as TaskQueueStatus } from "../db/task-queue.js";
 import { getFailedTasks, getListingRecords, updateFailedTaskStatus } from "../db/models.js";
+import { validate, CreateTaskSchema } from "../middleware/validate.js";
 
 export function createTaskRouter(taskQueue: TaskQueue): Router {
   const router = Router();
 
-  // Queue stats
   router.get("/queue/stats", (req, res) => {
     res.json({
       success: true,
@@ -18,7 +16,6 @@ export function createTaskRouter(taskQueue: TaskQueue): Router {
     });
   });
 
-  // Queued tasks
   router.get("/queue", (req, res) => {
     const status = (req.query.status as string) ?? undefined;
     const tasks = taskQueue.listTasks(status as TaskQueueStatus, 50);
@@ -29,7 +26,6 @@ export function createTaskRouter(taskQueue: TaskQueue): Router {
     });
   });
 
-  // Failed tasks (from DB)
   router.get("/failed", async (req, res) => {
     try {
       const storeId = (req.query.storeId as string | undefined) ?? "store_1";
@@ -48,7 +44,6 @@ export function createTaskRouter(taskQueue: TaskQueue): Router {
     }
   });
 
-  // Retry failed task (re-queue)
   router.post("/retry/:taskId", async (req, res) => {
     const task = await taskQueue.retry(req.params.taskId);
     if (!task) {
@@ -74,7 +69,6 @@ export function createTaskRouter(taskQueue: TaskQueue): Router {
     });
   });
 
-  // Listing history
   router.get("/listings", async (req, res) => {
     try {
       const records = await getListingRecords(50);
@@ -92,12 +86,10 @@ export function createTaskRouter(taskQueue: TaskQueue): Router {
     }
   });
 
-  // POST /api/task/deadletter/retry-batch — batch retry with optional filtering
   router.post("/deadletter/retry-batch", async (req, res) => {
     const { taskIds, filterType, storeId } = req.body as { taskIds?: string[]; filterType?: string; storeId?: string };
     const targetStoreId = storeId ?? "store_1";
 
-    // If filterType specified, get tasks from DB filtered by error type
     let idsToRetry = taskIds;
     if (filterType && !taskIds) {
       const db = await import("../db/models.js");
@@ -152,6 +144,26 @@ export function createTaskRouter(taskQueue: TaskQueue): Router {
     res.json({
       success: true,
       data: { results, retried: results.filter((r) => r.requeued).length, total: idsToRetry.length },
+      correlationId: req.correlationId,
+    });
+  });
+
+  router.post("/create", validate(CreateTaskSchema), async (req, res) => {
+    const body = (req as Request & { validatedBody: z.infer<typeof CreateTaskSchema> }).validatedBody;
+    
+    const task = await taskQueue.enqueue({
+      type: body.type,
+      payload: body.payload ?? {},
+      correlationId: req.correlationId ?? crypto.randomUUID(),
+      storeId: body.storeId,
+      priority: body.priority,
+      maxRetries: body.maxRetries,
+    });
+
+    res.json({
+      success: true,
+      data: task,
+      message: "Task created successfully",
       correlationId: req.correlationId,
     });
   });

@@ -4,6 +4,7 @@
 // ============================================================
 
 import type { DbAdapter } from "./connection.js";
+import { logger } from "@onzo/logger";
 
 // ---- Types ----
 
@@ -32,6 +33,8 @@ export interface TaskQueueStats {
   done: number;
   failed: number;
   total: number;
+  activeWorkers: number;
+  maxConcurrency: number;
 }
 
 type DbTaskRow = Record<string, unknown>;
@@ -44,8 +47,11 @@ export class TaskQueue {
   private db: DbAdapter | null = null;
   private dbAvailable = false;
   private initialized = false;
+  private maxConcurrency: number;
+  private activeWorkers = 0;
 
-  constructor(db?: DbAdapter) {
+  constructor(db?: DbAdapter, maxConcurrency = 5) {
+    this.maxConcurrency = maxConcurrency;
     if (db) {
       this.db = db;
       this.dbAvailable = true;
@@ -65,7 +71,7 @@ export class TaskQueue {
           [stuckTimeout]
         ).catch(() => ({ changes: 0 }));
         if (stuckResult.changes > 0) {
-          console.log(`[TaskQueue] Recovered ${stuckResult.changes} stuck task(s) from previous crash`);
+          logger.warn({ recovered: stuckResult.changes }, "Recovered stuck tasks from previous crash");
         }
 
         // Load queued + processing tasks into memory
@@ -130,10 +136,17 @@ export class TaskQueue {
   async dequeueBatch(count: number, type?: TaskType): Promise<QueuedTask[]> {
     await this.ensureInit();
 
+    if (this.activeWorkers >= this.maxConcurrency) {
+      return [];
+    }
+
+    const availableSlots = this.maxConcurrency - this.activeWorkers;
     const candidates = Array.from(this.memoryQueue.values())
       .filter((t) => t.status === "queued" && (!type || t.type === type))
       .sort((a, b) => a.priority - b.priority || a.createdAt.localeCompare(b.createdAt))
-      .slice(0, count);
+      .slice(0, Math.min(count, availableSlots));
+
+    this.activeWorkers += candidates.length;
 
     const now = new Date().toISOString();
     for (const task of candidates) {
@@ -179,6 +192,7 @@ export class TaskQueue {
       task.completedAt = new Date().toISOString();
     }
     this.processingSet.delete(taskId);
+    this.activeWorkers = Math.max(0, this.activeWorkers - 1);
 
     if (this.dbAvailable && this.db) {
       await this.db.run(
@@ -198,6 +212,7 @@ export class TaskQueue {
       task.completedAt = new Date().toISOString();
     }
     this.processingSet.delete(taskId);
+    this.activeWorkers = Math.max(0, this.activeWorkers - 1);
 
     if (this.dbAvailable && this.db) {
       await this.db.run(
@@ -241,6 +256,8 @@ export class TaskQueue {
       done: all.filter((t) => t.status === "done").length,
       failed: all.filter((t) => t.status === "failed").length,
       total: all.length,
+      activeWorkers: this.activeWorkers,
+      maxConcurrency: this.maxConcurrency,
     };
   }
 
@@ -284,7 +301,7 @@ export class TaskQueue {
       try {
         payload = JSON.parse(row.payload_json as string);
       } catch {
-        console.warn(`[TaskQueue] Corrupted payload_json for task ${row.id}, skipping`);
+        logger.warn({ taskId: row.id as string }, "Corrupted payload_json — skipping");
       }
     }
 

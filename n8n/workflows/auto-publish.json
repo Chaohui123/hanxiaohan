@@ -161,6 +161,6 @@
     "saveManualExecutions": true
   },
   "versionId": "1.0.0",
-  "active": false,
+  "active": true,
   "description": "Auto-publish: Manual trigger with 1688 URL → Ozon Draft. Schedule monitors queue health."
 }

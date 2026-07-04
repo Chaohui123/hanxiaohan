@@ -1,9 +1,4 @@
-// ============================================================
-// ONZO API Services — Express HTTP server
-// Phase 1: single-store MVP
-// ============================================================
-
-import express, { type RequestHandler } from "express";
+import express from "express";
 import cors from "cors";
 import { loadConfig } from "./config.js";
 import { correlationIdMiddleware } from "./middleware/correlation-id.js";
@@ -22,26 +17,34 @@ import { createPriceRouter } from "./routes/price.route.js";
 import { createStoreRouter } from "./routes/store.route.js";
 import { createStoreAdminRouter } from "./routes/store-admin.route.js";
 import { createDashboardHtmlRouter } from "./routes/dashboard-html.route.js";
+import { createAnalyzeRouter } from "./routes/analyze.route.js";
+import { createInventoryRouter } from "./routes/inventory.route.js";
+import { createAftersalesRouter } from "./routes/aftersales.route.js";
 import { timeoutMiddleware } from "./middleware/timeout.js";
 import { idempotencyMiddleware } from "./middleware/idempotency.js";
 import { authMiddleware } from "./middleware/auth.js";
 import { rateLimitMiddleware } from "./middleware/rate-limit.js";
 import { registerCleanup, setupShutdownHandlers } from "./middleware/shutdown.js";
 import { mockMiddleware } from "./routes/mock.middleware.js";
+import { requestTimingMiddleware } from "./middleware/request-timing.js";
 import { swaggerSpec } from "./swagger.js";
 import { getDb } from "./db/connection.js";
+import { initTracing, shutdownTracing } from "./tracing/index.js";
+import { collectMetrics, requestCounter, requestDuration } from "./metrics/index.js";
 
-// Dynamic import for swagger-ui-express (optional dependency)
 let swaggerUi: { serve: unknown; setup: (spec: unknown) => unknown } | null = null;
 async function loadSwagger() {
-  try { swaggerUi = (await import("swagger-ui-express")).default as typeof swaggerUi; } catch { /* optional */ }
+  try { swaggerUi = (await import("swagger-ui-express")).default as typeof swaggerUi; } catch { }
 }
 
 const config = loadConfig();
 const logger = createLogger(config);
+
+// Optional OpenTelemetry tracing (no-op unless OTEL_ENABLED=true)
+initTracing("onzo-api-services").catch(() => {});
+
 const app = express();
 
-// ---- Middleware ----
 const allowedOrigins = (process.env.CORS_ORIGINS || "http://localhost:3000,http://localhost:5678")
   .split(",")
   .map((s) => s.trim())
@@ -53,20 +56,28 @@ app.use(cors({
   allowedHeaders: ["Content-Type", "Authorization", "X-API-Key", "X-Correlation-ID"],
   maxAge: 86400,
 }));
+
 app.use(express.json({
   limit: "10mb",
   verify: (req, _res, buf) => {
     (req as express.Request & { rawBody?: Buffer }).rawBody = buf;
   },
 }));
+
 app.use(timeoutMiddleware(120_000));
 app.use(correlationIdMiddleware);
 app.use(rateLimitMiddleware);
 app.use(idempotencyMiddleware);
 app.use(authMiddleware);
+app.use(requestTimingMiddleware);
 app.use(mockMiddleware);
 
-// ---- Routes ----
+// Serve downloaded images for Ozon URL import (Ozon has no local-file upload API)
+import { mkdirSync, existsSync } from "node:fs";
+const tmpImgDir = "./data/tmp-images";
+if (!existsSync(tmpImgDir)) mkdirSync(tmpImgDir, { recursive: true });
+app.use("/tmp-images", express.static(tmpImgDir, { maxAge: 300_000 }));
+
 app.use(createHealthRouter());
 app.use("/api", createStatsRouter());
 app.use("/api", createBackupRouter());
@@ -75,34 +86,38 @@ app.use("/api", createPriceRouter());
 app.use("/api", createStoreRouter());
 app.use("/api", createStoreAdminRouter());
 
-// ---- HTML Dashboard (GET /) ----
 app.use(createDashboardHtmlRouter());
 
-// ---- Swagger docs ----
 await loadSwagger();
 if (swaggerUi) {
   app.use("/api/docs", swaggerUi.serve as express.RequestHandler, swaggerUi.setup(swaggerSpec));
 }
 
-// ---- Init DB (pre-init before routes mount) ----
+app.get("/metrics", async (_req, res) => {
+  try {
+    const metrics = await collectMetrics();
+    res.set("Content-Type", "text/plain; version=0.0.4; charset=utf-8");
+    res.send(metrics);
+  } catch (err) {
+    res.status(500).send("Failed to collect metrics");
+  }
+});
+
 const db = await getDb().catch((err) => {
   logger.warn({ err }, "DB not available — running without persistence");
   return null;
 });
 
-// Start auto-backup (every 6h, keeps 7 days)
 if (db) {
   startAutoBackup();
   registerCleanup(async () => { stopAutoBackup(); });
 }
 
-// ---- Init Queue ----
 const { TaskQueue } = await import("./db/task-queue.js");
-const taskQueue = new TaskQueue(db);
+const taskQueue = new TaskQueue(db, config.maxTaskConcurrency);
 await taskQueue.init();
 logger.info({ stats: taskQueue.getStats() }, "Task queue initialized");
 
-// ---- Mount DB-dependent routes ----
 app.use("/api/task", createTaskRouter(taskQueue));
 app.use("/api", createProcessRouter(config, taskQueue));
 
@@ -111,20 +126,62 @@ const ozonClient = new OzonClient({
   auth: new AuthManager({ clients: [{ clientId: config.ozon.clientId, apiKey: config.ozon.apiKey }] }),
   baseUrl: config.ozon.baseUrl,
 });
+
+// Shared AI clients (also used by process route internally)
+const { DeepSeekClient, GlmVisionClient, TokenTracker } = await import("@onzo/glm-integration");
+const tokenTracker = new TokenTracker({
+  dailyLimit: parseInt(process.env.LLM_DAILY_TOKEN_LIMIT || "0", 10),
+});
+const sharedDeepseekClient = new DeepSeekClient({
+  apiKey: config.deepseek.apiKey,
+  baseUrl: config.deepseek.baseUrl,
+  flashModel: config.deepseek.flashModel,
+  proModel: config.deepseek.proModel,
+  tokenTracker,
+});
+const sharedVisionClient = new GlmVisionClient({
+  apiKey: config.glm.apiKey,
+  baseUrl: `${config.glm.baseUrl}/chat/completions`,
+  model: config.glm.visionModel,
+  tokenTracker,
+});
+
 app.use("/api", createOrderRouter(ozonClient));
 app.use("/api", createBulkRouter(taskQueue));
 app.use("/api", createDashboardRouter(taskQueue));
+app.use("/api/analyze", createAnalyzeRouter());
+app.use("/api/inventory", createInventoryRouter());
+app.use("/api/aftersales", createAftersalesRouter());
 
-// ---- Error handling ----
+// Oozo: process 1688 plugin downloads (images + videos → Russian localized)
+const { createOozoRouter } = await import("./routes/oozo.route.js");
+app.use("/api", createOozoRouter(sharedDeepseekClient, sharedVisionClient, ozonClient));
+
+app.use((req, res, next) => {
+  const start = Date.now();
+  const route = req.path;
+  const method = req.method;
+  
+  res.on('finish', () => {
+    const duration = (Date.now() - start) / 1000;
+    requestCounter.inc({ route, method, status_code: res.statusCode });
+    requestDuration.observe({ route, method }, duration);
+  });
+  
+  next();
+});
+
 app.use(errorHandler);
 
-// ---- Start ----
 const server = app.listen(config.port, () => {
   logger.info(`ONZO API Services running on http://localhost:${config.port}`);
   logger.info(`Environment: ${config.nodeEnv}`);
 });
 
-// ---- Graceful Shutdown ----
+registerCleanup(async () => {
+  await shutdownTracing();
+});
+
 setupShutdownHandlers(server, {
   info: (msg: string) => logger.info(msg),
   error: (obj: unknown, msg: string) => logger.error(obj as Record<string, unknown>, msg),

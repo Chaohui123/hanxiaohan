@@ -66,5 +66,5 @@
   },
   "settings": { "callerPolicy": "workflowsFromSameOwner" },
   "versionId": "1.0.0",
-  "active": false
+  "active": true
 }

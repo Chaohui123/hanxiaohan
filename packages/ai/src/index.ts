@@ -6,4 +6,4 @@ export { TokenTracker, estimateCost, TOKEN_COST_PER_M, type TokenTrackerConfig, 
 export { DeepSeekClient, DeepSeekApiError, type DeepSeekConfig, type DeepSeekRequestOptions, type DeepSeekModelTier } from "./deepseek-client.js";
 export * from "./prompts/ocr.js";
 export * from "./prompts/translate.js";
-export * from "./prompts/category.js";
+export { CATEGORY_SYSTEM_PROMPT, buildCategoryPrompt, formatCategoryTree, filterCategoryTree } from "./prompts/category.js";

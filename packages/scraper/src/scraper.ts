@@ -231,6 +231,74 @@ export class ProductScraper {
   }
 
   /**
+   * Download images via Playwright browser — uses existing 1688 cookies/session
+   * to bypass hotlink protection that blocks plain fetch requests.
+   * Returns only successfully downloaded images (with content-type validation).
+   */
+  async downloadImagesViaBrowser(
+    imageUrls: string[],
+    options?: { maxImages?: number; minWidth?: number; minHeight?: number }
+  ): Promise<Array<{ url: string; buffer: Buffer; contentType: string }>> {
+    const maxImages = options?.maxImages ?? 15;
+    await this.ensureBrowser();
+
+    const page = await this.context!.newPage();
+    const results: Array<{ url: string; buffer: Buffer; contentType: string }> = [];
+    const uniqueUrls = [...new Set(imageUrls)];
+
+    try {
+      for (const url of uniqueUrls) {
+        if (results.length >= maxImages) break;
+
+        try {
+          // Use Playwright's request interception to capture the image response
+          const response = await page.goto(url, {
+            waitUntil: "commit",
+            timeout: 15000,
+          });
+
+          if (!response || !response.ok()) continue;
+
+          const contentType = response.headers()["content-type"] || "";
+          // Only accept actual images, not HTML pages
+          if (!contentType.startsWith("image/")) continue;
+
+          const buffer = await response.body();
+          if (!buffer || buffer.length < 1024) continue; // skip <1KB (icons/errors)
+
+          results.push({ url, buffer, contentType });
+        } catch {
+          // Individual image failure — skip this URL, try next
+        }
+      }
+    } finally {
+      await page.close().catch(() => {});
+    }
+
+    return results;
+  }
+
+  /**
+   * Filter raw scraped image URLs to keep only high-quality product images.
+   * Removes: SVGs, icons, logos, badges, tiny images, non-product assets.
+   */
+  filterProductImages(imageUrls: string[]): string[] {
+    return imageUrls.filter((url) => {
+      const lower = url.toLowerCase();
+      // Skip SVG icons
+      if (lower.endsWith(".svg")) return false;
+      // Skip icon-sized images (common in 1688: tps-15-14, tps-24-24, etc.)
+      if (/tps-\d+-\d+/.test(lower)) return false;
+      // Skip obvious badges/logos (contains "icon", "avatar", "logo", "badge", "banner")
+      if (/\b(icon|avatar|logo|badge|banner|qr)\b/i.test(lower)) return false;
+      // Skip "sum" (summary/thumbnail) images — usually duplicates
+      if (/sum\.(jpg|png|webp)/i.test(lower)) return false;
+      // Must be a real image format (with ?, &, _, /, #, or end-of-string after extension)
+      return /\.(jpg|jpeg|png|webp)(\?|&|$|_|\/|#)/i.test(lower);
+    });
+  }
+
+  /**
    * Clean up browser resources.
    */
   async close(): Promise<void> {

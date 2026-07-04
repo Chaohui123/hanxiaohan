@@ -10,6 +10,8 @@ import { resolveApiKey } from "./store.route.js";
 import type { LocalOrder, OzonPosting, OzonOrderStatus } from "@onzo/shared-types";
 import type { OzonClient } from "@onzo/ozon-api-wrapper";
 import { AuthManager } from "@onzo/ozon-api-wrapper";
+import { batchShipOrders } from "../services/auto-ship.js";
+import { syncReviewStatuses } from "../services/review-sync.js";
 
 export function createOrderRouter(ozonClient: OzonClient): Router {
   const router = Router();
@@ -50,7 +52,7 @@ export function createOrderRouter(ozonClient: OzonClient): Router {
       const effectiveClient = storeCreds?.client_id && decryptedKey
         ? new OzonOrderClient(new OzonClient({
             auth: new AuthManager({ clients: [{ clientId: storeCreds.client_id, apiKey: decryptedKey, storeId: syncStoreId }] }),
-            baseUrl: (ozonClient as unknown as { baseUrl?: string }).baseUrl,
+            baseUrl: ozonClient.apiBaseUrl,
           }))
         : orderClient;
 
@@ -152,6 +154,55 @@ export function createOrderRouter(ozonClient: OzonClient): Router {
       res.status(500).json({
         success: false,
         error: { code: "SHIP_FAILED", message: (err as Error).message, retryable: true },
+        correlationId: req.correlationId,
+      });
+    }
+  });
+
+  // POST /api/orders/sync-reviews — poll Ozon moderation results
+  router.post("/orders/sync-reviews", async (req, res) => {
+    try {
+      const result = await syncReviewStatuses(ozonClient);
+      res.json({
+        success: true,
+        data: {
+          total: result.total,
+          updated: result.updated,
+          approved: result.approved,
+          declined: result.declined,
+          errors: result.errors,
+          details: result.details.slice(0, 20),
+        },
+        correlationId: req.correlationId,
+      });
+    } catch (err) {
+      res.status(500).json({
+        success: false,
+        error: { code: "REVIEW_SYNC_FAILED", message: (err as Error).message, retryable: true },
+        correlationId: req.correlationId,
+      });
+    }
+  });
+
+  // POST /api/orders/batch-ship — auto-ship all awaiting_deliver orders
+  router.post("/orders/batch-ship", async (req, res) => {
+    try {
+      const result = await batchShipOrders(ozonClient);
+      res.json({
+        success: true,
+        data: {
+          total: result.total,
+          shipped: result.shipped,
+          skipped: result.skipped,
+          failed: result.failed,
+          results: result.results.slice(0, 20), // cap detail for response size
+        },
+        correlationId: req.correlationId,
+      });
+    } catch (err) {
+      res.status(500).json({
+        success: false,
+        error: { code: "BATCH_SHIP_FAILED", message: (err as Error).message, retryable: true },
         correlationId: req.correlationId,
       });
     }
