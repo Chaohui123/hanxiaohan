@@ -25,6 +25,14 @@ export function createOrderRouter(ozonClient: OzonClient): Router {
     const syncStoreId = storeId ?? "store_1";
     const db = await getDb();
 
+    // Resolve store proxy for multi-store IP isolation
+    if (storeId) {
+      try {
+        const cfg = await db?.all("SELECT proxy_url FROM store_configs WHERE store_id=? AND active=1", [storeId]) as Array<Record<string,string>>;
+        if (cfg?.[0]?.proxy_url) process.env.HTTP_PROXY = cfg[0].proxy_url;
+      } catch { /* optional */ }
+    }
+
     if (!db) {
       res.status(503).json({
         success: false,

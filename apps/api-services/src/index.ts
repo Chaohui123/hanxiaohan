@@ -69,50 +69,38 @@ if (swaggerUi) {
   app.use("/api/docs", swaggerUi.serve as express.RequestHandler, swaggerUi.setup(swaggerSpec));
 }
 
-// ---- Init DB & Queue ----
-async function start(): Promise<void> {
-  const db = await getDb().catch((err) => {
-    logger.warn({ err }, "DB not available — running without persistence");
-    return null;
-  });
-
-  // Dynamic import for task-queue (requires DB)
-  const { TaskQueue } = await import("./db/task-queue.js");
-  const taskQueue = new TaskQueue(db);
-  await taskQueue.init();
-  logger.info({ stats: taskQueue.getStats() }, "Task queue initialized");
-
-  // Mount task routes (depends on queue)
-  app.use("/api/task", createTaskRouter(taskQueue));
-
-  // Mount process routes
-  app.use("/api", createProcessRouter(config, taskQueue));
-
-  // Mount order routes
-  const { OzonClient, AuthManager } = await import("@onzo/ozon-api-wrapper");
-  const ozonClient = new OzonClient({
-    auth: new AuthManager({ clients: [{ clientId: config.ozon.clientId, apiKey: config.ozon.apiKey }] }),
-    baseUrl: config.ozon.baseUrl,
-  });
-  app.use("/api", createOrderRouter(ozonClient));
-  app.use("/api", createBulkRouter(taskQueue));
-  app.use("/api", createDashboardRouter(taskQueue));
-
-  // ---- Error handling ----
-  app.use(errorHandler);
-
-  // ---- Start ----
-  app.listen(config.port, () => {
-    logger.info(`ONZO API Services running on http://localhost:${config.port}`);
-    logger.info(`Environment: ${config.nodeEnv}`);
-  });
-}
-
-start().catch((err) => {
-  logger.fatal({ err }, "Failed to start server");
-  process.exit(1);
+// ---- Init DB (pre-init before routes mount) ----
+const db = await getDb().catch((err) => {
+  logger.warn({ err }, "DB not available — running without persistence");
+  return null;
 });
 
-// Note: routes are mounted asynchronously via start().
-// Do not import this module for programmatic use — use a child process or Docker.
+// ---- Init Queue ----
+const { TaskQueue } = await import("./db/task-queue.js");
+const taskQueue = new TaskQueue(db);
+await taskQueue.init();
+logger.info({ stats: taskQueue.getStats() }, "Task queue initialized");
+
+// ---- Mount DB-dependent routes ----
+app.use("/api/task", createTaskRouter(taskQueue));
+app.use("/api", createProcessRouter(config, taskQueue));
+
+const { OzonClient, AuthManager } = await import("@onzo/ozon-api-wrapper");
+const ozonClient = new OzonClient({
+  auth: new AuthManager({ clients: [{ clientId: config.ozon.clientId, apiKey: config.ozon.apiKey }] }),
+  baseUrl: config.ozon.baseUrl,
+});
+app.use("/api", createOrderRouter(ozonClient));
+app.use("/api", createBulkRouter(taskQueue));
+app.use("/api", createDashboardRouter(taskQueue));
+
+// ---- Error handling ----
+app.use(errorHandler);
+
+// ---- Start ----
+app.listen(config.port, () => {
+  logger.info(`ONZO API Services running on http://localhost:${config.port}`);
+  logger.info(`Environment: ${config.nodeEnv}`);
+});
+
 export { app };

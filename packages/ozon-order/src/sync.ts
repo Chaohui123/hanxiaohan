@@ -41,6 +41,7 @@ export async function syncOrders(
 
   const pageSize = options?.pageSize ?? 100;
   let localProcessedCount = 0;
+  let skippedCount = 0;
 
   // Helper to iterate paged postings
   async function iterateList(listFn: (filter?: Record<string, unknown>) => Promise<OzonPosting[]>) {
@@ -51,12 +52,14 @@ export async function syncOrders(
       if (!postings || postings.length === 0) break
 
       for (const p of postings) {
-        // idempotency check by store and order id when possible
         const idempotencyKey = `${options?.storeId ?? "store_1"}:${p.orderId}`;
         if (options?.db) {
           const storeId = options.storeId ?? "store_1";
           const rows = await options.db.all(`SELECT COUNT(*) as cnt FROM local_orders WHERE store_id = ? AND order_id = ?`, [storeId, p.orderId]);
-          if (rows?.[0]?.cnt && rows[0].cnt > 0) continue;
+          if (rows?.[0]?.cnt && rows[0].cnt > 0) {
+            skippedCount++;
+            continue;
+          }
         }
 
         if (options?.processPosting) {
@@ -90,7 +93,7 @@ export async function syncOrders(
     fboCount,
     total: fbsCount + fboCount,
     upserted: localProcessedCount,
-    skipped: (fbsCount + fboCount) - localProcessedCount,
+    skipped: skippedCount,
     errors,
   }
 }
