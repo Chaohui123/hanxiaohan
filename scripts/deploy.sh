@@ -1,6 +1,7 @@
 #!/bin/bash
 # ============================================================
 # ONZO Deploy Script — deploy / rollback / status
+# Uses Docker Compose + PostgreSQL pg_dump backups
 # Usage:
 #   bash scripts/deploy.sh deploy    # Full deploy with health check
 #   bash scripts/deploy.sh rollback  # Rollback to previous version
@@ -10,10 +11,10 @@
 set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-APP_DIR="$PROJECT_DIR/apps/api-services"
 BACKUP_DIR="$PROJECT_DIR/data/backups"
 LOG_FILE="/tmp/onzo.log"
 HEALTH_URL="${HEALTH_URL:-http://localhost:3000/health}"
+ENV_FILE="${ENV_FILE:-.env.production}"
 
 cd "$PROJECT_DIR"
 
@@ -21,12 +22,18 @@ deploy() {
   echo "=== ONZO Deploy ==="
   echo "Time: $(date -Iseconds)"
 
-  # 1. Backup DB
-  echo "[1/5] Backing up database..."
+  # 1. Backup PG
+  echo "[1/5] Backing up PostgreSQL..."
   mkdir -p "$BACKUP_DIR"
-  if [ -f "$PROJECT_DIR/data/onzo.db" ]; then
-    cp "$PROJECT_DIR/data/onzo.db" "$BACKUP_DIR/onzo-pre-deploy-$(date +%Y%m%d-%H%M%S).db"
-    echo "  Backup saved"
+  BACKUP_FILE="$BACKUP_DIR/onzo-pre-deploy-$(date +%Y%m%d-%H%M%S).sql.gz"
+  if command -v docker &>/dev/null && docker ps 2>/dev/null | grep -q onzo-postgres; then
+    docker exec onzo-postgres pg_dump -U onzo onzo_prod | gzip > "$BACKUP_FILE"
+    echo "  Backup saved: $BACKUP_FILE"
+  elif command -v pg_dump &>/dev/null; then
+    pg_dump --no-owner --no-privileges "${DATABASE_URL:-postgresql://onzo:onzo@localhost:5432/onzo_prod}" | gzip > "$BACKUP_FILE"
+    echo "  Backup saved (local pg_dump): $BACKUP_FILE"
+  else
+    echo "  PostgreSQL not available — skipping backup"
   fi
 
   # 2. Git pull
@@ -37,13 +44,15 @@ deploy() {
   echo "[3/5] Running migrations..."
   bash "$SCRIPT_DIR/migrate.sh" up || echo "  Migration skipped or failed"
 
-  # 4. Restart
-  echo "[4/5] Restarting service..."
-  pkill -f "tsx.*index.ts" 2>/dev/null || true
-  sleep 2
-  cd "$APP_DIR"
-  nohup npx tsx src/index.ts > "$LOG_FILE" 2>&1 &
-  echo "  Service started (PID: $!)"
+  # 4. Restart via Docker Compose
+  echo "[4/5] Rebuilding and restarting..."
+  if command -v docker &>/dev/null && docker compose version &>/dev/null; then
+    docker compose --env-file "$ENV_FILE" up -d --build api-services web-dashboard
+    echo "  Docker Compose deploy complete"
+  else
+    echo "  Docker not available — cannot restart"
+    return 1
+  fi
 
   # 5. Health check
   echo "[5/5] Health check..."
@@ -60,24 +69,42 @@ deploy() {
 
 rollback() {
   echo "=== Rollback ==="
-  local latest_backup=$(ls -t "$BACKUP_DIR"/onzo-pre-deploy-*.db 2>/dev/null | head -1)
+  local latest_backup=$(ls -t "$BACKUP_DIR"/onzo-pre-deploy-*.sql.gz 2>/dev/null | head -1)
   if [ -z "$latest_backup" ]; then
     echo "No backup found — cannot rollback"
     exit 1
   fi
 
   echo "Restoring: $latest_backup"
-  pkill -f "tsx.*index.ts" 2>/dev/null || true
-  sleep 2
-  cp "$latest_backup" "$PROJECT_DIR/data/onzo.db"
-  cd "$APP_DIR"
-  nohup npx tsx src/index.ts > "$LOG_FILE" 2>&1 &
-  echo "Rollback complete. Service restarted."
+  if command -v docker &>/dev/null && docker ps 2>/dev/null | grep -q onzo-postgres; then
+    gunzip -c "$latest_backup" | docker exec -i onzo-postgres psql -U onzo onzo_prod
+    echo "  DB restored via Docker"
+  elif command -v psql &>/dev/null; then
+    gunzip -c "$latest_backup" | psql "${DATABASE_URL:-postgresql://onzo:onzo@localhost:5432/onzo_prod}"
+    echo "  DB restored via local psql"
+  else
+    echo "  No PostgreSQL client available — cannot restore"
+    exit 1
+  fi
+
+  if command -v docker &>/dev/null; then
+    docker compose --env-file "$ENV_FILE" restart api-services
+    echo "Rollback complete. Service restarted."
+  else
+    echo "Rollback complete. Restart service manually."
+  fi
 }
 
 status() {
   echo "=== ONZO Status ==="
   echo "Time: $(date -Iseconds)"
+
+  # Docker status
+  if command -v docker &>/dev/null; then
+    echo ""
+    echo "Docker containers:"
+    docker compose ps 2>/dev/null || echo "  docker compose not available"
+  fi
 
   # Service health
   if curl -s --connect-timeout 3 "$HEALTH_URL" 2>/dev/null | grep -q '"status":"ok"'; then
@@ -88,15 +115,10 @@ status() {
     echo "Service: ❌ Not responding"
   fi
 
-  # Recent logs
-  echo ""
-  echo "Recent logs:"
-  tail -5 "$LOG_FILE" 2>/dev/null || echo "  No logs found"
-
   # Backups
   echo ""
   echo "Backups:"
-  ls -lh "$BACKUP_DIR"/onzo-*.db 2>/dev/null | tail -5 || echo "  No backups"
+  ls -lh "$BACKUP_DIR"/onzo-*.sql.gz 2>/dev/null | tail -5 || echo "  No backups"
 }
 
 # Main
