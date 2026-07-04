@@ -1,6 +1,6 @@
 #!/bin/bash
 # ============================================================
-# ONZO Database Migration Script
+# ONZO Database Migration Script (PostgreSQL)
 # Usage:
 #   bash scripts/migrate.sh up       # Apply pending migrations
 #   bash scripts/migrate.sh down     # Rollback last migration
@@ -10,69 +10,58 @@
 set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
-DB_PATH="${SQLITE_DB_PATH:-$PROJECT_DIR/data/onzo.db}"
 BACKUP_DIR="$PROJECT_DIR/data/backups"
 
 up() {
   echo "=== Running Migrations (up) ==="
-  if [ ! -f "$DB_PATH" ]; then
-    echo "Database not found at $DB_PATH — migrations will run on next server start"
-    exit 0
-  fi
+  cd "$PROJECT_DIR/apps/api-services"
 
-  # Backup before migration
-  mkdir -p "$BACKUP_DIR"
-  cp "$DB_PATH" "$BACKUP_DIR/onzo-pre-migrate-$(date +%Y%m%d-%H%M%S).db"
-  echo "Backup created"
-
-  # Run migrations via Node.js
-  node -e "
-    const { DatabaseSync } = require('node:sqlite');
-    const db = new DatabaseSync('$DB_PATH');
-    // Check applied migrations
-    db.exec('CREATE TABLE IF NOT EXISTS _migrations (version INTEGER PRIMARY KEY, name TEXT NOT NULL, applied_at TEXT DEFAULT (datetime(\"now\")))');
-    const applied = db.prepare('SELECT version FROM _migrations ORDER BY version').all();
-    console.log('Applied migrations:', applied.length);
-    console.log('Latest version:', applied.length > 0 ? applied[applied.length-1].version : 'none');
-    db.close();
+  npx tsx -e "
+    import { getDb } from './src/db/connection.js';
+    import { MIGRATIONS } from './src/db/migrations.js';
+    import { runMigrations } from './src/db/migrate.js';
+    const db = await getDb();
+    if (!db) { console.error('DB unavailable — check DATABASE_URL'); process.exit(1); }
+    const count = await runMigrations(db, MIGRATIONS);
+    console.log('Applied ' + count + ' migration(s)');
   "
+
   echo "Migrations complete"
 }
 
 down() {
   echo "=== Rolling Back Last Migration ==="
-  node -e "
-    const { DatabaseSync } = require('node:sqlite');
-    const db = new DatabaseSync('$DB_PATH');
-    const applied = db.prepare('SELECT version FROM _migrations ORDER BY version DESC LIMIT 1').all();
-    if (applied.length > 0) {
-      const v = applied[0].version;
-      db.prepare('DELETE FROM _migrations WHERE version = ?').run(v);
-      console.log('Rolled back migration v' + v);
+  cd "$PROJECT_DIR/apps/api-services"
+
+  npx tsx -e "
+    import { getDb } from './src/db/connection.js';
+    const db = await getDb();
+    if (!db) { console.error('DB unavailable — check DATABASE_URL'); process.exit(1); }
+    const rows = await db.all('SELECT version FROM _migrations ORDER BY version DESC LIMIT 1');
+    if (rows.length > 0) {
+      await db.run('DELETE FROM _migrations WHERE version = \$1', [rows[0].version]);
+      console.log('Rolled back migration v' + rows[0].version);
     } else {
       console.log('No migrations to roll back');
     }
-    db.close();
   "
 }
 
 status() {
   echo "=== Migration Status ==="
-  echo "DB: $DB_PATH"
-  if [ -f "$DB_PATH" ]; then
-    node -e "
-      const { DatabaseSync } = require('node:sqlite');
-      const db = new DatabaseSync('$DB_PATH');
-      try {
-        const applied = db.prepare('SELECT version, name, applied_at FROM _migrations ORDER BY version').all();
-        console.log('Applied (' + applied.length + '):');
-        for (const m of applied) console.log('  v' + m.version + ' ' + m.name + ' (' + m.applied_at + ')');
-      } catch { console.log('  No migrations table — pending'); }
-      db.close();
-    "
-  else
-    echo "  Database file not found"
-  fi
+  echo "DB: ${DATABASE_URL:-postgresql://onzo:onzo@localhost:5432/onzo_prod}"
+  cd "$PROJECT_DIR/apps/api-services"
+
+  npx tsx -e "
+    import { getDb } from './src/db/connection.js';
+    const db = await getDb();
+    if (!db) { console.error('DB unavailable — check DATABASE_URL'); process.exit(1); }
+    try {
+      const rows = await db.all('SELECT version, name, applied_at FROM _migrations ORDER BY version');
+      console.log('Applied (' + rows.length + '):');
+      for (const m of rows) console.log('  v' + m.version + ' ' + m.name + ' (' + m.applied_at + ')');
+    } catch { console.log('  No migrations table — pending'); }
+  "
 }
 
 case "${1:-status}" in
