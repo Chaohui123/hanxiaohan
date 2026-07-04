@@ -1,68 +1,78 @@
-version: "3.8"
+﻿version: '3.8'
 
 services:
-  n8n:
-    image: n8nio/n8n:latest
-    container_name: onzo-n8n
-    ports:
-      - "5678:5678"
-    volumes:
-      - ./data/n8n:/home/node/.n8n
-      - ./n8n/workflows:/home/node/.n8n/workflows
-    environment:
-      - N8N_BASIC_AUTH_ACTIVE=${N8N_BASIC_AUTH_ACTIVE:-true}
-      - N8N_BASIC_AUTH_USER=${N8N_USER:-admin}
-      - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD:-onzo2026}
-      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY:-changeMeToRandom32Characters!!}
-      - N8N_EXECUTIONS_DATA_PRUNE=true
-      - N8N_EXECUTIONS_DATA_MAX_AGE=168
-      - WEBHOOK_URL=http://localhost:5678/
+  postgres:
+    image: postgres:16-alpine
+    container_name: onzo-postgres
     restart: unless-stopped
+    environment:
+      POSTGRES_USER: onzo
+      POSTGRES_PASSWORD: Onzo@Prod2025StrongPass
+      POSTGRES_DB: onzo_prod
+    volumes:
+      - /data/onzo/postgres/data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U onzo"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
     networks:
       - onzo-network
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+
+  redis:
+    image: redis:7-alpine
+    container_name: onzo-redis
+    restart: unless-stopped
+    command: redis-server --requirepass Redis@Onzo2025Strong --appendonly yes
+    volumes:
+      - /data/onzo/redis/data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "-a", "Redis@Onzo2025Strong", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - onzo-network
 
   api-services:
     build:
       context: .
-      dockerfile: docker/api-services/Dockerfile
-    container_name: onzo-api-services
+      dockerfile: Dockerfile
+    container_name: onzo-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    env_file:
+      - .env
+    volumes:
+      - /data/onzo/uploads:/app/uploads
+      - /data/onzo/dead-letter:/app/dead-letter
+      - /data/onzo/logs:/app/logs
+      - /data/onzo/data:/app/data
     ports:
       - "3000:3000"
-    volumes:
-      - ./data:/app/data
-      - ./logs:/app/logs
-    environment:
-      - NODE_ENV=${NODE_ENV:-development}
-      - PORT=3000
-      - OZON_CLIENT_ID=${OZON_CLIENT_ID}
-      - OZON_API_KEY=${OZON_API_KEY}
-      - GLM_API_KEY=${GLM_API_KEY}
-      - LOG_LEVEL=${LOG_LEVEL:-info}
-      - LOG_DIR=/app/logs
-    restart: unless-stopped
     networks:
       - onzo-network
 
-  # HTTPS reverse proxy — auto Let's Encrypt (optional, set CADDY_DOMAIN to enable)
   caddy:
     image: caddy:2-alpine
     container_name: onzo-caddy
+    restart: unless-stopped
+    depends_on:
+      - api-services
     ports:
       - "80:80"
       - "443:443"
     volumes:
-      - ./docker/Caddyfile:/etc/caddy/Caddyfile:ro
-      - ./data/caddy/data:/data
-      - ./data/caddy/logs:/var/log/caddy
-    environment:
-      - CADDY_DOMAIN=${CADDY_DOMAIN:-localhost}
-    restart: unless-stopped
+      - /data/onzo/caddy/Caddyfile:/etc/caddy/Caddyfile
+      - /data/onzo/caddy/data:/data
+      - /data/onzo/caddy/config:/config
+      - /data/onzo/logs/caddy:/data/caddy
     networks:
       - onzo-network
-    profiles:
-      - production  # Only starts with: docker compose --profile production up
 
 networks:
   onzo-network:

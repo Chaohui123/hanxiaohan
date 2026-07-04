@@ -1,0 +1,17 @@
+﻿124-221-11-222.nip.io {
+    encode gzip zstd
+    reverse_proxy /api/* api-services:3000
+    reverse_proxy /tmp-images/* api-services:3000
+    reverse_proxy /health api-services:3000
+    reverse_proxy /metrics api-services:3000
+    reverse_proxy /dashboard api-services:3000
+    reverse_proxy api-services:3000
+    log {
+        output file /data/caddy/access.log
+        level INFO
+    }
+}
+
+http://124.221.11.222 {
+    redir https://124-221-11-222.nip.io{uri} permanent
+}

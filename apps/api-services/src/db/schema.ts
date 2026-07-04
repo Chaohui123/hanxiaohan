@@ -1,4 +1,4 @@
-// ============================================================
+﻿// ============================================================
 // SQLite schema initialization
 // ============================================================
 
@@ -51,7 +51,7 @@ export async function initSchema(db: Database): Promise<void> {
       created_at TEXT DEFAULT (datetime('now'))
     );
 
-    -- Price history (P2 light alternative — no Qdrant needed in Phase 1)
+    -- Price history (P2 light alternative 鈥?no Qdrant needed in Phase 1)
     CREATE TABLE IF NOT EXISTS price_history (
       id INTEGER PRIMARY KEY AUTOINCREMENT,
       product_sku TEXT,
@@ -150,3 +150,4 @@ export async function initSchema(db: Database): Promise<void> {
     );
   `);
 }
+

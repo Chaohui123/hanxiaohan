@@ -1,7 +1,8 @@
-import { Router } from "express";
+﻿import { Router } from "express";
 import { ProductAnalyzer, type ProductAnalysis, type AnalysisOptions } from "../services/product-analyzer.js";
 import { PricingEngine, type PricingOptions } from "../services/pricing-engine.js";
 import { analyzeForBlueOcean, batchAnalyzeBlueOcean, getOnzoSalesTrends, getTopBlueOceanCategories, getKeywordRecommendations, type BlueOceanAnalysis } from "../services/blue-ocean-analyzer.js";
+import { analyzeReturnRisk, getPriorityCategories, calculateReturnCost } from '../services/return-risk-analyzer.js';
 import { analyzeProductForRussia, getHighDemandCategoriesForCurrentSeason, getAutoPartCategoriesSorted } from "../services/russia-market-rules.js";
 
 export function createAnalyzeRouter(): Router {
@@ -304,5 +305,48 @@ export function createAnalyzeRouter(): Router {
     }
   });
 
+
+  router.post("/return-risk", async (req, res) => {
+    try {
+      const { title, description, categoryPath } = req.body as {
+        title: string; description?: string; categoryPath?: string[];
+      };
+      const analysis = analyzeReturnRisk(title, description || '', categoryPath || []);
+      res.json({ success: true, data: analysis, correlationId: req.correlationId });
+    } catch (err) {
+      res.status(500).json({
+        success: false,
+        error: { code: "RETURN_RISK_ERROR", message: (err as Error).message, retryable: true },
+        correlationId: req.correlationId
+      });
+    }
+  });
+
+  router.get("/priority-categories", async (_req, res) => {
+    try {
+      const categories = getPriorityCategories();
+      res.json({ success: true, data: categories, correlationId: _req.correlationId });
+    } catch (err) {
+      res.status(500).json({
+        success: false,
+        error: { code: "CATEGORIES_ERROR", message: (err as Error).message, retryable: true },
+        correlationId: _req.correlationId
+      });
+    }
+  });
+
+  router.post("/return-cost", async (req, res) => {
+    try {
+      const { baseMargin, returnRate } = req.body as { baseMargin: number; returnRate: number };
+      const result = calculateReturnCost(baseMargin, returnRate);
+      res.json({ success: true, data: result, correlationId: req.correlationId });
+    } catch (err) {
+      res.status(500).json({
+        success: false,
+        error: { code: "RETURN_COST_ERROR", message: (err as Error).message, retryable: true },
+        correlationId: req.correlationId
+      });
+    }
+  });
   return router;
 }

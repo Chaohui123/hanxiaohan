@@ -15,7 +15,7 @@ COPY packages/price-monitor/package.json packages/price-monitor/tsconfig.json pa
 COPY packages/logger/package.json packages/logger/tsconfig.json packages/logger/
 COPY apps/api-services/package.json apps/api-services/tsconfig.json apps/api-services/
 
-RUN pnpm install --frozen-lockfile
+RUN pnpm install --no-frozen-lockfile
 
 COPY packages/ packages/
 COPY apps/ apps/

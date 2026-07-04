@@ -1,4 +1,4 @@
-import express from "express";
+﻿import express from "express";
 import cors from "cors";
 import { loadConfig } from "./config.js";
 import { correlationIdMiddleware } from "./middleware/correlation-id.js";
@@ -17,6 +17,7 @@ import { createPriceRouter } from "./routes/price.route.js";
 import { createStoreRouter } from "./routes/store.route.js";
 import { createStoreAdminRouter } from "./routes/store-admin.route.js";
 import { createDashboardHtmlRouter } from "./routes/dashboard-html.route.js";
+import { CosUploader } from './services/cos-uploader.js';
 import { createAnalyzeRouter } from "./routes/analyze.route.js";
 import { createInventoryRouter } from "./routes/inventory.route.js";
 import { createAftersalesRouter } from "./routes/aftersales.route.js";
@@ -45,7 +46,7 @@ initTracing("onzo-api-services").catch(() => {});
 
 const app = express();
 
-const allowedOrigins = (process.env.CORS_ORIGINS || "http://localhost:3000,http://localhost:5678")
+const allowedOrigins = (process.env.CORS_ORIGINS || "https://124-221-11-222.nip.io,http://localhost:3000,http://localhost:5678")
   .split(",")
   .map((s) => s.trim())
   .filter(Boolean);
@@ -104,7 +105,7 @@ app.get("/metrics", async (_req, res) => {
 });
 
 const db = await getDb().catch((err) => {
-  logger.warn({ err }, "DB not available — running without persistence");
+  logger.warn({ err }, "DB not available 鈥?running without persistence");
   return null;
 });
 
@@ -150,10 +151,49 @@ app.use("/api", createOrderRouter(ozonClient));
 app.use("/api", createBulkRouter(taskQueue));
 app.use("/api", createDashboardRouter(taskQueue));
 app.use("/api/analyze", createAnalyzeRouter());
+// COS Image Upload
+const cosUploader = new CosUploader(db);
+app.post('/api/images/upload', async (req, res) => {
+  try {
+    const { filePath, productId, key } = req.body as { filePath: string; productId: string; key?: string };
+    if (!filePath || !productId) {
+      res.status(400).json({ success: false, error: 'filePath and productId required' });
+      return;
+    }
+    const result = await cosUploader.uploadImage(filePath, productId, key);
+    res.json({ success: result.success, data: result });
+  } catch (err) {
+    res.status(500).json({ success: false, error: (err as Error).message });
+  }
+});
+
+app.post('/api/images/batch-upload', async (req, res) => {
+  try {
+    const { files } = req.body as { files: Array<{ filePath: string; productId: string; key?: string }> };
+    if (!files || !Array.isArray(files)) {
+      res.status(400).json({ success: false, error: 'files array required' });
+      return;
+    }
+    const results = await cosUploader.uploadImagesBatch(files);
+    res.json({ success: true, data: results });
+  } catch (err) {
+    res.status(500).json({ success: false, error: (err as Error).message });
+  }
+});
+
+app.post('/api/images/retry-dead-letter', async (_req, res) => {
+  try {
+    const results = await cosUploader.retryDeadLetterImages();
+    res.json({ success: true, data: results });
+  } catch (err) {
+    res.status(500).json({ success: false, error: (err as Error).message });
+  }
+});
+
 app.use("/api/inventory", createInventoryRouter());
 app.use("/api/aftersales", createAftersalesRouter());
 
-// Oozo: process 1688 plugin downloads (images + videos → Russian localized)
+// Oozo: process 1688 plugin downloads (images + videos 鈫?Russian localized)
 const { createOozoRouter } = await import("./routes/oozo.route.js");
 app.use("/api", createOozoRouter(sharedDeepseekClient, sharedVisionClient, ozonClient));
 
@@ -188,3 +228,4 @@ setupShutdownHandlers(server, {
 });
 
 export { app };
+
