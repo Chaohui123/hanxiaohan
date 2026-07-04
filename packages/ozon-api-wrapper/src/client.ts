@@ -289,6 +289,17 @@ export class OzonClient {
     }
   }
 
+  /** Sync local stock levels to Ozon warehouse. */
+  async updateStock(items: Array<{ offerId: string; stock: number; warehouseId?: number }>): Promise<void> {
+    await this.request("POST", "/v2/product/stocks", {
+      stocks: items.map((item) => ({
+        offer_id: item.offerId,
+        stock: item.stock,
+        warehouse_id: item.warehouseId,
+      })),
+    });
+  }
+
   // ---- Image Upload (two channels per Ozon spec) ----
 
   /**

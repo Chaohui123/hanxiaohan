@@ -136,12 +136,8 @@ export class InventoryManager {
       const auth = new AuthManager({ clients: [{ clientId: store.client_id, apiKey }] });
       const ozonClient = new OzonClient({ auth });
 
-      // Update Ozon warehouse stock via generic request (POST /v1/warehouse/stock/update)
-      await (ozonClient as { request: (method: string, path: string, body: unknown) => Promise<unknown> }).request(
-        "POST",
-        "/v1/warehouse/stock/update",
-        { stocks: [{ offer_id: offerId, sku, stock }] }
-      );
+      // Push stock to Ozon warehouse
+      await ozonClient.updateStock([{ offerId, stock }]);
 
       return { success: true };
     } catch (err) {
