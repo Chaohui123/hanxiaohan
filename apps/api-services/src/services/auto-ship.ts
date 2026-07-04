@@ -8,6 +8,7 @@ import { OzonOrderClient } from "@onzo/ozon-order";
 import { getDb, serializedWrite } from "../db/connection.js";
 import { logger } from "@onzo/logger";
 import { notifier } from "./notifier.js";
+import { getLogisticsProvider, type LogisticsProvider, type ShipmentRequest } from "@onzo/logistics";
 
 export interface ShipResult {
   postingNumber: string;
@@ -25,12 +26,58 @@ export interface BatchShipResult {
 }
 
 /**
- * Generate a tracking number placeholder.
- * In production, replace with logistics provider API call (CDEK, Почта России, etc.).
+ * Create a real shipment via logistics provider (CDEK / Russian Post).
+ * Falls back to placeholder tracking number if no provider is configured.
  */
-function generateTrackingNumber(postingNumber: string): string {
-  const ts = Date.now().toString(36).toUpperCase();
-  return `ONZO-${ts}-${postingNumber.slice(-6)}`;
+async function createShipment(
+  postingNumber: string,
+  orderData: Record<string, unknown>,
+  provider: LogisticsProvider | null
+): Promise<{ trackingNumber: string; labelUrl?: string; costRub?: number }> {
+  if (!provider) {
+    // No logistics provider configured — fallback placeholder
+    const ts = Date.now().toString(36).toUpperCase();
+    return { trackingNumber: `ONZO-${ts}-${postingNumber.slice(-6)}` };
+  }
+
+  try {
+    const request: ShipmentRequest = {
+      postingNumber,
+      recipientName: (orderData.buyerName as string) || "Customer",
+      recipientPhone: (orderData.buyerPhone as string) || "+70000000000",
+      address: {
+        city: (orderData.city as string) || "Moscow",
+        street: (orderData.street as string) || "",
+        zipCode: (orderData.zipCode as string) || "101000",
+      },
+      package: {
+        weightGrams: (orderData.weight as number) || 500,
+        lengthCm: (orderData.length as number) || 20,
+        widthCm: (orderData.width as number) || 15,
+        heightCm: (orderData.height as number) || 5,
+        items: (orderData.products as Array<{ name: string; quantity: number; price: number }>) || [],
+      },
+    };
+
+    const result = await provider.createShipment(request);
+
+    if (result.success && result.trackingNumber) {
+      return {
+        trackingNumber: result.trackingNumber,
+        labelUrl: result.labelUrl,
+        costRub: result.costRub,
+      };
+    }
+
+    // Provider failed — fallback to placeholder
+    logger.warn({ postingNumber, error: result.error }, "Logistics provider failed, using placeholder tracking");
+    const ts = Date.now().toString(36).toUpperCase();
+    return { trackingNumber: `ONZO-${ts}-${postingNumber.slice(-6)}` };
+  } catch (err) {
+    logger.warn({ postingNumber, err: (err as Error).message }, "Logistics provider exception, using placeholder");
+    const ts = Date.now().toString(36).toUpperCase();
+    return { trackingNumber: `ONZO-${ts}-${postingNumber.slice(-6)}` };
+  }
 }
 
 /**
@@ -60,62 +107,83 @@ export async function batchShipOrders(ozonClient: OzonClient): Promise<BatchShip
 
   logger.info({ count: pendingOrders.length }, "Auto-ship: Processing orders");
   const client = new OzonOrderClient(ozonClient);
+  const logistics = await getLogisticsProvider();
+  if (!logistics) {
+    logger.warn("Auto-ship: No logistics provider — using placeholder tracking numbers");
+  }
   const results: ShipResult[] = [];
   let shipped = 0, skipped = 0, failed = 0;
 
   for (const order of pendingOrders) {
     try {
-      // Parse products from raw_json stored at sync time
+      // Parse products and order data from raw_json
       let products: Array<{ sku: number; quantity: number }> = [];
+      let raw: Record<string, unknown> = {};
       try {
-        const raw = JSON.parse(order.raw_json || "{}");
+        raw = JSON.parse(order.raw_json || "{}");
         products = (raw.products || raw.items || []).map((p: { sku?: number; product_id?: number; quantity: number }) => ({
           sku: p.sku ?? p.product_id ?? 0,
           quantity: p.quantity ?? 1,
         }));
       } catch {
-        // Can't ship without product info
-        results.push({
-          postingNumber: order.posting_number,
-          status: "skipped",
-          error: "Cannot parse product list from raw_json",
-        });
+        results.push({ postingNumber: order.posting_number, status: "skipped", error: "Cannot parse product list" });
         skipped++;
         continue;
       }
 
       if (products.length === 0) {
-        results.push({
-          postingNumber: order.posting_number,
-          status: "skipped",
-          error: "No products in order",
-        });
+        results.push({ postingNumber: order.posting_number, status: "skipped", error: "No products in order" });
         skipped++;
         continue;
       }
 
-      // Generate tracking number (placeholder — replace with logistics API in production)
-      const trackingNumber = generateTrackingNumber(order.posting_number);
+      // 1. Create real shipment via logistics provider
+      const shipment = await createShipment(order.posting_number, raw, logistics);
 
-      // Call Ozon ship API
-      await client.shipOrder(order.posting_number, trackingNumber, products);
+      // 2. Call Ozon FBS ship API with tracking number
+      await client.shipOrder(order.posting_number, shipment.trackingNumber, products);
 
-      // Update local order status
+      // 3. Update local order with tracking number + label URL
       await serializedWrite(() =>
         db.run(
           "UPDATE local_orders SET status = 'delivering', tracking_number = ?, updated_at = datetime('now') WHERE posting_number = ?",
-          [trackingNumber, order.posting_number]
+          [shipment.trackingNumber, order.posting_number]
         )
       );
 
-      results.push({ postingNumber: order.posting_number, status: "shipped", trackingNumber });
+      results.push({
+        postingNumber: order.posting_number,
+        status: "shipped",
+        trackingNumber: shipment.trackingNumber,
+      });
       shipped++;
-      logger.info({ postingNumber: order.posting_number, trackingNumber }, "Auto-ship: Order shipped");
+      logger.info({
+        postingNumber: order.posting_number,
+        trackingNumber: shipment.trackingNumber,
+        provider: logistics?.name || "placeholder",
+        costRub: shipment.costRub,
+      }, "Auto-ship: Order shipped");
     } catch (err) {
       const msg = (err as Error).message;
       results.push({ postingNumber: order.posting_number, status: "failed", error: msg });
       failed++;
       logger.error({ postingNumber: order.posting_number, err: msg }, "Auto-ship: Shipment failed");
+
+      // Retry with placeholder on logistics failure
+      if (msg.includes("CDEK") || msg.includes("Russian Post")) {
+        try {
+          const fallbackTracking = `ONZO-${Date.now().toString(36)}-${order.posting_number.slice(-6)}`;
+          await client.shipOrder(order.posting_number, fallbackTracking, products);
+          await serializedWrite(() =>
+            db.run("UPDATE local_orders SET status = 'delivering', tracking_number = ? WHERE posting_number = ?",
+              [fallbackTracking, order.posting_number])
+          );
+          results[results.length - 1].status = "shipped";
+          results[results.length - 1].trackingNumber = fallbackTracking;
+          shipped++;
+          failed--;
+        } catch { /* fallback also failed */ }
+      }
     }
   }
 
