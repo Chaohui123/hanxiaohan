@@ -65,7 +65,7 @@ services:
   api-services:
     build:
       context: .
-      dockerfile: Dockerfile
+      dockerfile: docker/api-services/Dockerfile
     container_name: onzo-api
     restart: unless-stopped
     env_file:

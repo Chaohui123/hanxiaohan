@@ -28,7 +28,7 @@ COPY packages/logger/package.json packages/logger/tsconfig.json packages/logger/
 COPY apps/api-services/package.json apps/api-services/tsconfig.json apps/api-services/
 
 # Install production deps only
-RUN pnpm install --no-frozen-lockfile --prod
+RUN pnpm install --frozen-lockfile --prod
 
 # Copy full source
 COPY packages/ packages/

@@ -29,7 +29,7 @@ COPY packages/logger/package.json packages/logger/tsconfig.json packages/logger/
 COPY packages/ai/package.json packages/ai/tsconfig.json packages/ai/
 
 # Install dependencies (pnpm handles workspace linking)
-RUN pnpm install --no-frozen-lockfile
+RUN pnpm install --frozen-lockfile
 
 # Copy full source
 COPY apps/ apps/

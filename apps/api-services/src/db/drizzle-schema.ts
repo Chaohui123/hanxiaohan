@@ -4,8 +4,6 @@
 
 import { pgTable, text, integer, real, serial, timestamp } from "drizzle-orm/pg-core";
 
-const defaultNow = timestamp("created_at").defaultNow().notNull();
-
 // ---- Task Queue ----
 export const taskQueue = pgTable("task_queue", {
   id: text("id").primaryKey(),
