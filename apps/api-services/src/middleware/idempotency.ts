@@ -17,7 +17,7 @@ setInterval(() => {
   }
 }, 60_000);
 
-export function idempotencyMiddleware(req: Request, res: Response, next: NextFunction): void {
+export async function idempotencyMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
   // Only check POST /api/process/*
   if (!req.path.startsWith("/api/process")) {
     next();
