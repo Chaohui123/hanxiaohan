@@ -35,9 +35,10 @@ describe('syncOrders', () => {
 
     const mockDb = {
       all: vi.fn().mockImplementation((_sql: string, params?: unknown[]) => {
-        if (params && params[0] === "store_1" && params[1] === 1) return Promise.resolve([{ cnt: 1 }])
-        return Promise.resolve([{ cnt: 0 }])
+        if (params && params[0] === "store_1" && params[1] === 1) return Promise.resolve([{ status: "awaiting_packaging" }])
+        return Promise.resolve([])
       }),
+      run: vi.fn().mockResolvedValue({ changes: 1 }),
     }
 
     const processPosting = vi.fn(async (_p: OzonPosting) => {})

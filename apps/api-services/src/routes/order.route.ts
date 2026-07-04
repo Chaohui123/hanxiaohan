@@ -13,6 +13,8 @@ import { AuthManager } from "@onzo/ozon-api-wrapper";
 import { batchShipOrders } from "../services/auto-ship.js";
 import { syncReviewStatuses } from "../services/review-sync.js";
 import { writeToDeadLetter } from "../services/dead-letter.js";
+import { getSyncMetrics } from "@onzo/ozon-order";
+import { getWebhookMetrics } from "../services/order-processor.js";
 
 export function createOrderRouter(ozonClient: OzonClient): Router {
   const router = Router();
@@ -191,6 +193,18 @@ export function createOrderRouter(ozonClient: OzonClient): Router {
         correlationId: req.correlationId,
       });
     }
+  });
+
+  // GET /api/orders/metrics — sync + webhook monitoring
+  router.get("/orders/metrics", (_req, res) => {
+    res.json({
+      success: true,
+      data: {
+        sync: getSyncMetrics(),
+        webhook: getWebhookMetrics(),
+      },
+      correlationId: _req.correlationId,
+    });
   });
 
   // POST /api/orders/batch-ship — auto-ship all awaiting_deliver orders

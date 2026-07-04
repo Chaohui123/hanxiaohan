@@ -18,6 +18,7 @@ import { parseWebhookPayload, handleWebhookEvent, type WebhookPayload } from "@o
 import { getDb } from "../db/connection.js";
 import { logger } from "@onzo/logger";
 import { writeToDeadLetter } from "../services/dead-letter.js";
+import { processNewOrder, processCancelledOrder, processStatusChange, recordWebhookReceived, recordWebhookProcessed } from "../services/order-processor.js";
 
 const API_SECRET = process.env.OZON_API_KEYS || "";
 
@@ -144,78 +145,52 @@ export function createWebhookRouter(): Router {
       correlationId: req.correlationId,
     }, "Webhook event processing");
 
-    // Handle the event — update local order status
-    try {
-    await handleWebhookEvent(payload, {
-      onStatusChanged: async (p) => {
-        const db = await getDb().catch(() => null);
-        if (!db) return;
-
-        await db.run(
-          "UPDATE local_orders SET status = ?, updated_at = datetime('now') WHERE posting_number = ?",
-          [p.status, p.postingNumber]
-        );
-        logger.info({ postingNumber: p.postingNumber, status: p.status }, "Webhook order status update");
-      },
-
-      onDelivered: async (p) => {
-        const db = await getDb().catch(() => null);
-        if (!db) return;
-
-        await db.run(
-          "UPDATE local_orders SET status = 'delivered', updated_at = datetime('now') WHERE posting_number = ?",
-          [p.postingNumber]
-        );
-
-        // Confirm inventory delivery
-        const { serializedWrite } = await import("../db/connection.js");
-        await serializedWrite(async () => {
-          const inv = await import("@onzo/ozon-order/inventory");
-          const mgr = new inv.InventoryManager(db!);
-          await mgr.confirmDelivery(p.postingNumber);
-        });
-
-        logger.info({ postingNumber: p.postingNumber }, "Webhook order delivered — inventory updated");
-      },
-
-      onCancelled: async (p) => {
-        const db = await getDb().catch(() => null);
-        if (!db) return;
-
-        await db.run(
-          "UPDATE local_orders SET status = 'cancelled', updated_at = datetime('now') WHERE posting_number = ?",
-          [p.postingNumber]
-        );
-
-        // Restore inventory
-        const { serializedWrite } = await import("../db/connection.js");
-        await serializedWrite(async () => {
-          const inv = await import("@onzo/ozon-order/inventory");
-          const mgr = new inv.InventoryManager(db!);
-          const m = await db!.all(
-            "SELECT offer_id, sku, -quantity as qty FROM stock_movements WHERE posting_number = ? AND type = 'deduct'",
-            [p.postingNumber]
-          ) as Array<{ offer_id: string; sku: number; qty: number }>;
-          if (m.length > 0) {
-            await mgr.restore(p.postingNumber, m.map(x => ({ offerId: x.offer_id, sku: x.sku, quantity: x.qty })));
-          }
-        });
-
-        logger.info({ postingNumber: p.postingNumber }, "Webhook order cancelled — inventory restored");
-      },
-    });
-
+    // Respond immediately (Ozon expects fast 200) — process async
     res.json({ success: true, eventId: payload.eventId, correlationId: req.correlationId });
+    recordWebhookReceived();
+
+    // Background processing
+    const processStart = Date.now();
+    try {
+      await handleWebhookEvent(payload, {
+        onStatusChanged: async (p) => {
+          await processStatusChange(p.postingNumber, p.status);
+        },
+        onDelivered: async (p) => {
+          await processStatusChange(p.postingNumber, "delivered");
+        },
+        onCancelled: async (p) => {
+          await processCancelledOrder(p.postingNumber, "store_1");
+        },
+      });
+
+      // If it's a new order, process inventory
+      if (payload.eventType === "order.created") {
+        // Reconstruct minimal OzonPosting for new order processing
+        const order = {
+          postingNumber: payload.postingNumber,
+          orderId: payload.orderId,
+          status: payload.status,
+          createdAt: payload.timestamp,
+          products: [],
+          price: 0,
+          commission: 0,
+          payout: 0,
+        } as Parameters<typeof processNewOrder>[0];
+        await processNewOrder(order, "store_1");
+      }
+
+      recordWebhookProcessed(Date.now() - processStart, true);
     } catch (err) {
       const errorMsg = (err as Error).message;
       logger.error({ correlationId: req.correlationId, err: errorMsg }, "Webhook event handling failed");
+      recordWebhookProcessed(Date.now() - processStart, false);
       writeToDeadLetter({
         taskType: "webhook",
         errorMessage: errorMsg,
-        payload: { eventId: (parsed as { eventId?: string }).eventId ?? "unknown" },
+        payload: { eventId: payload.eventId },
         correlationId: req.correlationId,
       }).catch(() => {});
-      res.status(500).json({ success: false, error: { code: "WEBHOOK_FAILED", message: errorMsg, retryable: true }, correlationId: req.correlationId });
     }
   });
 
