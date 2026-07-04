@@ -32,9 +32,9 @@
 		reverse_proxy api-services:3000
 	}
 
-	# ---- HTML Dashboard ----
+	# ---- Web Dashboard (React SPA) ----
 	handle {
-		reverse_proxy api-services:3000
+		reverse_proxy web-dashboard:80
 	}
 
 	# ---- Security Headers ----
@@ -57,14 +57,9 @@
 	}
 }
 
-# ---- WebSocket Support (future frontend) ----
-# Uncomment when adding a real-time dashboard frontend:
-#
+# ---- WebSocket Support — uncomment for real-time features ----
 # {$CADDY_DOMAIN:localhost} {
 #   handle /ws/* {
-#     reverse_proxy api-services:3000 {
-#       header_up Connection {>Connection}
-#       header_up Upgrade {>Upgrade}
-#     }
+#     reverse_proxy api-services:3000
 #   }
 # }

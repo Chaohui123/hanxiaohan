@@ -5,3 +5,4 @@ allowBuilds:
   '@scarf/scarf': set this to true or false
   better-sqlite3: true
   esbuild: true
+  protobufjs: set this to true or false
