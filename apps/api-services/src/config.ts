@@ -17,7 +17,7 @@ export interface AppConfig {
   port: number;
   nodeEnv: string;
   logLevel: string;
-  dbPath: string;
+  databaseUrl: string;
   maxAiConcurrency: number;
   maxTaskConcurrency: number;
 
@@ -73,17 +73,11 @@ export function loadConfig(): AppConfig {
     }
   }
 
-  // Resolve relative DB path against project root, not CWD
-  const rawDbPath = optionalEnv("SQLITE_DB_PATH", "./data/onzo.db");
-  const resolvedDbPath = rawDbPath.startsWith("./") || rawDbPath.startsWith("../")
-    ? resolve(projectRoot, rawDbPath)
-    : rawDbPath;
-
   return {
     port: parseInt(optionalEnv("API_SERVICE_PORT", "3000"), 10),
     nodeEnv: optionalEnv("NODE_ENV", "development"),
     logLevel: optionalEnv("LOG_LEVEL", "info"),
-    dbPath: resolvedDbPath,
+    databaseUrl: optionalEnv("DATABASE_URL", "postgresql://onzo:onzo@localhost:5432/onzo_prod"),
     maxAiConcurrency: parseInt(optionalEnv("MAX_AI_CONCURRENCY", "10"), 10),
     maxTaskConcurrency: parseInt(optionalEnv("MAX_TASK_CONCURRENCY", "5"), 10),
 

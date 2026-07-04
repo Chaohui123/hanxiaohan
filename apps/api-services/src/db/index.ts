@@ -1,4 +1,4 @@
-export { getDb, serializedWrite } from "./connection.js";
+export { getDb, serializedWrite, closeDb } from "./connection.js";
 export { initSchema } from "./schema.js";
 export {
   withTransaction,

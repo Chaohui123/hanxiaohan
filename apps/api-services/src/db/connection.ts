@@ -1,134 +1,119 @@
 // ============================================================
-// SQLite connection manager — singleton + write serialization
-// Adapts between Node 22+ built-in DatabaseSync and better-sqlite3
+// PostgreSQL Connection Manager — pg Pool
+// Migrated from SQLite. PG natively supports concurrent writes.
 // ============================================================
 
-import { resolve, dirname } from "node:path";
-import { fileURLToPath } from "node:url";
-import { initSchema } from "./schema.js";
-import { runMigrations } from "./migrate.js";
-import { MIGRATIONS } from "./migrations.js";
+import pg from "pg";
 import { logger } from "@onzo/logger";
+import { initSchema } from "./schema.js";
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const projectRoot = resolve(__dirname, "../../../..");
-
-function resolveDbPath(): string {
-  const raw = process.env.SQLITE_DB_PATH || "./data/onzo.db";
-  if (raw.startsWith("./") || raw.startsWith("../")) {
-    return resolve(projectRoot, raw);
-  }
-  return raw;
-}
-
-// ---- Adapter interface ----
+// ---- DbAdapter Interface (unchanged from SQLite — all services use this) ----
 export interface DbAdapter {
-  exec(sql: string): void;
+  exec(sql: string): Promise<void>;
   run(sql: string, params?: unknown[]): Promise<{ changes: number; lastInsertRowid?: number | bigint }>;
-  all<T = Record<string, unknown>>(sql: string,params?: unknown[]): Promise<T[]>;
+  all<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>;
 }
 
-let dbInstance: DbAdapter | null = null;
-let writeQueue: Array<() => Promise<void>> = [];
-let writeLock = false;
+let pool: pg.Pool | null = null;
 
-/**
- * Create a DbAdapter from Node 22+ built-in DatabaseSync.
- */
-async function createNodeSqliteAdapter(path: string): Promise<DbAdapter> {
-  const sqlite = await import("node:sqlite");
-  const db = new sqlite.DatabaseSync(path);
-
-  return {
-    exec(sql: string): void {
-      db.exec(sql);
-    },
-    async run(sql: string, params?: unknown[]): Promise<{ changes: number; lastInsertRowid?: number | bigint }> {
-      const stmt = db.prepare(sql);
-      return stmt.run(...(params ?? []));
-    },
-    async all<T = Record<string, unknown>>(sql: string,params?: unknown[]): Promise<T[]> {
-      const stmt = db.prepare(sql);
-      return stmt.all(...(params ?? [])) as T[];
-    },
-  };
+function getDatabaseUrl(): string {
+  return process.env.DATABASE_URL || "postgresql://onzo:onzo@localhost:5432/onzo_prod";
 }
 
 /**
- * Create a DbAdapter from better-sqlite3 (fallback).
- */
-async function createBetterSqlite3Adapter(path: string): Promise<DbAdapter> {
-  const BetterSqlite3 = (await import("better-sqlite3")).default;
-  const db = new BetterSqlite3(path);
-
-  return {
-    exec(sql: string): void {
-      db.exec(sql);
-    },
-    async run(sql: string, params?: unknown[]): Promise<{ changes: number; lastInsertRowid?: number | bigint }> {
-      return db.prepare(sql).run(...(params ?? []));
-    },
-    async all<T = Record<string, unknown>>(sql: string,params?: unknown[]): Promise<T[]> {
-      return db.prepare(sql).all(...(params ?? [])) as T[];
-    },
-  };
-}
-
-/**
- * Get or create the SQLite database connection (with adapter).
+ * Get or create the PostgreSQL connection pool.
+ * Automatically initializes schema on first connection.
  */
 export async function getDb(): Promise<DbAdapter | null> {
-  if (dbInstance) return dbInstance;
+  if (pool) return createAdapter(pool);
 
   try {
-    // Node 22+ built-in SQLite
-    const dbPath = resolveDbPath();
-    dbInstance = await createNodeSqliteAdapter(dbPath);
-    await initSchema(dbInstance);
-    const applied = await runMigrations(dbInstance, MIGRATIONS);
-    if (applied > 0) logger.info({ applied }, "Database migrations complete");
-    logger.info({ dbPath, driver: "node:sqlite" }, "SQLite connected");
-  } catch (err) {
-    logger.warn({ err: (err as Error).message }, "node:sqlite unavailable, trying better-sqlite3");
-    try {
-      const dbPath = resolveDbPath();
-      dbInstance = await createBetterSqlite3Adapter(dbPath);
-      await initSchema(dbInstance);
-      const applied = await runMigrations(dbInstance, MIGRATIONS);
-      if (applied > 0) logger.info({ applied }, "Database migrations complete");
-      logger.info({ dbPath, driver: "better-sqlite3" }, "SQLite connected");
-    } catch {
-      logger.error("No SQLite driver available — running without persistence");
-      dbInstance = null;
-    }
-  }
+    const url = getDatabaseUrl();
+    pool = new pg.Pool({
+      connectionString: url,
+      max: 20,
+      idleTimeoutMillis: 30_000,
+      connectionTimeoutMillis: 10_000,
+    });
 
-  return dbInstance;
+    // Test connection
+    const client = await pool.connect();
+    await client.query("SELECT 1");
+    client.release();
+
+    // Init schema
+    await initSchema(createAdapter(pool));
+
+    logger.info({ db: "PostgreSQL", pool: "connected" }, "Database connected");
+    return createAdapter(pool);
+  } catch (err) {
+    logger.error({ err: (err as Error).message }, "PostgreSQL connection failed — running without persistence");
+    pool = null;
+    return null;
+  }
 }
 
 /**
- * Serialize writes to avoid SQLite lock conflicts.
+ * Create a DbAdapter from pg Pool.
+ * Converts SQLite-style ? placeholders to PG-style $1, $2, ...
+ * Supports both parameter styles for backward compatibility.
+ */
+function createAdapter(p: pg.Pool): DbAdapter {
+  let paramIndex = 0;
+
+  function convertQuery(sql: string): string {
+    paramIndex = 0;
+    // Convert ? → $1, $2, ... only for non-PG queries
+    if (sql.includes("$1") || sql.includes("$2")) return sql;
+    return sql.replace(/\?/g, () => `$${++paramIndex}`);
+  }
+
+  return {
+    async exec(sql: string): Promise<void> {
+      const client = await p.connect();
+      try {
+        await client.query(sql);
+      } finally {
+        client.release();
+      }
+    },
+
+    async run(sql: string, params?: unknown[]): Promise<{ changes: number; lastInsertRowid?: number | bigint }> {
+      const client = await p.connect();
+      try {
+        const result = await client.query(convertQuery(sql), params || []);
+        return { changes: result.rowCount ?? 0 };
+      } finally {
+        client.release();
+      }
+    },
+
+    async all<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]> {
+      const client = await p.connect();
+      try {
+        const result = await client.query(convertQuery(sql), params || []);
+        return result.rows as T[];
+      } finally {
+        client.release();
+      }
+    },
+  };
+}
+
+/**
+ * Serialized write — no longer needed for PG (native concurrency).
+ * Kept for backward compatibility with existing service code.
  */
 export async function serializedWrite<T>(fn: () => Promise<T>): Promise<T> {
-  return new Promise<T>((resolve, reject) => {
-    const execute = async () => {
-      writeLock = true;
-      try {
-        const result = await fn();
-        resolve(result);
-      } catch (err) {
-        reject(err);
-      } finally {
-        writeLock = false;
-        const next = writeQueue.shift();
-        if (next) next();
-      }
-    };
+  return fn(); // PG handles concurrency natively
+}
 
-    if (!writeLock) {
-      execute();
-    } else {
-      writeQueue.push(execute);
-    }
-  });
+/**
+ * Close the pool (for graceful shutdown).
+ */
+export async function closeDb(): Promise<void> {
+  if (pool) {
+    await pool.end();
+    pool = null;
+  }
 }
