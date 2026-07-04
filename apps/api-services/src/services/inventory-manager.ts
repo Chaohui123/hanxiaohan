@@ -5,6 +5,7 @@
 
 import { getDb, serializedWrite } from "../db/connection.js";
 import { logger } from "@onzo/logger";
+import { emitEvent, EVENT_KEYS } from "./notification-events.js";
 
 export type AlertLevel = "normal" | "warning" | "critical";
 
@@ -112,6 +113,18 @@ export class InventoryManager {
       "SELECT offer_id, sku, stock_available FROM inventory WHERE stock_available < ?",
       [threshold]
     ) as Array<Record<string, unknown>>;
+
+    // Emit notifications for critical stock levels
+    for (const r of rows) {
+      const stock = (r.stock_available ?? 0) as number;
+      if (stock === 0) {
+        emitEvent(EVENT_KEYS.STOCK_OUT, {
+          sku: String(r.sku),
+          offerId: String(r.offer_id),
+          currentStock: "0",
+        }).catch(() => {});
+      }
+    }
 
     return rows.map((r) => {
       const stock = (r.stock_available ?? 0) as number;

@@ -6,7 +6,7 @@
 import { randomUUID } from "node:crypto";
 import { getDb, serializedWrite } from "../db/connection.js";
 import { logger } from "@onzo/logger";
-import { notifier } from "./notifier.js";
+import { emitEvent, EVENT_KEYS } from "./notification-events.js";
 
 export type DeadLetterStatus = "pending_retry" | "retrying" | "permanent_failure" | "retried";
 export type DeadLetterCategory = "api_error" | "validation" | "network" | "rate_limit" | "circuit_breaker" | "unknown";
@@ -68,19 +68,10 @@ export async function writeToDeadLetter(params: {
 
   // Notify on permanent failures
   if ((params.maxRetries ?? 3) >= 3) {
-    await notifier
-      .notify({
-        level: "error",
-        event: "死信队列",
-        message: `[${category}] ${params.taskType}: ${params.errorMessage.substring(0, 200)}`,
-        correlationId,
-        metadata: {
-          taskType: params.taskType,
-          category,
-          error: params.errorMessage.substring(0, 100),
-        },
-      })
-      .catch(() => {});
+    await emitEvent(EVENT_KEYS.DEAD_LETTER_FULL, {
+      count: "1",
+      category,
+    }, correlationId).catch(() => {});
   }
 
   return id;

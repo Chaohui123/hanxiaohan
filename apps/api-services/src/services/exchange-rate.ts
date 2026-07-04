@@ -6,6 +6,8 @@
 //   between sources, or >48h stale cache)
 // ============================================================
 
+import { emitEvent, EVENT_KEYS } from "./notification-events.js";
+
 interface RateCache {
   rate: number;
   timestamp: number;
@@ -136,6 +138,11 @@ export async function getExchangeRate(): Promise<RateResult> {
         `[ExchangeRate] BLOCKING: Cache is ${hoursStale.toFixed(0)}h old (>${STALE_BLOCK_MS / 3600_000}h). ` +
         `Both rate APIs are down. Refusing to list with unreliable rate.`
       );
+      emitEvent(EVENT_KEYS.EXCHANGE_RATE_STALE, {
+        hoursStale: hoursStale.toFixed(0),
+        rate: String(cache.rate),
+        source: cache.source,
+      }).catch(() => {});
       return {
         rate: cache.rate,
         cached: true,

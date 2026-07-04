@@ -8,6 +8,7 @@ import { OzonOrderClient } from "@onzo/ozon-order";
 import { getDb, serializedWrite } from "../db/connection.js";
 import { logger } from "@onzo/logger";
 import { notifier } from "./notifier.js";
+import { emitEvent, EVENT_KEYS } from "./notification-events.js";
 import { getLogisticsProvider, type LogisticsProvider, type ShipmentRequest } from "@onzo/logistics";
 
 export interface ShipResult {
@@ -199,13 +200,20 @@ export async function batchShipOrders(ozonClient: OzonClient): Promise<BatchShip
 
   // Notify on failures
   if (failed > 0) {
-    await notifier.notify({
-      level: "warn",
-      event: "批量发货",
-      message: `${shipped}/${pendingOrders.length} 发货成功，${failed} 失败`,
-      correlationId: `auto-ship-${Date.now()}`,
-      metadata: { shipped: String(shipped), failed: String(failed), skipped: String(skipped) },
-    }).catch(() => {});
+    const failedDetails = results.filter((r) => r.status === "failed").slice(0, 3).map((r) => r.postingNumber);
+    await emitEvent(EVENT_KEYS.SHIPMENT_FAILED, {
+      postingNumber: failedDetails.join(","),
+      error: `${failed}/${pendingOrders.length} 失败`,
+    }, `auto-ship-${Date.now()}`).catch(() => {});
+  }
+
+  if (shipped > 0) {
+    for (const r of results.filter((r) => r.status === "shipped").slice(0, 5)) {
+      await emitEvent(EVENT_KEYS.ORDER_SHIPPED, {
+        postingNumber: r.postingNumber,
+        trackingNumber: r.trackingNumber || "N/A",
+      }).catch(() => {});
+    }
   }
 
   return result;

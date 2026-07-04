@@ -6,7 +6,7 @@
 import type { OzonClient } from "@onzo/ozon-api-wrapper";
 import { getDb } from "../db/connection.js";
 import { logger } from "@onzo/logger";
-import { notifier } from "./notifier.js";
+import { emitEvent, EVENT_KEYS } from "./notification-events.js";
 
 export interface ReviewSyncResult {
   total: number;
@@ -118,17 +118,10 @@ export async function syncReviewStatuses(ozonClient: OzonClient): Promise<Review
 
   // Notify summary
   if (result.declined > 0) {
-    await notifier.notify({
-      level: "warn",
-      event: "Ozon审核",
-      message: `${result.declined}/${result.updated} 商品审核被拒`,
-      correlationId: `review-sync-${Date.now()}`,
-      metadata: {
-        declined: String(result.declined),
-        approved: String(result.approved),
-        total: String(result.updated),
-      },
-    }).catch(() => {});
+    await emitEvent(EVENT_KEYS.REVIEW_DECLINED, {
+      productId: String(result.details[0]?.productId || "unknown"),
+      count: String(result.declined),
+    }, `review-sync-${Date.now()}`).catch(() => {});
   }
 
   logger.info(
