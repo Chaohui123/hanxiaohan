@@ -35,7 +35,6 @@ describe('syncOrders', () => {
 
     const mockDb = {
       all: vi.fn().mockImplementation((_sql: string, params?: unknown[]) => {
-        // New sync uses: WHERE store_id = ? AND order_id = ?
         if (params && params[0] === "store_1" && params[1] === 1) return Promise.resolve([{ cnt: 1 }])
         return Promise.resolve([{ cnt: 0 }])
       }),
@@ -45,6 +44,8 @@ describe('syncOrders', () => {
 
     const res = await syncOrders({} as unknown as Parameters<typeof syncOrders>[0], { client: client as unknown as Parameters<typeof syncOrders>[1]["client"], db: mockDb as unknown as Parameters<typeof syncOrders>[1]["db"], processPosting, storeId: "store_1" })
     expect(res.total).toBe(0)
+    expect(res.upserted).toBe(0)
+    expect(res.skipped).toBe(1)
     expect(processPosting).toHaveBeenCalledTimes(0)
   })
 })
