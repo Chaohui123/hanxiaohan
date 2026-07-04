@@ -278,6 +278,10 @@ app.post('/api/images/retry-dead-letter', async (_req, res) => {
 app.use("/api/inventory", createInventoryRouter());
 app.use("/api/aftersales", createAftersalesRouter());
 
+// Data export routes
+const { createExportRouter } = await import("./routes/export.route.js");
+app.use("/api", createExportRouter());
+
 // Oozo: process 1688 plugin downloads (images + videos 鈫?Russian localized)
 const { createOozoRouter } = await import("./routes/oozo.route.js");
 app.use("/api", createOozoRouter(sharedDeepseekClient, sharedVisionClient, ozonClient));
