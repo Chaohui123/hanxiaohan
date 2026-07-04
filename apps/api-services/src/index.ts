@@ -1,5 +1,6 @@
 ﻿import express from "express";
 import cors from "cors";
+import helmet from "helmet";
 import { loadConfig } from "./config.js";
 import { validateProductionConfig } from "./config-validation.js";
 import { registerJob, startScheduler, stopScheduler } from "./services/scheduler.js";
@@ -29,6 +30,7 @@ import { authMiddleware } from "./middleware/auth.js";
 import { rateLimitMiddleware } from "./middleware/rate-limit.js";
 import { registerCleanup, setupShutdownHandlers } from "./middleware/shutdown.js";
 import { mockMiddleware } from "./routes/mock.middleware.js";
+import { auditMiddleware } from "./middleware/audit.js";
 import { requestTimingMiddleware } from "./middleware/request-timing.js";
 import { swaggerSpec } from "./swagger.js";
 import { getDb } from "./db/connection.js";
@@ -55,14 +57,20 @@ const allowedOrigins = (process.env.CORS_ORIGINS || "https://124-221-11-222.nip.
   .filter(Boolean);
 
 app.use(cors({
+app.use(helmet({contentSecurityPolicy:{directives:{defaultSrc:["'self'"],scriptSrc:["'self'"],styleSrc:["'self'","'unsafe-inline'"],imgSrc:["'self'","data:","https:"]}},hsts:{maxAge:31536000,includeSubDomains:true,preload:true}}));
   origin: allowedOrigins.length > 0 ? allowedOrigins : undefined,
+app.use(helmet({contentSecurityPolicy:{directives:{defaultSrc:["'self'"],scriptSrc:["'self'"],styleSrc:["'self'","'unsafe-inline'"],imgSrc:["'self'","data:","https:"]}},hsts:{maxAge:31536000,includeSubDomains:true,preload:true}}));
   methods: ["GET", "POST", "DELETE"],
+app.use(helmet({contentSecurityPolicy:{directives:{defaultSrc:["'self'"],scriptSrc:["'self'"],styleSrc:["'self'","'unsafe-inline'"],imgSrc:["'self'","data:","https:"]}},hsts:{maxAge:31536000,includeSubDomains:true,preload:true}}));
   allowedHeaders: ["Content-Type", "Authorization", "X-API-Key", "X-Correlation-ID"],
+app.use(helmet({contentSecurityPolicy:{directives:{defaultSrc:["'self'"],scriptSrc:["'self'"],styleSrc:["'self'","'unsafe-inline'"],imgSrc:["'self'","data:","https:"]}},hsts:{maxAge:31536000,includeSubDomains:true,preload:true}}));
   maxAge: 86400,
+app.use(helmet({contentSecurityPolicy:{directives:{defaultSrc:["'self'"],scriptSrc:["'self'"],styleSrc:["'self'","'unsafe-inline'"],imgSrc:["'self'","data:","https:"]}},hsts:{maxAge:31536000,includeSubDomains:true,preload:true}}));
 }));
+app.use(helmet({contentSecurityPolicy:{directives:{defaultSrc:["'self'"],scriptSrc:["'self'"],styleSrc:["'self'","'unsafe-inline'"],imgSrc:["'self'","data:","https:"]}},hsts:{maxAge:31536000,includeSubDomains:true,preload:true}}));
 
 app.use(express.json({
-  limit: "10mb",
+  limit: "1mb",
   verify: (req, _res, buf) => {
     (req as express.Request & { rawBody?: Buffer }).rawBody = buf;
   },
@@ -73,6 +81,7 @@ app.use(correlationIdMiddleware);
 app.use(rateLimitMiddleware);
 app.use(idempotencyMiddleware);
 app.use(authMiddleware);
+app.use(auditMiddleware);
 app.use(requestTimingMiddleware);
 app.use(mockMiddleware);
 

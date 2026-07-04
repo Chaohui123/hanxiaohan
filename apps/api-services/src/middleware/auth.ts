@@ -36,6 +36,14 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
   }
 
   if (!API_KEY) {
+    if ((process.env.ENV || process.env.NODE_ENV) === "production") {
+      res.status(401).json({
+        success: false,
+        error: { code: "UNAUTHORIZED", message: "Server misconfigured: API_KEY not set", retryable: false },
+        correlationId: (req as Request & { correlationId?: string }).correlationId ?? "unknown",
+      });
+      return;
+    }
     next();
     return;
   }
