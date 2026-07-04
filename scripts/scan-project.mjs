@@ -42,8 +42,8 @@ const result = {
 
   databaseConfig: {
     orm: "Drizzle ORM v0.45.2",
-    dialect: "sqlite",
-    driver: "better-sqlite3 (primary) / node:sqlite DatabaseSync (fallback)",
+    dialect: "postgresql",
+    driver: "node-postgres (pg) Pool",
     configFile: "drizzle.config.ts",
     tables: [
       "task_queue", "failed_tasks", "listing_records", "price_history",
@@ -82,7 +82,7 @@ const result = {
     deadLetter: {
       file: "services/dead-letter.ts",
       categories: ["api_error", "validation", "network", "rate_limit", "circuit_breaker", "unknown"],
-      storage: "failed_tasks SQLite table",
+      storage: "failed_tasks PostgreSQL table",
     },
   },
 

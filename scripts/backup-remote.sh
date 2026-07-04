@@ -1,6 +1,6 @@
 #!/bin/sh
 # ============================================================
-# ONZO Remote Backup — sync SQLite backups to S3/OSS via rclone
+# ONZO Remote Backup — sync PostgreSQL backups to S3/OSS via rclone
 #
 # Setup:
 #   1. Install rclone: https://rclone.org/install/
@@ -14,7 +14,6 @@ set -e
 SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 BACKUP_DIR="${BACKUP_DIR:-$PROJECT_DIR/data/backups}"
-DB_PATH="${SQLITE_DB_PATH:-$PROJECT_DIR/data/onzo.db}"
 RCLONE_REMOTE="${RCLONE_REMOTE:-}"
 
 if [ -z "$RCLONE_REMOTE" ]; then
@@ -32,7 +31,7 @@ echo "[Backup] Local backup: $LOCAL_BACKUP"
 if command -v rclone >/dev/null 2>&1; then
   echo "[Backup] Syncing $BACKUP_DIR → $RCLONE_REMOTE"
   rclone sync "$BACKUP_DIR" "$RCLONE_REMOTE" \
-    --include "onzo-*.db" \
+    --include "onzo-*.sql.gz" \
     --max-age 7d \
     --verbose \
     --retries 3
@@ -44,6 +43,6 @@ fi
 
 # 3. Keep only last 30 days of remote backups
 echo "[Backup] Cleaning remote backups older than 30 days"
-rclone delete "$RCLONE_REMOTE" --min-age 30d --include "onzo-*.db" --verbose 2>/dev/null || true
+rclone delete "$RCLONE_REMOTE" --min-age 30d --include "onzo-*.sql.gz" --verbose 2>/dev/null || true
 
 echo "[Backup] Done"

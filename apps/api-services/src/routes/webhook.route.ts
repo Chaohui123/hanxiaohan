@@ -95,7 +95,7 @@ export function createWebhookRouter(): Router {
 
     const dedupStore = {
       /**
-       * Atomic dedup: INSERT OR IGNORE checks UNIQUE constraint on event_id.
+       * Atomic dedup: ON CONFLICT(event_id) DO NOTHING skips existing events.
        * Returns true if already processed (insert ignored = row existed).
        * This eliminates the race condition between SELECT + INSERT.
        */
