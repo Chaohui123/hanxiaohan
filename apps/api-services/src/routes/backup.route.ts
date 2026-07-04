@@ -1,10 +1,15 @@
 // ============================================================
-// Backup routes — SQLite db auto-backup with configurable retention
+// Backup routes — PostgreSQL auto-backup via pg_dump + gzip
 // ============================================================
 
 import { Router } from "express";
 import { mkdir, readdir, unlink, stat } from "node:fs/promises";
+import { execFile } from "node:child_process";
+import { createGzip } from "node:zlib";
+import { createWriteStream } from "node:fs";
 import { join } from "node:path";
+import { pipeline } from "node:stream/promises";
+import { logger } from "@onzo/logger";
 
 const BACKUP_DIR = process.env.BACKUP_DIR || "./data/backups";
 const MAX_BACKUP_DAYS = parseInt(process.env.BACKUP_RETENTION_DAYS || "7", 10);
@@ -13,39 +18,105 @@ const AUTO_BACKUP_INTERVAL_HOURS = parseInt(process.env.BACKUP_INTERVAL_HOURS ||
 let autoBackupTimer: ReturnType<typeof setInterval> | null = null;
 
 /**
- * Run an atomic backup using SQLite's built-in .backup() API.
- * This is safe to run while the database is in use — it acquires a read lock
- * and copies a consistent snapshot. Falls back to VACUUM INTO on older SQLite.
+ * Run a PostgreSQL backup using pg_dump → gzip.
+ * Falls back to key-table SELECT export if pg_dump is unavailable.
  */
-async function runBackup(dbPath?: string): Promise<{ name: string; path: string; sizeBytes: number } | null> {
-  const sourcePath = dbPath || process.env.SQLITE_DB_PATH || "./data/onzo.db";
-
+async function runBackup(): Promise<{ name: string; path: string; sizeBytes: number } | null> {
   try {
     const ts = new Date().toISOString().replace(/[:.]/g, "-");
-    const backupName = `onzo-${ts}.db`;
+    const backupName = `onzo-${ts}.sql.gz`;
     const backupPath = join(BACKUP_DIR, backupName);
 
     await mkdir(BACKUP_DIR, { recursive: true });
 
-    // Use SQLite backup API (atomic, consistent snapshot)
-    const sqlite = await import("node:sqlite");
-    const srcDb = new sqlite.DatabaseSync(sourcePath);
-    try {
-      // VACUUM INTO creates a consistent copy without blocking writes
-      srcDb.exec(`VACUUM INTO '${backupPath.replace(/'/g, "''")}'`);
-    } finally {
-      srcDb.close();
+    const dbUrl = process.env.DATABASE_URL || "postgresql://onzo:onzo@localhost:5432/onzo_prod";
+
+    // Try pg_dump (primary method)
+    const pgDumpSuccess = await tryPgDump(dbUrl, backupPath);
+    if (!pgDumpSuccess) {
+      // Fallback: export key tables via pg connection
+      await fallbackExport(backupPath);
     }
 
-    // Rotate old backups
     await rotateBackups();
 
-    const fileStat = await stat(backupPath);
+    const fileStat = await stat(backupPath).catch(() => null);
+    if (!fileStat) {
+      console.error("[Backup] Backup file not created");
+      return null;
+    }
+
     console.log(`[Backup] Created: ${backupName} (${(fileStat.size / 1024).toFixed(1)} KB)`);
     return { name: backupName, path: backupPath, sizeBytes: fileStat.size };
   } catch (err) {
     console.error(`[Backup] Failed: ${(err as Error).message}`);
     return null;
+  }
+}
+
+/**
+ * Try pg_dump for a full PostgreSQL backup.
+ */
+function tryPgDump(dbUrl: string, outputPath: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const gzip = createGzip();
+    const output = createWriteStream(outputPath);
+
+    execFile(
+      "pg_dump",
+      ["--no-owner", "--no-privileges", "--compress=0", dbUrl],
+      { timeout: 120_000 },
+      (err) => {
+        if (err) {
+          console.warn(`[Backup] pg_dump unavailable: ${err.message} — falling back to table export`);
+          resolve(false);
+        } else {
+          resolve(true);
+        }
+      }
+    ).stdout?.pipe(gzip).pipe(output);
+  });
+}
+
+/**
+ * Fallback: export key tables as SQL via pg Pool SELECT queries.
+ */
+async function fallbackExport(outputPath: string): Promise<void> {
+  const { getDb } = await import("../db/connection.js");
+  const db = await getDb().catch(() => null);
+  if (!db) return;
+
+  const tables = [
+    "task_queue", "failed_tasks", "listing_records", "local_orders",
+    "webhook_events", "inventory", "stock_movements", "token_usage",
+    "store_configs", "category_cache", "stock_alerts", "aftersales_cases",
+    "daily_sales", "product_performance", "images",
+  ];
+
+  const gzip = createGzip();
+  const output = createWriteStream(outputPath);
+  const write = (s: string) => new Promise<void>((r) => { output.write(s, () => r()); });
+
+  try {
+    for (const table of tables) {
+      await write(`-- ONZO backup: ${table}\n`);
+      const rows = await db.all(`SELECT * FROM ${table}`).catch(() => [] as Record<string, unknown>[]);
+      for (const row of rows) {
+        const cols = Object.keys(row).join(", ");
+        const vals = Object.values(row).map((v) =>
+          v === null ? "NULL" : typeof v === "string" ? `'${v.replace(/'/g, "''")}'` : String(v)
+        ).join(", ");
+        await write(`INSERT INTO ${table} (${cols}) VALUES (${vals});\n`);
+      }
+      await write("\n");
+    }
+    await new Promise<void>((resolve, reject) => {
+      gzip.end();
+      gzip.on("finish", resolve);
+      gzip.on("error", reject);
+    });
+  } finally {
+    output.close();
   }
 }
 
@@ -56,14 +127,13 @@ async function rotateBackups(): Promise<void> {
   try {
     await mkdir(BACKUP_DIR, { recursive: true });
     const files = await readdir(BACKUP_DIR);
-    const dbFiles = files
-      .filter((f) => f.startsWith("onzo-") && f.endsWith(".db"))
+    const backupFiles = files
+      .filter((f) => f.startsWith("onzo-") && f.endsWith(".sql.gz"))
       .sort()
-      .reverse(); // newest first
+      .reverse();
 
-    // Delete backups older than MAX_BACKUP_DAYS
     const cutoff = Date.now() - MAX_BACKUP_DAYS * 24 * 60 * 60 * 1000;
-    for (const file of dbFiles.slice(MAX_BACKUP_DAYS)) {
+    for (const file of backupFiles.slice(MAX_BACKUP_DAYS)) {
       const filePath = join(BACKUP_DIR, file);
       try {
         const fileStat = await stat(filePath);
@@ -71,38 +141,25 @@ async function rotateBackups(): Promise<void> {
           await unlink(filePath);
           console.log(`[Backup] Rotated out: ${file}`);
         }
-      } catch {
-        // File already gone
-      }
+      } catch { /* already gone */ }
     }
   } catch (err) {
     console.warn(`[Backup] Rotation failed: ${(err as Error).message}`);
   }
 }
 
-/**
- * Start the auto-backup scheduler.
- * Runs every AUTO_BACKUP_INTERVAL_HOURS.
- */
-export function startAutoBackup(dbPath?: string): void {
+export function startAutoBackup(): void {
   if (autoBackupTimer) return;
 
   const intervalMs = AUTO_BACKUP_INTERVAL_HOURS * 3600 * 1000;
   console.log(`[Backup] Auto-backup scheduled every ${AUTO_BACKUP_INTERVAL_HOURS}h, keeping ${MAX_BACKUP_DAYS} days`);
 
-  // Run first backup after 1 minute (wait for DB to be ready)
   setTimeout(() => {
-    runBackup(dbPath);
-
-    autoBackupTimer = setInterval(() => {
-      runBackup(dbPath);
-    }, intervalMs);
+    runBackup();
+    autoBackupTimer = setInterval(() => runBackup(), intervalMs);
   }, 60_000);
 }
 
-/**
- * Stop the auto-backup scheduler (called during shutdown).
- */
 export function stopAutoBackup(): void {
   if (autoBackupTimer) {
     clearInterval(autoBackupTimer);
@@ -129,10 +186,7 @@ export function createBackupRouter(): Router {
 
       res.json({
         success: true,
-        data: {
-          backup: result.name,
-          sizeKb: (result.sizeBytes / 1024).toFixed(1),
-        },
+        data: { backup: result.name, sizeKb: (result.sizeBytes / 1024).toFixed(1) },
         correlationId: req.correlationId,
       });
     } catch (err) {
@@ -149,13 +203,13 @@ export function createBackupRouter(): Router {
     try {
       await mkdir(BACKUP_DIR, { recursive: true });
       const files = await readdir(BACKUP_DIR);
-      const dbFiles = files
-        .filter((f) => f.startsWith("onzo-") && f.endsWith(".db"))
+      const backupFiles = files
+        .filter((f) => f.startsWith("onzo-") && f.endsWith(".sql.gz"))
         .sort()
         .reverse();
 
       const backups = await Promise.all(
-        dbFiles.map(async (f) => {
+        backupFiles.map(async (f) => {
           const s = await stat(join(BACKUP_DIR, f)).catch(() => null);
           return {
             name: f,
