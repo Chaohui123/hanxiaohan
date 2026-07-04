@@ -35,6 +35,7 @@ export interface OzonDraftInput {
 export interface OzonDraftResult {
   productId: number;
   offerId: string;
+  taskId?: number;
   status: string;
 }
 

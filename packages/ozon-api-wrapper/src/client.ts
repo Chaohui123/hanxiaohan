@@ -140,7 +140,7 @@ export class OzonClient {
       item.attributes = product.attributes;
     }
 
-    const response = await this.doRequest<{ result: { product_id: number; offer_id: string } }>(
+    const response = await this.doRequest<{ result: { task_id: number; product_id?: number; offer_id?: string } }>(
       "POST",
       "/v3/product/import",
       {
@@ -148,10 +148,13 @@ export class OzonClient {
       }
     );
 
+    // Ozon v3 product import is async — returns task_id immediately.
+    // product_id and offer_id are populated after moderation (poll via /v3/product/info/status)
     return {
-      productId: response.result.product_id,
-      offerId: response.result.offer_id,
-      status: "draft",
+      productId: response.result.product_id ?? response.result.task_id ?? 0,
+      offerId: response.result.offer_id ?? `task_${response.result.task_id}`,
+      taskId: response.result.task_id,
+      status: response.result.task_id ? "processing" : "draft",
     };
   }
 

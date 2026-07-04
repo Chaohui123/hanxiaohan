@@ -4,6 +4,7 @@
 // ============================================================
 
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from "node:crypto";
+import { logger } from "@onzo/logger";
 
 const ALGORITHM = "aes-256-gcm";
 const IV_LENGTH = 16;
@@ -11,23 +12,69 @@ const AUTH_TAG_LENGTH = 16;
 const SALT_LENGTH = 32;
 const KEY_LENGTH = 32;
 
-// Derive encryption key from master API_KEY + salt
-// Falls back to a hardcoded seed if API_KEY not set (dev mode)
-function deriveKey(): { key: Buffer; salt: Buffer } {
-  const masterKey = process.env.API_KEY || process.env.ENCRYPTION_KEY || "onzo-dev-fallback-key-change-in-production";
-  const saltHex = process.env.ENCRYPTION_SALT;
+let persistedSalt: Buffer | null = null;
 
-  let salt: Buffer;
+/**
+ * Set a persistent salt from external storage (database or env).
+ * Must be called once during startup before any encrypt/decrypt.
+ */
+export function setEncryptionSalt(saltHex: string): void {
+  persistedSalt = Buffer.from(saltHex, "hex");
+}
+
+/**
+ * Load salt from ENCRYPTION_SALT env var.
+ * In production, this must be a randomly generated 64-char hex string.
+ * In development, a random salt is auto-generated (warning logged).
+ */
+export function initEncryptionSalt(): Buffer {
+  if (persistedSalt) return persistedSalt;
+
+  const saltHex = process.env.ENCRYPTION_SALT;
   if (saltHex) {
-    salt = Buffer.from(saltHex, "hex");
-  } else {
-    // Use a deterministic salt derived from the key itself (NOT secure, but Phase 1)
-    salt = Buffer.from("onzo-salt-v1-" + masterKey.slice(0, 16), "utf8").subarray(0, SALT_LENGTH);
-    if (salt.length < SALT_LENGTH) {
-      salt = Buffer.concat([salt, Buffer.alloc(SALT_LENGTH - salt.length, 0x5a)]);
-    }
+    persistedSalt = Buffer.from(saltHex, "hex");
+    return persistedSalt;
   }
 
+  // No salt configured — auto-generate one
+  const autoSalt = randomBytes(SALT_LENGTH);
+  const autoSaltHex = autoSalt.toString("hex");
+
+  if ((process.env.ENV || process.env.NODE_ENV) === "production") {
+    const msg = "ENCRYPTION_SALT not set — auto-generated salt will be lost on restart. " +
+      `Generated salt (add to .env): ENCRYPTION_SALT=${autoSaltHex}`;
+    logger.error(msg);
+    throw new Error(msg);
+  }
+
+  logger.warn({ generatedSalt: autoSaltHex },
+    "ENCRYPTION_SALT not set — auto-generated for dev. Add to .env for persistence."
+  );
+  persistedSalt = autoSalt;
+  return persistedSalt;
+}
+
+/**
+ * Derive encryption key from ENCRYPTION_KEY + salt.
+ * ENCRYPTION_KEY must be set — no fallback.
+ */
+function deriveKey(): { key: Buffer; salt: Buffer } {
+  const masterKey = process.env.ENCRYPTION_KEY;
+  if (!masterKey) {
+    const msg = "ENCRYPTION_KEY is required for encryption. " +
+      "Generate with: node -e \"console.log(require('crypto').randomBytes(32).toString('hex'))\"";
+    logger.error(msg);
+    throw new Error(msg);
+  }
+
+  if ((process.env.ENV || process.env.NODE_ENV) === "production" &&
+      (masterKey.length < 32 || masterKey === "change_me_to_random_32_chars")) {
+    const msg = "ENCRYPTION_KEY is too short or is a placeholder. Production requires a 64-char random hex string.";
+    logger.error(msg);
+    throw new Error(msg);
+  }
+
+  const salt = initEncryptionSalt();
   const key = scryptSync(masterKey, salt, KEY_LENGTH);
   return { key, salt };
 }
@@ -64,8 +111,11 @@ export function decrypt(encoded: string): string {
   offset += AUTH_TAG_LENGTH;
   const encrypted = packed.subarray(offset);
 
-  // Re-derive key with stored salt
-  const masterKey = process.env.API_KEY || process.env.ENCRYPTION_KEY || "onzo-dev-fallback-key-change-in-production";
+  const masterKey = process.env.ENCRYPTION_KEY;
+  if (!masterKey) {
+    throw new Error("ENCRYPTION_KEY is required for decryption.");
+  }
+
   const key = scryptSync(masterKey, salt, KEY_LENGTH);
 
   const decipher = createDecipheriv(ALGORITHM, key, iv);

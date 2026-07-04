@@ -1,6 +1,7 @@
 ﻿import express from "express";
 import cors from "cors";
 import { loadConfig } from "./config.js";
+import { validateProductionConfig } from "./config-validation.js";
 import { correlationIdMiddleware } from "./middleware/correlation-id.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { createLogger } from "./middleware/logger.js";
@@ -39,6 +40,7 @@ async function loadSwagger() {
 }
 
 const config = loadConfig();
+validateProductionConfig();
 const logger = createLogger(config);
 
 // Optional OpenTelemetry tracing (no-op unless OTEL_ENABLED=true)

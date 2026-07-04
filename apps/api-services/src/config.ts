@@ -51,8 +51,8 @@ export interface AppConfig {
 
 function requireEnv(key: string): string {
   const value = process.env[key];
-  if (!value || value.startsWith("your_")) {
-    throw new Error(`Missing or placeholder environment variable: ${key}`);
+  if (!value || value.startsWith("your_") || value.startsWith("YOUR_") || value.startsWith("CHANGE_ME")) {
+    throw new Error(`Missing or placeholder environment variable: ${key}. Set it in .env`);
   }
   return value;
 }
@@ -63,6 +63,16 @@ function optionalEnv(key: string, fallback: string): string {
 }
 
 export function loadConfig(): AppConfig {
+  // Production safety: ENCRYPTION_KEY is mandatory
+  const isProduction = (process.env.ENV || process.env.NODE_ENV) === "production";
+  if (isProduction) {
+    requireEnv("ENCRYPTION_KEY");
+    const encKey = process.env.ENCRYPTION_KEY!;
+    if (encKey.length < 32) {
+      throw new Error("ENCRYPTION_KEY must be at least 32 characters in production");
+    }
+  }
+
   // Resolve relative DB path against project root, not CWD
   const rawDbPath = optionalEnv("SQLITE_DB_PATH", "./data/onzo.db");
   const resolvedDbPath = rawDbPath.startsWith("./") || rawDbPath.startsWith("../")
