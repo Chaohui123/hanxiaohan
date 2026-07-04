@@ -40,7 +40,12 @@ const app = express();
 
 // ---- Middleware ----
 app.use(cors());
-app.use(express.json({ limit: "10mb" }));
+app.use(express.json({
+  limit: "10mb",
+  verify: (req, _res, buf) => {
+    (req as express.Request & { rawBody?: Buffer }).rawBody = buf;
+  },
+}));
 app.use(timeoutMiddleware(120_000));
 app.use(correlationIdMiddleware);
 app.use(idempotencyMiddleware);

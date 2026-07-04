@@ -9,6 +9,7 @@ import type { ProductScraper } from "@onzo/scraper-1688";
 import type { GlmVisionClient } from "@onzo/glm-integration";
 import type { OzonClient } from "@onzo/ozon-api-wrapper";
 import type { DeepSeekTranslator } from "./deepseek-translator.js";
+import { heuristicFillAttributes, buildDefaultAttributes, type FilledAttribute } from "./attribute-filler.js";
 import type { AppConfig } from "../config.js";
 import { saveFailedTask, saveListingRecord } from "../db/models.js";
 
@@ -155,13 +156,18 @@ export async function stepFillAttributes(
       categoryId,
       requiredAttributes
     );
-    ctx.attributes = result.attributes;
-    return result.attributes;
+    ctx.attributes = result.attributes.length > 0
+      ? result.attributes
+      : heuristicFillAttributes(translated.specificationsRu, requiredAttributes);
+    return ctx.attributes as FilledAttribute[];
   } catch (err) {
-    const msg = `Attribute fill failed: ${(err as Error).message}`;
+    // DeepSeek failed — fall back to heuristic fill
+    const msg = `Attribute fill failed: ${(err as Error).message} — using heuristic fallback`;
     ctx.errors.push({ step: "fill_attributes", message: msg });
-    ctx.attributes = [];
-    return [];
+    ctx.attributes = requiredAttributes.length > 0
+      ? heuristicFillAttributes(translated.specificationsRu, requiredAttributes)
+      : buildDefaultAttributes({ title: translated.titleRu, specifications: translated.specificationsRu });
+    return ctx.attributes as FilledAttribute[];
   }
 }
 

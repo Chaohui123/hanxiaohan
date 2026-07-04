@@ -73,6 +73,45 @@ export async function getFailedTasks(storeId: string, limit = 50): Promise<Faile
   return rows.map(rowToFailedTask);
 }
 
+export async function updateFailedTaskStatus(taskId: string, updates: {
+  status?: FailedTask["status"];
+  retryCount?: number;
+  errorMessage?: string | null;
+  storeId?: string;
+}): Promise<void> {
+  const db = await getDb();
+  if (!db) return;
+
+  const fields: string[] = [];
+  const values: unknown[] = [];
+
+  if (updates.status !== undefined) {
+    fields.push("status = ?");
+    values.push(updates.status);
+  }
+  if (updates.retryCount !== undefined) {
+    fields.push("retry_count = ?");
+    values.push(updates.retryCount);
+  }
+  if (updates.errorMessage !== undefined) {
+    fields.push("error_message = ?");
+    values.push(updates.errorMessage);
+  }
+  if (updates.storeId !== undefined) {
+    fields.push("store_id = ?");
+    values.push(updates.storeId);
+  }
+
+  if (fields.length === 0) return;
+
+  fields.push("updated_at = datetime('now')");
+  values.push(taskId);
+
+  await serializedWrite(() =>
+    db.run(`UPDATE failed_tasks SET ${fields.join(", ")} WHERE id = ?`, values)
+  );
+}
+
 // ---- Listing Records ----
 
 export async function saveListingRecord(record: Omit<ListingRecord, "createdAt">): Promise<void> {

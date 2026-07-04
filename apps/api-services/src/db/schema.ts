@@ -85,6 +85,15 @@ export async function initSchema(db: Database): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_orders_posting ON local_orders(posting_number);
     CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_store_order ON local_orders(store_id, order_id);
 
+    -- Webhook event dedup (persisted to avoid duplicate processing after restart)
+    CREATE TABLE IF NOT EXISTS webhook_events (
+      event_id TEXT PRIMARY KEY,
+      posting_number TEXT,
+      event_type TEXT,
+      created_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_webhook_events_posting ON webhook_events(posting_number);
+
     -- Inventory management
     CREATE TABLE IF NOT EXISTS inventory (
       offer_id TEXT NOT NULL,

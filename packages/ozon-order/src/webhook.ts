@@ -24,11 +24,20 @@ export interface WebhookVerifyResult {
   reason?: string;
 }
 
+export interface WebhookDedupStore {
+  isDuplicate(eventId: string): Promise<boolean> | boolean;
+  markProcessed(eventId: string, meta?: { postingNumber?: string; eventType?: string }): Promise<void> | void;
+}
+
 /** Set of recently processed event IDs for dedup (in-memory, with TTL). */
 const processedEvents = new Map<string, number>(); // eventId → expiry timestamp
 const EVENT_TTL_MS = 24 * 3600 * 1000; // 24 hours
 
-function isDuplicate(eventId: string): boolean {
+async function isDuplicate(eventId: string, dedupStore?: WebhookDedupStore): Promise<boolean> {
+  if (dedupStore) {
+    return await dedupStore.isDuplicate(eventId);
+  }
+
   const expiry = processedEvents.get(eventId);
   if (expiry && expiry > Date.now()) return true;
   // Clean up expired entries
@@ -38,7 +47,12 @@ function isDuplicate(eventId: string): boolean {
   return false;
 }
 
-function markProcessed(eventId: string): void {
+function markProcessed(eventId: string, dedupStore?: WebhookDedupStore): void {
+  if (dedupStore) {
+    void dedupStore.markProcessed(eventId);
+    return;
+  }
+
   processedEvents.set(eventId, Date.now() + EVENT_TTL_MS);
 }
 
@@ -70,11 +84,12 @@ export function verifySignature(
 /**
  * Parse and validate an incoming Ozon webhook.
  */
-export function parseWebhookPayload(
+export async function parseWebhookPayload(
   rawBody: string,
   signature?: string,
-  apiSecret?: string
-): WebhookPayload | WebhookVerifyResult {
+  apiSecret?: string,
+  options?: { dedupStore?: WebhookDedupStore }
+): Promise<WebhookPayload | WebhookVerifyResult> {
   // Verify signature if secret provided
   if (signature && apiSecret) {
     const result = verifySignature(rawBody, signature, apiSecret);
@@ -92,7 +107,7 @@ export function parseWebhookPayload(
   const eventType = (parsed.event_type || parsed.type || "order.status_changed") as string;
 
   // Dedup check
-  if (isDuplicate(eventId)) {
+  if (await isDuplicate(eventId, options?.dedupStore)) {
     return { valid: false, reason: "Duplicate event (already processed)" };
   }
 
@@ -102,7 +117,10 @@ export function parseWebhookPayload(
     return { valid: false, reason: "Missing posting_number" };
   }
 
-  markProcessed(eventId);
+  markProcessed(eventId, options?.dedupStore);
+  if (options?.dedupStore) {
+    await options.dedupStore.markProcessed(eventId, { postingNumber, eventType });
+  }
 
   return {
     eventId,

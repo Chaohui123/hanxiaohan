@@ -4,7 +4,7 @@
 
 import { Router } from "express";
 import type { TaskQueue, TaskStatus as TaskQueueStatus } from "../db/task-queue.js";
-import { getFailedTasks, getListingRecords } from "../db/models.js";
+import { getFailedTasks, getListingRecords, updateFailedTaskStatus } from "../db/models.js";
 
 export function createTaskRouter(taskQueue: TaskQueue): Router {
   const router = Router();
@@ -32,7 +32,8 @@ export function createTaskRouter(taskQueue: TaskQueue): Router {
   // Failed tasks (from DB)
   router.get("/failed", async (req, res) => {
     try {
-      const tasks = await getFailedTasks("store_1");
+      const storeId = (req.query.storeId as string | undefined) ?? "store_1";
+      const tasks = await getFailedTasks(storeId);
       res.json({
         success: true,
         data: tasks,
@@ -58,6 +59,12 @@ export function createTaskRouter(taskQueue: TaskQueue): Router {
       });
       return;
     }
+
+    await updateFailedTaskStatus(req.params.taskId, {
+      status: task.retryCount >= task.maxRetries ? "failed" : "retrying",
+      retryCount: task.retryCount,
+      errorMessage: null,
+    }).catch(() => {});
 
     res.json({
       success: true,
@@ -87,13 +94,14 @@ export function createTaskRouter(taskQueue: TaskQueue): Router {
 
   // POST /api/task/deadletter/retry-batch — batch retry with optional filtering
   router.post("/deadletter/retry-batch", async (req, res) => {
-    const { taskIds, filterType } = req.body as { taskIds?: string[]; filterType?: string };
+    const { taskIds, filterType, storeId } = req.body as { taskIds?: string[]; filterType?: string; storeId?: string };
+    const targetStoreId = storeId ?? "store_1";
 
     // If filterType specified, get tasks from DB filtered by error type
     let idsToRetry = taskIds;
     if (filterType && !taskIds) {
       const db = await import("../db/models.js");
-      const failed = await db.getFailedTasks("store_1");
+      const failed = await db.getFailedTasks(targetStoreId);
       if (filterType === "api_error") {
         idsToRetry = failed
           .filter((t: { errorMessage: string; status: string }) =>
@@ -130,6 +138,14 @@ export function createTaskRouter(taskQueue: TaskQueue): Router {
     const results: Array<{ taskId: string; requeued: boolean }> = [];
     for (const tid of idsToRetry) {
       const task = await taskQueue.retry(tid);
+      if (task) {
+        await updateFailedTaskStatus(tid, {
+          status: task.retryCount >= task.maxRetries ? "failed" : "retrying",
+          retryCount: task.retryCount,
+          errorMessage: null,
+          storeId: targetStoreId,
+        }).catch(() => {});
+      }
       results.push({ taskId: tid, requeued: !!task });
     }
 

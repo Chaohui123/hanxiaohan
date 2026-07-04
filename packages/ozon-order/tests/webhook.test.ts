@@ -27,7 +27,7 @@ describe("Webhook signature verification", () => {
 });
 
 describe("Webhook payload parsing", () => {
-  it("parses valid Ozon webhook", () => {
+  it("parses valid Ozon webhook", async () => {
     const body = JSON.stringify({
       event_id: "evt-001",
       event_type: "order.status_changed",
@@ -36,7 +36,7 @@ describe("Webhook payload parsing", () => {
       new_status: "delivering",
     });
 
-    const result = parseWebhookPayload(body);
+    const result = await parseWebhookPayload(body);
     expect("eventId" in result).toBe(true);
     if ("eventId" in result) {
       expect(result.eventId).toBe("evt-001");
@@ -45,7 +45,7 @@ describe("Webhook payload parsing", () => {
     }
   });
 
-  it("deduplicates repeated events", () => {
+  it("deduplicates repeated events", async () => {
     const body = JSON.stringify({
       event_id: "evt-002-dedup-2",
       event_type: "order.delivered",
@@ -53,26 +53,26 @@ describe("Webhook payload parsing", () => {
       status: "delivered",
     });
 
-    const r1 = parseWebhookPayload(body);
+    const r1 = await parseWebhookPayload(body);
     expect("eventId" in r1).toBe(true);
 
-    const r2 = parseWebhookPayload(body);
+    const r2 = await parseWebhookPayload(body);
     expect("eventId" in r2).toBe(false);
     if (!("eventId" in r2)) {
       expect(r2.reason).toBe("Duplicate event (already processed)");
     }
   });
 
-  it("rejects invalid JSON", () => {
-    const result = parseWebhookPayload("not json");
+  it("rejects invalid JSON", async () => {
+    const result = await parseWebhookPayload("not json");
     expect("eventId" in result).toBe(false);
     if (!("eventId" in result)) {
       expect(result.reason).toBe("Invalid JSON body");
     }
   });
 
-  it("rejects missing posting_number", () => {
-    const result = parseWebhookPayload(JSON.stringify({ event_id: "x" }));
+  it("rejects missing posting_number", async () => {
+    const result = await parseWebhookPayload(JSON.stringify({ event_id: "x" }));
     expect("eventId" in result).toBe(false);
     if (!("eventId" in result)) {
       expect(result.reason).toBe("Missing posting_number");

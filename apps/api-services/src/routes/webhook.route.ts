@@ -12,11 +12,29 @@ export function createWebhookRouter(): Router {
   const router = Router();
 
   router.post("/webhook/ozon", async (req, res) => {
-    const rawBody = JSON.stringify(req.body);
+    const rawBodyBuffer = (req as typeof req & { rawBody?: Buffer }).rawBody;
+    const rawBody = rawBodyBuffer ? rawBodyBuffer.toString("utf8") : JSON.stringify(req.body);
     const signature = req.headers["x-ozon-signature"] as string | undefined;
 
+    const dedupStore = {
+      async isDuplicate(eventId: string): Promise<boolean> {
+        const db = await getDb().catch(() => null);
+        if (!db) return false;
+        const rows = await db.all("SELECT 1 FROM webhook_events WHERE event_id = ? LIMIT 1", [eventId]);
+        return rows.length > 0;
+      },
+      async markProcessed(eventId: string, meta?: { postingNumber?: string; eventType?: string }): Promise<void> {
+        const db = await getDb().catch(() => null);
+        if (!db) return;
+        await db.run(
+          "INSERT OR IGNORE INTO webhook_events (event_id, posting_number, event_type, created_at) VALUES (?, ?, ?, datetime('now'))",
+          [eventId, meta?.postingNumber ?? null, meta?.eventType ?? null]
+        );
+      },
+    };
+
     // Parse + verify + dedup
-    const parsed = parseWebhookPayload(rawBody, signature, API_SECRET);
+    const parsed = await parseWebhookPayload(rawBody, signature, API_SECRET, { dedupStore });
 
     if (!("eventId" in parsed)) {
       // VerificationResult
