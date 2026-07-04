@@ -386,7 +386,7 @@ export class CosUploader {
           id TEXT PRIMARY KEY, product_id TEXT NOT NULL, cos_key TEXT NOT NULL UNIQUE,
           url TEXT, status TEXT NOT NULL DEFAULT 'pending', retry_count INTEGER DEFAULT 0,
           dead_letter INTEGER DEFAULT 0, local_path TEXT, error TEXT,
-          created_at TEXT DEFAULT (datetime('now')), updated_at TEXT DEFAULT (datetime('now'))
+          created_at TEXT DEFAULT (NOW()), updated_at TEXT DEFAULT (NOW())
         );
         CREATE INDEX IF NOT EXISTS idx_images_product ON images(product_id);
         CREATE INDEX IF NOT EXISTS idx_images_status ON images(status);

@@ -51,8 +51,9 @@ export async function writeToDeadLetter(params: {
 
   await serializedWrite(() =>
     db.run(
-      `INSERT OR REPLACE INTO failed_tasks (id, store_id, task_type, payload_json, error_message, status, correlation_id, retry_count, updated_at)
-       VALUES (?, ?, ?, ?, ?, 'pending_retry', ?, 0, datetime('now'))`,
+      `INSERT INTO failed_tasks (id, store_id, task_type, payload_json, error_message, status, correlation_id, retry_count, updated_at)
+       VALUES (?, ?, ?, ?, ?, 'pending_retry', ?, 0, NOW())
+       ON CONFLICT(id) DO UPDATE SET error_message=EXCLUDED.error_message, status='pending_retry', retry_count=0, updated_at=NOW()`,
       [
         id,
         storeId,
@@ -108,13 +109,13 @@ export async function retryDeadLetters(options?: {
 
     try {
       await db.run(
-        "UPDATE failed_tasks SET status = 'retrying', retry_count = retry_count + 1, updated_at = datetime('now') WHERE id = ?",
+        "UPDATE failed_tasks SET status = 'retrying', retry_count = retry_count + 1, updated_at = NOW() WHERE id = ?",
         [id]
       );
       retried++;
     } catch {
       await db
-        .run("UPDATE failed_tasks SET status = 'permanent_failure', updated_at = datetime('now') WHERE id = ?", [id])
+        .run("UPDATE failed_tasks SET status = 'permanent_failure', updated_at = NOW() WHERE id = ?", [id])
         .catch(() => {});
       failed++;
     }

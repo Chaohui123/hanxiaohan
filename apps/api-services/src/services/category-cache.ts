@@ -59,7 +59,7 @@ export async function getCategoryTree(
   if (!options?.forceRefresh && db) {
     try {
       const rows = await db.all(
-        "SELECT tree_json, fetched_at FROM category_cache WHERE id = 1 AND datetime(fetched_at, ? || ' hours') > datetime('now')",
+        "SELECT tree_json, fetched_at FROM category_cache WHERE id = 1 AND datetime(fetched_at, ? || ' hours') > NOW()",
         [String(ttlHours)]
       ) as Array<{ tree_json: string; fetched_at: string }>;
 
@@ -80,7 +80,7 @@ export async function getCategoryTree(
   if (db && tree.length > 0) {
     try {
       await db.run(
-        "INSERT OR REPLACE INTO category_cache (id, tree_json, fetched_at, ttl_hours) VALUES (1, ?, datetime('now'), ?)",
+        "INSERT INTO category_cache (id, tree_json, fetched_at, ttl_hours) VALUES (1, ?, NOW(), ?) ON CONFLICT(id) DO UPDATE SET tree_json=EXCLUDED.tree_json, fetched_at=NOW(), ttl_hours=EXCLUDED.ttl_hours",
         [JSON.stringify(tree), ttlHours]
       );
       logger.info({ rootCategories: tree.length }, "Category cache stored in SQLite");

@@ -60,11 +60,11 @@ export async function withTransaction<T>(
   // Serialize writes to prevent SQLite lock conflicts
   return serializedWrite(async () => {
     try {
-      await db.run("BEGIN IMMEDIATE");
+      await db.run("BEGIN");
     } catch (err) {
       return {
         success: false as const,
-        error: `BEGIN IMMEDIATE failed: ${(err as Error).message}`,
+        error: `BEGIN failed: ${(err as Error).message}`,
       };
     }
 

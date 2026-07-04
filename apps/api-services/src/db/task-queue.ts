@@ -124,8 +124,8 @@ export class TaskQueue {
 
     if (this.dbAvailable && this.db) {
       await this.db.run(
-        `INSERT OR REPLACE INTO task_queue (id, type, status, payload_json, correlation_id, store_id, priority, max_retries)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?)`,
+        `INSERT INTO task_queue (id, type, status, payload_json, correlation_id, store_id, priority, max_retries)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET status=EXCLUDED.status, payload_json=EXCLUDED.payload_json, priority=EXCLUDED.priority`,
         [task.id, task.type, task.status, JSON.stringify(task.payload), task.correlationId, task.storeId, task.priority, task.maxRetries]
       ).catch(() => {});
     }

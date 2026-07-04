@@ -102,12 +102,12 @@ export function createWebhookRouter(): Router {
       async isDuplicate(eventId: string): Promise<boolean> {
         const db = await getDb().catch(() => null);
         if (!db) return false;
-        // Try to insert — if it already exists, INSERT OR IGNORE does nothing
+        // Atomic dedup: ON CONFLICT DO NOTHING skips existing event_id
         const result = await db.run(
-          "INSERT OR IGNORE INTO webhook_events (event_id, posting_number, event_type, created_at) VALUES (?, NULL, NULL, datetime('now'))",
+          "INSERT INTO webhook_events (event_id, posting_number, event_type, created_at) VALUES (?, NULL, NULL, NOW()) ON CONFLICT(event_id) DO NOTHING",
           [eventId]
         );
-        // changes === 0 means the row already existed → duplicate
+        // rowCount === 0 means the row already existed → duplicate (PG returns null for no insert)
         return result.changes === 0;
       },
       async markProcessed(eventId: string, meta?: { postingNumber?: string; eventType?: string }): Promise<void> {

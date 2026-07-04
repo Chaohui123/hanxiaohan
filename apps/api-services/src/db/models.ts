@@ -54,8 +54,8 @@ export async function saveFailedTask(task: Omit<FailedTask, "createdAt" | "updat
 
   await serializedWrite(() =>
     db.run(
-      `INSERT OR REPLACE INTO failed_tasks (id, store_id, task_type, payload_json, error_message, status, correlation_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO failed_tasks (id, store_id, task_type, payload_json, error_message, status, correlation_id)
+       VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET status=EXCLUDED.status, draft_id=EXCLUDED.draft_id, ozon_product_id=EXCLUDED.ozon_product_id, result_json=EXCLUDED.result_json ON CONFLICT(id) DO UPDATE SET error_message=EXCLUDED.error_message, status=EXCLUDED.status`,
       [task.id, task.storeId, task.taskType, task.payloadJson, task.errorMessage, task.status, task.correlationId]
     )
   );
@@ -104,7 +104,7 @@ export async function updateFailedTaskStatus(taskId: string, updates: {
 
   if (fields.length === 0) return;
 
-  fields.push("updated_at = datetime('now')");
+  fields.push("updated_at = NOW()");
   values.push(taskId);
 
   await serializedWrite(() =>
@@ -120,8 +120,8 @@ export async function saveListingRecord(record: Omit<ListingRecord, "createdAt">
 
   await serializedWrite(() =>
     db.run(
-      `INSERT OR REPLACE INTO listing_records (id, source_url, status, draft_id, ozon_product_id, correlation_id, result_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?)`,
+      `INSERT INTO listing_records (id, source_url, status, draft_id, ozon_product_id, correlation_id, result_json)
+       VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET status=EXCLUDED.status, draft_id=EXCLUDED.draft_id, ozon_product_id=EXCLUDED.ozon_product_id, result_json=EXCLUDED.result_json ON CONFLICT(id) DO UPDATE SET error_message=EXCLUDED.error_message, status=EXCLUDED.status`,
       [record.id, record.sourceUrl, record.status, record.draftId ?? null, record.ozonProductId ?? null, record.correlationId, record.resultJson ?? null]
     )
   );
@@ -181,8 +181,8 @@ export async function upsertStoreConfig(config: Omit<StoreConfig, "active">): Pr
 
   await serializedWrite(() =>
     db.run(
-      `INSERT OR REPLACE INTO store_configs (store_id, client_id, api_key, store_name, proxy_url)
-       VALUES (?, ?, ?, ?, ?)`,
+      `INSERT INTO store_configs (store_id, client_id, api_key, store_name, proxy_url)
+       VALUES (?, ?, ?, ?, ?) ON CONFLICT(store_id) DO UPDATE SET client_id=EXCLUDED.client_id, api_key=EXCLUDED.api_key, store_name=EXCLUDED.store_name, proxy_url=EXCLUDED.proxy_url`,
       [config.storeId, config.clientId, config.apiKey, config.storeName ?? null, config.proxyUrl ?? null]
     )
   );

@@ -74,8 +74,8 @@ export function createStoreRouter(): Router {
       const encryptedKey = isEncrypted(apiKey) ? apiKey : encrypt(apiKey);
 
       await db.run(
-        `INSERT OR REPLACE INTO store_configs (store_id, client_id, api_key, store_name, group_name, proxy_url, active)
-         VALUES (?, ?, ?, ?, ?, ?, 1)`,
+        `INSERT INTO store_configs (store_id, client_id, api_key, store_name, group_name, proxy_url, active)
+         VALUES (?, ?, ?, ?, ?, ?, 1) ON CONFLICT(store_id) DO UPDATE SET client_id=EXCLUDED.client_id, api_key=EXCLUDED.api_key, store_name=EXCLUDED.store_name, group_name=EXCLUDED.group_name, proxy_url=EXCLUDED.proxy_url`,
         [storeId, clientId, encryptedKey, storeName ?? null, groupName ?? null, proxyUrl ?? null]
       );
 

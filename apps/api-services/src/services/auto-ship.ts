@@ -147,7 +147,7 @@ export async function batchShipOrders(ozonClient: OzonClient): Promise<BatchShip
       // 3. Update local order with tracking number + label URL
       await serializedWrite(() =>
         db.run(
-          "UPDATE local_orders SET status = 'delivering', tracking_number = ?, updated_at = datetime('now') WHERE posting_number = ?",
+          "UPDATE local_orders SET status = 'delivering', tracking_number = ?, updated_at = NOW() WHERE posting_number = ?",
           [shipment.trackingNumber, order.posting_number]
         )
       );

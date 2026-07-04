@@ -34,16 +34,16 @@ export class SalesDashboard {
     // Upsert daily_sales
     await db.run(
       `INSERT INTO daily_sales (date, orders, revenue_rub, profit_rub, avg_order_value, updated_at)
-       VALUES (?, 1, ?, ?, ?, datetime('now'))
-       ON CONFLICT(date) DO UPDATE SET orders=orders+1, revenue_rub=revenue_rub+?, profit_rub=profit_rub+?, avg_order_value=(revenue_rub+?)/(orders+1), updated_at=datetime('now')`,
+       VALUES (?, 1, ?, ?, ?, NOW())
+       ON CONFLICT(date) DO UPDATE SET orders=orders+1, revenue_rub=revenue_rub+?, profit_rub=profit_rub+?, avg_order_value=(revenue_rub+?)/(orders+1), updated_at=NOW()`,
       [params.date, params.revenueRub, params.profitRub, 0, params.revenueRub, params.profitRub, params.revenueRub]
     );
 
     // Upsert product_performance
     await db.run(
       `INSERT INTO product_performance (product_id, title, sku, sales, revenue_rub, profit_rub, updated_at)
-       VALUES (?, ?, ?, 1, ?, ?, datetime('now'))
-       ON CONFLICT(sku) DO UPDATE SET sales=sales+1, revenue_rub=revenue_rub+?, profit_rub=profit_rub+?, updated_at=datetime('now')`,
+       VALUES (?, ?, ?, 1, ?, ?, NOW())
+       ON CONFLICT(sku) DO UPDATE SET sales=sales+1, revenue_rub=revenue_rub+?, profit_rub=profit_rub+?, updated_at=NOW()`,
       [params.productId ?? null, params.title ?? null, params.sku, params.revenueRub, params.profitRub, params.revenueRub, params.profitRub]
     );
 
@@ -84,7 +84,7 @@ export class SalesDashboard {
     if (!db) return [];
 
     const rows = await db.all(
-      "SELECT * FROM daily_sales WHERE date >= date('now', ?) ORDER BY date DESC",
+      "SELECT * FROM daily_sales WHERE date >= CURRENT_DATE - (?::text || ' days')::INTERVAL ORDER BY date DESC",
       [`-${days} days`]
     ) as Array<Record<string, unknown>>;
 
@@ -128,8 +128,8 @@ export class SalesDashboard {
 
     if (rows[0].orders > 0) {
       await db.run(
-        `INSERT OR REPLACE INTO daily_sales (date, orders, revenue_rub, profit_rub, avg_order_value, updated_at)
-         VALUES (?, ?, ?, ?, ?, datetime('now'))`,
+        `INSERT INTO daily_sales (date, orders, revenue_rub, profit_rub, avg_order_value, updated_at)
+         VALUES (?, ?, ?, ?, ?, NOW()) ON CONFLICT(date) DO UPDATE SET orders=EXCLUDED.orders, revenue_rub=EXCLUDED.revenue_rub, profit_rub=EXCLUDED.profit_rub, avg_order_value=EXCLUDED.avg_order_value, updated_at=NOW()`,
         [today, rows[0].orders, rows[0].revenue, rows[0].profit, rows[0].orders > 0 ? Math.round(rows[0].revenue / rows[0].orders * 100) / 100 : 0]
       );
     }

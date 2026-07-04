@@ -82,10 +82,10 @@ export class AftersalesManager {
     if (!db) return;
 
     if (updates.status) {
-      await db.run("UPDATE aftersales_cases SET status=?, updated_at=datetime('now') WHERE id=?", [updates.status, id]);
+      await db.run("UPDATE aftersales_cases SET status=?, updated_at=NOW() WHERE id=?", [updates.status, id]);
     }
     if (updates.resolutionNote) {
-      await db.run("UPDATE aftersales_cases SET resolution_note=?, updated_at=datetime('now') WHERE id=?", [updates.resolutionNote, id]);
+      await db.run("UPDATE aftersales_cases SET resolution_note=?, updated_at=NOW() WHERE id=?", [updates.resolutionNote, id]);
     }
   }
 

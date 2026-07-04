@@ -86,11 +86,11 @@ export function createOrderRouter(ozonClient: OzonClient): Router {
           };
 
           await db.run(
-            `INSERT OR REPLACE INTO local_orders
+            `INSERT INTO local_orders
              (id, store_id, posting_number, order_id, status, created_at, updated_at, buyer_name_masked,
               buyer_phone_masked, total_price_rub, commission_rub, payout_rub,
               product_count, tracking_number, raw_json, synced_at)
-             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW()) ON CONFLICT(id) DO UPDATE SET status=EXCLUDED.status, updated_at=NOW()`,
             [local.id, syncStoreId, local.postingNumber, local.orderId, local.status,
              local.createdAt, local.updatedAt, local.buyerNameMasked,
              local.buyerPhoneMasked, local.totalPriceRub, local.commissionRub,

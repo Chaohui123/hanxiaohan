@@ -57,7 +57,7 @@ export class InventoryManager {
     if (!db) return;
 
     await serializedWrite(() =>
-      db.run("INSERT OR REPLACE INTO inventory (offer_id,sku,stock_available,stock_reserved,updated_at) VALUES (?,?,?,0,datetime('now'))", [offerId, sku, quantity])
+      db.run("INSERT INTO inventory (offer_id,sku,stock_available,stock_reserved,updated_at) VALUES (?,?,?,0,NOW()) ON CONFLICT(offer_id, sku) DO UPDATE SET stock_available=EXCLUDED.stock_available, stock_reserved=0, updated_at=NOW()", [offerId, sku, quantity])
     );
     // Invalidate cache
     cache.delete(cacheKey(offerId, sku));

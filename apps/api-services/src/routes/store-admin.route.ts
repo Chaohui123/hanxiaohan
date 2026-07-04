@@ -16,9 +16,9 @@ export function createStoreAdminRouter(): Router {
 
       const stores = await db.all<Record<string, unknown>>("SELECT COUNT(*) as total, SUM(active) as active FROM store_configs");
       const groups = await db.all<Record<string, unknown>>("SELECT COUNT(DISTINCT group_name) as cnt FROM store_configs WHERE group_name IS NOT NULL");
-      const listings = await db.all<Record<string, unknown>>("SELECT COUNT(*) as total FROM listing_records WHERE date(created_at) = date('now')");
+      const listings = await db.all<Record<string, unknown>>("SELECT COUNT(*) as total FROM listing_records WHERE date(created_at) = CURRENT_DATE");
       const orders = await db.all<Record<string, unknown>>("SELECT COUNT(*) as pending FROM local_orders WHERE status IN ('awaiting_packaging','awaiting_deliver','delivering')");
-      const tokens = await db.all<Record<string, unknown>>("SELECT COALESCE(SUM(total_tokens),0) as total FROM token_usage WHERE date(timestamp) = date('now')");
+      const tokens = await db.all<Record<string, unknown>>("SELECT COALESCE(SUM(total_tokens),0) as total FROM token_usage WHERE date(timestamp) = CURRENT_DATE");
       const lowStock = await db.all<Record<string, unknown>>("SELECT COUNT(*) as cnt FROM inventory WHERE stock_available < 5");
 
       // Per-store breakdown with correlated listing count

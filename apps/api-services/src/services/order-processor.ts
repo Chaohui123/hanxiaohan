@@ -45,11 +45,11 @@ export async function processNewOrder(
     };
 
     await db.run(
-      `INSERT OR REPLACE INTO local_orders
+      `INSERT INTO local_orders
        (id, store_id, posting_number, order_id, status, created_at, updated_at,
         buyer_name_masked, buyer_phone_masked, total_price_rub, commission_rub, payout_rub,
         product_count, tracking_number, raw_json, synced_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, NOW()) ON CONFLICT(id) DO UPDATE SET status=EXCLUDED.status, updated_at=NOW()`,
       [local.id, storeId, local.postingNumber, local.orderId, local.status,
        local.createdAt, local.updatedAt, local.buyerNameMasked,
        local.buyerPhoneMasked, local.totalPriceRub, local.commissionRub,
@@ -109,7 +109,7 @@ export async function processCancelledOrder(
   try {
     // 1. Update local status
     await db.run(
-      "UPDATE local_orders SET status = 'cancelled', updated_at = datetime('now') WHERE posting_number = ?",
+      "UPDATE local_orders SET status = 'cancelled', updated_at = NOW() WHERE posting_number = ?",
       [postingNumber]
     );
 
@@ -160,7 +160,7 @@ export async function processStatusChange(
 
   try {
     await db.run(
-      "UPDATE local_orders SET status = ?, updated_at = datetime('now') WHERE posting_number = ?",
+      "UPDATE local_orders SET status = ?, updated_at = NOW() WHERE posting_number = ?",
       [newStatus, postingNumber]
     );
 

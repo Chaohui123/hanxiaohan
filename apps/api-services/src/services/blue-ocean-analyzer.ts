@@ -69,7 +69,7 @@ export async function analyzeBlueOcean(
     const orderData = db
       ? await db.all(
           `SELECT category_id, COUNT(*) as cnt, AVG(total_price_rub) as avgPrice
-           FROM local_orders WHERE created_at >= date('now','-60 days') AND status='delivered'
+           FROM local_orders WHERE created_at >= CURRENT_DATE - INTERVAL '60 days' AND status='delivered'
            GROUP BY category_id`
         ) as Array<{ category_id: number; cnt: number; avgPrice: number }>
       : [];
@@ -205,8 +205,8 @@ async function persistResults(results: BlueOceanAnalysis[]): Promise<void> {
   if (!db) return;
   for (const r of results.slice(0, 20)) {
     await db.run(
-      `INSERT OR REPLACE INTO category_opportunities (category_id, category_name, overall_score, listing_count, avg_price_rub, est_margin, month_orders, recommendation, data_source, updated_at)
-       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+      `INSERT INTO category_opportunities (category_id, category_name, overall_score, listing_count, avg_price_rub, est_margin, month_orders, recommendation, data_source, updated_at)
+       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, NOW()) ON CONFLICT(category_id) DO UPDATE SET overall_score=EXCLUDED.overall_score, listing_count=EXCLUDED.listing_count, avg_price_rub=EXCLUDED.avg_price_rub, month_orders=EXCLUDED.month_orders, recommendation=EXCLUDED.recommendation, data_source=EXCLUDED.data_source, updated_at=NOW()`,
       [r.categoryId, r.categoryName, r.overallScore, r.listingCount, r.avgPriceRub, r.estMargin, r.monthOrders, r.recommendation, r.dataSource]
     ).catch(() => {});
   }

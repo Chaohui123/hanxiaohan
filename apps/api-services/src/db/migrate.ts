@@ -24,7 +24,7 @@ export async function runMigrations(db: DbAdapter, migrations: Migration[]): Pro
     CREATE TABLE IF NOT EXISTS _migrations (
       version INTEGER PRIMARY KEY,
       name TEXT NOT NULL,
-      applied_at TEXT DEFAULT (datetime('now'))
+      applied_at TIMESTAMP DEFAULT NOW()
     )
   `);
 
