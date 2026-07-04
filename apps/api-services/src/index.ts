@@ -118,15 +118,45 @@ if (db) {
 }
 
 // Register built-in scheduled jobs (replaces n8n for critical periodic tasks)
+// n8n remains available as a backup option — these don't duplicate when n8n calls the same API endpoints
+
 registerJob("order-sync", 30 * 60_000, async () => {
   const { syncOrders } = await import("@onzo/ozon-order");
   await syncOrders(ozonClient, { storeId: "store_1", pageSize: 50 }).catch((err) =>
     logger.error({ err }, "Scheduled order sync failed")
   );
 });
+
+registerJob("auto-ship", 3 * 3600_000, async () => {
+  const { batchShipOrders } = await import("./services/auto-ship.js");
+  await batchShipOrders(ozonClient).catch((err) =>
+    logger.error({ err }, "Scheduled auto-ship failed")
+  );
+});
+
+registerJob("review-sync", 3600_000, async () => {
+  const { syncReviewStatuses } = await import("./services/review-sync.js");
+  await syncReviewStatuses(ozonClient).catch((err) =>
+    logger.error({ err }, "Scheduled review sync failed")
+  );
+});
+
+registerJob("exchange-rate-refresh", 3600_000, async () => {
+  const { forceRefreshRate } = await import("./services/exchange-rate.js");
+  forceRefreshRate();
+});
+
+registerJob("market-data-collect", 24 * 3600_000, async () => {
+  const { collectMarketData } = await import("./services/market-data-collector.js");
+  await collectMarketData([], ozonClient).catch((err) =>
+    logger.error({ err }, "Scheduled market data collection failed")
+  );
+});
+
 registerJob("token-monitor", 6 * 3600_000, async () => {
   try { await import("./routes/backup.route.js").then((m) => m.startAutoBackup()); } catch {}
 });
+
 startScheduler();
 registerCleanup(async () => { stopScheduler(); });
 
