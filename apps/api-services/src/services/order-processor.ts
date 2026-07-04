@@ -67,6 +67,16 @@ export async function processNewOrder(
         if (!deductResult.success) {
           logger.warn({ postingNumber: order.postingNumber, sku: product.sku, reason: deductResult.reason },
             "Inventory deduction failed — continuing without blocking order");
+        } else {
+          // Sync updated stock level back to Ozon (fire-and-forget)
+          const { InventoryManager: LocalInventoryMgr } = await import("./inventory-manager.js");
+          const localMgr = new LocalInventoryMgr();
+          const currentStock = await localMgr.getItem(product.offerId, product.sku);
+          const newStock = (currentStock?.stockAvailable ?? product.quantity) - product.quantity;
+          localMgr.syncStockToOzon(product.offerId, product.sku, Math.max(0, newStock)).catch((err) => {
+            logger.warn({ offerId: product.offerId, sku: product.sku, err: (err as Error).message },
+              "Failed to sync stock to Ozon after order deduction");
+          });
         }
       }
     }
