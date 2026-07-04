@@ -40,11 +40,8 @@ jobs:
             echo "=== Running database migrations ==="
             bash scripts/migrate.sh up
 
-            echo "=== Building and restarting ==="
-            pkill -f "tsx.*index" || true
-            sleep 2
-            cd apps/api-services
-            nohup npx tsx src/index.ts > /tmp/onzo.log 2>&1 &
+            echo "=== Building and restarting via Docker Compose ==="
+            docker compose --env-file .env.production up -d --build api-services web-dashboard
 
             echo "=== Health Check ==="
             for i in 1 2 3 4 5 6 7 8 9 10; do
@@ -64,5 +61,5 @@ jobs:
       - name: Rollback on Failure
         if: failure()
         run: |
-          echo "DEPLOY FAILED — manual rollback required"
-          echo "SSH to server and run: cd /root/onzo && bash scripts/deploy.sh rollback"
+          echo "DEPLOY FAILED — attempting rollback"
+          ssh -o StrictHostKeyChecking=no -i ${{ secrets.SSH_PRIVATE_KEY }} ${{ secrets.SSH_USER }}@${{ secrets.SSH_HOST }} "cd /root/onzo && bash scripts/deploy.sh rollback"
