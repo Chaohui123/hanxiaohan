@@ -18,7 +18,7 @@ describe('syncOrders', () => {
 
     const processPosting = vi.fn(async (_p: OzonPosting) => {})
 
-    const res = await syncOrders({} as any, { client: client as any, processPosting, pageSize: 1 })
+    const res = await syncOrders({} as unknown as Parameters<typeof syncOrders>[0], { client: client as unknown as Parameters<typeof syncOrders>[1]["client"], processPosting: processPosting as unknown as Parameters<typeof syncOrders>[1]["processPosting"], pageSize: 1 })
     expect(res.total).toBe(2)
     expect(processPosting).toHaveBeenCalledTimes(2)
   })
@@ -34,15 +34,16 @@ describe('syncOrders', () => {
     }
 
     const mockDb = {
-      all: vi.fn().mockImplementation((sql: string, params?: any[]) => {
-        if (params && params[0] === 'p1') return Promise.resolve([{ cnt: 1 }])
+      all: vi.fn().mockImplementation((_sql: string, params?: unknown[]) => {
+        // New sync uses: WHERE store_id = ? AND order_id = ?
+        if (params && params[0] === "store_1" && params[1] === 1) return Promise.resolve([{ cnt: 1 }])
         return Promise.resolve([{ cnt: 0 }])
       }),
     }
 
     const processPosting = vi.fn(async (_p: OzonPosting) => {})
 
-    const res = await syncOrders({} as any, { client: client as any, db: mockDb as any, processPosting })
+    const res = await syncOrders({} as unknown as Parameters<typeof syncOrders>[0], { client: client as unknown as Parameters<typeof syncOrders>[1]["client"], db: mockDb as unknown as Parameters<typeof syncOrders>[1]["db"], processPosting, storeId: "store_1" })
     expect(res.total).toBe(0)
     expect(processPosting).toHaveBeenCalledTimes(0)
   })

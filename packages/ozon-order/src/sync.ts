@@ -11,10 +11,11 @@ export interface SyncResult {
   fboCount: number;
   total: number;
   upserted: number;
+  skipped: number;
   errors: string[];
 }
 
-export type ProcessPostingFn = (posting: OzonPosting, ctx: { db?: { all: (sql: string, params?: unknown[]) => Promise<Array<Record<string, unknown>>> }; idempotencyKey: string }) => Promise<void>;
+export type ProcessPostingFn = (posting: OzonPosting, ctx: { db?: { all: (sql: string, params?: unknown[]) => Promise<Array<Record<string, unknown>>> }; idempotencyKey: string; storeId: string }) => Promise<void>;
 
 /**
  * Sync orders from Ozon (FBS + FBO) with pagination and idempotency checks.
@@ -88,6 +89,7 @@ export async function syncOrders(
     fboCount,
     total: fbsCount + fboCount,
     upserted: fbsCount + fboCount,
+    skipped: 0,
     errors,
   }
 }

@@ -83,5 +83,6 @@ export function loadConfig(): AppConfig {
       requestDelayMin: parseInt(optionalEnv("SCRAPER_REQUEST_DELAY_MIN", "800"), 10),
       requestDelayMax: parseInt(optionalEnv("SCRAPER_REQUEST_DELAY_MAX", "1500"), 10),
     },
+    orderSyncPageSize: parseInt(optionalEnv("ORDER_SYNC_PAGE_SIZE", "50"), 10),
   };
 }

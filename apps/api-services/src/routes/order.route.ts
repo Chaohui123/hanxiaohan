@@ -3,7 +3,7 @@
 // ============================================================
 
 import { Router } from "express";
-import { OzonOrderClient } from "@onzo/ozon-order";
+import { OzonOrderClient, syncOrders } from "@onzo/ozon-order";
 import { getDb } from "../db/connection.js";
 import type { LocalOrder, OzonPosting, OzonOrderStatus } from "@onzo/shared-types";
 import type { OzonClient } from "@onzo/ozon-api-wrapper";
@@ -14,59 +14,68 @@ export function createOrderRouter(ozonClient: OzonClient): Router {
 
   // POST /api/orders/sync — pull orders from Ozon and store locally
   router.post("/orders/sync", async (req, res) => {
-    const { status, since, until } = req.body as { status?: string; since?: string; until?: string };
+    const { status, since, until, storeId } = req.body as { status?: string; since?: string; until?: string; storeId?: string };
 
     const validStatuses: OzonOrderStatus[] = ["awaiting_packaging", "awaiting_deliver", "delivering", "delivered", "cancelled"];
     const orderStatus: OzonOrderStatus | undefined = validStatuses.includes(status as OzonOrderStatus)
       ? (status as OzonOrderStatus) : undefined;
 
+    const syncStoreId = storeId ?? "store_1";
+    const db = await getDb();
+
+    if (!db) {
+      res.status(503).json({
+        success: false,
+        error: { code: "DB_UNAVAILABLE", message: "Database unavailable", retryable: true },
+        correlationId: req.correlationId,
+      });
+      return;
+    }
+
     try {
-      const filter = { status: orderStatus, since, until, limit: 50 };
-      const [fbsOrders, fboOrders] = await Promise.all([
-        orderClient.listPostings(filter),
-        orderClient.listFboPostings(filter).catch(() => [] as OzonPosting[]),
-      ]);
+      const result = await syncOrders(ozonClient, {
+        client: orderClient,
+        db,
+        storeId: syncStoreId,
+        status: orderStatus ? orderStatus : undefined,
+        since,
+        until,
+        pageSize: parseInt(process.env.ORDER_SYNC_PAGE_SIZE || "50", 10),
+        processPosting: async (order, ctx) => {
+          const local: LocalOrder = {
+            id: order.postingNumber,
+            postingNumber: order.postingNumber,
+            orderId: order.orderId,
+            status: order.status,
+            createdAt: order.createdAt,
+            updatedAt: new Date().toISOString(),
+            buyerNameMasked: order.buyerName,
+            buyerPhoneMasked: order.buyerPhone,
+            totalPriceRub: order.price,
+            commissionRub: order.commission,
+            payoutRub: order.payout,
+            productCount: order.products.length,
+            trackingNumber: order.trackingNumber,
+            rawJson: JSON.stringify(order),
+          };
 
-      const allOrders = [...fbsOrders, ...fboOrders];
-      const db = await getDb();
-
-      let upserted = 0;
-      for (const order of allOrders) {
-        if (!db) break;
-        const local: LocalOrder = {
-          id: order.postingNumber,
-          postingNumber: order.postingNumber,
-          orderId: order.orderId,
-          status: order.status,
-          createdAt: order.createdAt,
-          updatedAt: new Date().toISOString(),
-          buyerNameMasked: order.buyerName,
-          buyerPhoneMasked: order.buyerPhone,
-          totalPriceRub: order.price,
-          commissionRub: order.commission,
-          payoutRub: order.payout,
-          productCount: order.products.length,
-          trackingNumber: order.trackingNumber,
-          rawJson: JSON.stringify(order),
-        };
-
-        await db.run(
-          `INSERT OR REPLACE INTO local_orders
-           (id, posting_number, order_id, status, created_at, updated_at, buyer_name_masked,
-            buyer_phone_masked, total_price_rub, commission_rub, payout_rub,
-            product_count, tracking_number, raw_json, synced_at)
-           VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
-          [local.id, local.postingNumber, local.orderId, local.status,
-           local.createdAt, local.updatedAt, local.buyerNameMasked,
-           local.buyerPhoneMasked, local.totalPriceRub, local.commissionRub,
-           local.payoutRub, local.productCount, local.trackingNumber ?? null, local.rawJson]
-        ).catch(() => {});
-        upserted++;
-      }
+          await db.run(
+            `INSERT OR REPLACE INTO local_orders
+             (id, store_id, posting_number, order_id, status, created_at, updated_at, buyer_name_masked,
+              buyer_phone_masked, total_price_rub, commission_rub, payout_rub,
+              product_count, tracking_number, raw_json, synced_at)
+             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime('now'))`,
+            [local.id, syncStoreId, local.postingNumber, local.orderId, local.status,
+             local.createdAt, local.updatedAt, local.buyerNameMasked,
+             local.buyerPhoneMasked, local.totalPriceRub, local.commissionRub,
+             local.payoutRub, local.productCount, local.trackingNumber ?? null, local.rawJson]
+          );
+        },
+      });
 
       res.json({
         success: true,
-        data: { fbs: fbsOrders.length, fbo: fboOrders.length, upserted },
+        data: { fbs: result.fbsCount, fbo: result.fboCount, upserted: result.upserted, skipped: result.total - result.upserted },
         correlationId: req.correlationId,
       });
     } catch (err) {
