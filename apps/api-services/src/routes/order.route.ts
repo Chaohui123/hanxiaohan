@@ -6,6 +6,7 @@ import { Router } from "express";
 import { OzonOrderClient, syncOrders } from "@onzo/ozon-order";
 import { validateBody } from "../middleware/validate.js";
 import { getDb } from "../db/connection.js";
+import { resolveApiKey } from "./store.route.js";
 import type { LocalOrder, OzonPosting, OzonOrderStatus } from "@onzo/shared-types";
 import type { OzonClient } from "@onzo/ozon-api-wrapper";
 import { AuthManager } from "@onzo/ozon-api-wrapper";
@@ -45,9 +46,10 @@ export function createOrderRouter(ozonClient: OzonClient): Router {
     try {
       const storeConfigRow = await db.all("SELECT client_id, api_key FROM store_configs WHERE store_id = ? AND active = 1 LIMIT 1", [syncStoreId]);
       const storeCreds = storeConfigRow?.[0] as { client_id?: string; api_key?: string } | undefined;
-      const effectiveClient = storeCreds?.client_id && storeCreds?.api_key
+      const decryptedKey = storeCreds?.api_key ? resolveApiKey(storeCreds.api_key) : undefined;
+      const effectiveClient = storeCreds?.client_id && decryptedKey
         ? new OzonOrderClient(new OzonClient({
-            auth: new AuthManager({ clients: [{ clientId: storeCreds.client_id, apiKey: storeCreds.api_key, storeId: syncStoreId }] }),
+            auth: new AuthManager({ clients: [{ clientId: storeCreds.client_id, apiKey: decryptedKey, storeId: syncStoreId }] }),
             baseUrl: (ozonClient as unknown as { baseUrl?: string }).baseUrl,
           }))
         : orderClient;

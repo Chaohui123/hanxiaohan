@@ -5,7 +5,7 @@
 import type { ScrapedProduct } from "@onzo/shared-types";
 import { parseProductPage, sanitizeUrl } from "./parser.js";
 import { createStealthConfig, randomDelay, sleep } from "./anti-detect.js";
-import { readFileSync } from "node:fs";
+import { readFileSync, existsSync, mkdirSync, writeFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { dirname, join } from "node:path";
 
@@ -93,6 +93,7 @@ export interface ScraperConfig {
   timeout?: number;
   proxy?: { server: string; username?: string; password?: string };
   dataDir?: string; // persistent browser context
+  cookieFile?: string; // path to save/load cookies (JSON)
   minDelayMs?: number;
   maxDelayMs?: number;
 }
@@ -101,6 +102,7 @@ const DEFAULT_CONFIG: Required<Omit<ScraperConfig, "proxy">> = {
   headless: true,
   timeout: 30000,
   dataDir: "./data/browser",
+  cookieFile: "./data/browser/cookies.json",
   minDelayMs: 3000,
   maxDelayMs: 8000,
 };
@@ -154,6 +156,9 @@ export class ProductScraper {
       const product = parseProductPage(pageData, url);
       product.detailImages = detailImages;
 
+      // Persist cookies after successful scrape (maintains login session)
+      await this.saveCookies().catch(() => {});
+
       return product;
     } finally {
       await page.close();
@@ -187,22 +192,31 @@ export class ProductScraper {
 
   /**
    * Download images from URLs, returning buffers.
+   * Adds 1688 Referer header to bypass hotlink protection.
    */
   async downloadImages(
     imageUrls: string[],
     concurrency: number = 3
-  ): Promise<Array<{ url: string; buffer: Buffer }>> {
-    const results: Array<{ url: string; buffer: Buffer }> = [];
+  ): Promise<Array<{ url: string; buffer: Buffer; contentType: string }>> {
+    const results: Array<{ url: string; buffer: Buffer; contentType: string }> = [];
     const uniqueUrls = [...new Set(imageUrls)];
 
     for (let i = 0; i < uniqueUrls.length; i += concurrency) {
       const batch = uniqueUrls.slice(i, i + concurrency);
       const batchResults = await Promise.allSettled(
         batch.map(async (url) => {
-          const response = await fetch(sanitizeUrl(url));
+          const response = await fetch(url, {
+            headers: {
+              "Referer": "https://detail.1688.com/",
+              "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/125.0.0.0 Safari/537.36",
+              "Accept": "image/avif,image/webp,image/apng,image/svg+xml,image/*,*/*;q=0.8",
+            },
+          });
           if (!response.ok) throw new Error(`HTTP ${response.status}`);
-          const buffer = Buffer.from(await response.arrayBuffer());
-          return { url, buffer };
+          const arrayBuffer = await response.arrayBuffer();
+          const buffer = Buffer.from(arrayBuffer);
+          const contentType = response.headers.get("content-type") || "image/jpeg";
+          return { url, buffer, contentType };
         })
       );
 
@@ -220,7 +234,9 @@ export class ProductScraper {
    * Clean up browser resources.
    */
   async close(): Promise<void> {
+    // Persist cookies before closing
     if (this.context) {
+      await this.saveCookies().catch(() => {});
       await this.context.close();
       this.context = null;
     }
@@ -243,6 +259,56 @@ export class ProductScraper {
     });
 
     this.context = await this.browser.newContext(createStealthConfig());
+
+    // Load persisted cookies (1688 login session)
+    await this.loadCookies();
+  }
+
+  /**
+   * Load cookies from persisted file into the browser context.
+   */
+  private async loadCookies(): Promise<void> {
+    const cookieFile = this.config.cookieFile;
+    if (!cookieFile || !this.context) return;
+
+    try {
+      if (existsSync(cookieFile)) {
+        const cookies = JSON.parse(readFileSync(cookieFile, "utf-8"));
+        if (Array.isArray(cookies) && cookies.length > 0) {
+          await this.context.addCookies(cookies);
+          console.log(`[Scraper] Loaded ${cookies.length} cookies from ${cookieFile}`);
+        }
+      }
+    } catch (err) {
+      console.warn(`[Scraper] Failed to load cookies: ${(err as Error).message}`);
+    }
+  }
+
+  /**
+   * Save current browser context cookies to file.
+   */
+  private async saveCookies(): Promise<void> {
+    const cookieFile = this.config.cookieFile;
+    if (!cookieFile || !this.context) return;
+
+    try {
+      const cookies = await this.context.cookies();
+      // Filter to only 1688 domain cookies to keep file small
+      const relevantCookies = cookies.filter(
+        (c) => c.domain.includes("1688") || c.domain.includes("taobao") || c.domain.includes("alibaba")
+      );
+
+      // Ensure directory exists
+      const dir = dirname(cookieFile);
+      if (!existsSync(dir)) {
+        mkdirSync(dir, { recursive: true });
+      }
+
+      writeFileSync(cookieFile, JSON.stringify(relevantCookies.length > 0 ? relevantCookies : cookies, null, 2));
+      console.log(`[Scraper] Saved ${relevantCookies.length} cookies to ${cookieFile}`);
+    } catch (err) {
+      console.warn(`[Scraper] Failed to save cookies: ${(err as Error).message}`);
+    }
   }
 
   private async dismissLoginOverlay(page: Page): Promise<void> {

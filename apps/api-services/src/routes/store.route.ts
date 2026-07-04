@@ -5,6 +5,7 @@
 import { Router } from "express";
 import { validateBody } from "../middleware/validate.js";
 import { getDb } from "../db/connection.js";
+import { encrypt, decrypt, isEncrypted } from "../services/crypto.js";
 import type { OzonCredentials, OzonClientConfig } from "@onzo/shared-types";
 
 interface StoreRecord {
@@ -34,7 +35,12 @@ export function createStoreRouter(): Router {
       const params = group ? [group] : [];
 
       const stores = await db.all<StoreRecord>(sql, params);
-      res.json({ success: true, data: stores, correlationId: req.correlationId });
+      // Mask sensitive fields
+      const masked = stores.map((s) => ({
+        ...s,
+        apiKey: maskKey(s.apiKey),
+      }));
+      res.json({ success: true, data: masked, correlationId: req.correlationId });
     } catch (err) {
       res.status(500).json({ success: false, error: { code: "DB_ERROR", message: (err as Error).message, retryable: true }, correlationId: req.correlationId });
     }
@@ -64,10 +70,13 @@ export function createStoreRouter(): Router {
         return;
       }
 
+      // Encrypt API key at rest (idempotent — encrypted keys stay encrypted)
+      const encryptedKey = isEncrypted(apiKey) ? apiKey : encrypt(apiKey);
+
       await db.run(
         `INSERT OR REPLACE INTO store_configs (store_id, client_id, api_key, store_name, group_name, proxy_url, active)
          VALUES (?, ?, ?, ?, ?, ?, 1)`,
-        [storeId, clientId, apiKey, storeName ?? null, groupName ?? null, proxyUrl ?? null]
+        [storeId, clientId, encryptedKey, storeName ?? null, groupName ?? null, proxyUrl ?? null]
       );
 
       res.json({ success: true, data: { storeId, storeName, groupName }, correlationId: req.correlationId });
@@ -141,4 +150,20 @@ export function createStoreRouter(): Router {
   });
 
   return router;
+}
+
+/** Mask API key for display: show first 4 + last 4 chars */
+function maskKey(key: string): string {
+  if (!key || key.length < 8) return "***";
+  // If encrypted (hex), show structure prefix
+  if (isEncrypted(key)) return `[encrypted:${key.substring(0, 8)}...]`;
+  return key.substring(0, 4) + "****" + key.slice(-4);
+}
+
+/** Decrypt API key from DB, handling legacy plaintext */
+export function resolveApiKey(storedKey: string): string {
+  if (isEncrypted(storedKey)) {
+    return decrypt(storedKey);
+  }
+  return storedKey; // legacy plaintext
 }

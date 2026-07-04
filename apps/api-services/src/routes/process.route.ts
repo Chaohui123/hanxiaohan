@@ -10,10 +10,14 @@ import { ProductScraper, BrowserPool } from "@onzo/scraper-1688";
 import { GlmVisionClient, DeepSeekClient, GlmRateLimiter, TokenTracker, estimateCost } from "@onzo/glm-integration";
 import { DeepSeekTranslator } from "../pipelines/deepseek-translator.js";
 import { getExchangeRate } from "../services/exchange-rate.js";
+import { notifier } from "../services/notifier.js";
+import { getCategoryTree } from "../services/category-cache.js";
+import { fullComplianceCheck } from "../services/compliance.js";
 import { validateBody } from "../middleware/validate.js";
 import { logger } from "@onzo/logger";
 import { ProductValidator } from "@onzo/validation-layer";
 import { OzonClient, AuthManager } from "@onzo/ozon-api-wrapper";
+import { registerCleanup } from "../middleware/shutdown.js";
 import {
   createPipelineContext,
   stepScrape,
@@ -21,7 +25,7 @@ import {
   stepTranslate,
   stepMatchCategory,
   stepFillAttributes,
-  stepUploadImages,
+  stepDownloadAndUploadImages,
   stepCreateDraft,
   buildProcessedProduct,
   recordPipelineFailure,
@@ -38,6 +42,12 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
     dataDir: "./data/browser",
     minDelayMs: config.scraper.requestDelayMin,
     maxDelayMs: config.scraper.requestDelayMax,
+  });
+
+  // Register cleanup for graceful shutdown
+  registerCleanup(async () => {
+    await scraper.close();
+    logger.info("Browser scraper closed");
   });
 
   const validator = new ProductValidator();
@@ -145,7 +155,7 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
       );
 
       // Step 4: Match category (DeepSeek Flash)
-      const categoryTree = await ozonClient.getCategoryTree();
+      const categoryTree = await getCategoryTree(ozonClient, { ttlHours: 24 });
       const category = await glmLimiter.call(() =>
         stepMatchCategory(ctx, deepseekTranslator, scraped, categoryTree)
       );
@@ -161,6 +171,10 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
           stepFillAttributes(ctx, deepseekTranslator, translated, category.categoryId, requiredAttributes)
         );
       }
+
+      // Step 5.5: Download images locally + upload to Ozon CDN
+      const allDetailImages = scraped.detailImages ?? [];
+      await stepDownloadAndUploadImages(ctx, ozonClient, scraper, scraped.specImages, allDetailImages);
 
       // Step 6: Build + validate
       const fx = await getExchangeRate();
@@ -180,7 +194,25 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
         return;
       }
 
-      // Step 7: Create draft with image URLs directly (Ozon imports them)
+      // Compliance check — block sanctioned categories before hitting Ozon
+      const compliance = fullComplianceCheck({
+        categoryId: processed.categoryId,
+        categoryName: processed.categoryName,
+        categoryPath: processed.categoryPath,
+        titleRu: processed.titleRu,
+        descriptionRu: processed.descriptionRu,
+      });
+      if (compliance.blocked) {
+        const reason = compliance.blockedReason ?? "Category prohibited";
+        taskQueue.markFailed(queued.id, `Compliance: ${reason}`)
+          .catch((dbErr) => console.error(`[${ctx.correlationId}] Failed to mark compliance block:`, dbErr));
+        return;
+      }
+      if (compliance.warnings.length > 0) {
+        logger.warn({ warnings: compliance.warnings, correlationId: ctx.correlationId }, "Compliance warnings");
+      }
+
+      // Step 7: Create draft with image IDs (Ozon CDN)
       const draftResult = await stepCreateDraft(ctx, ozonClient, processed);
 
       // Success
@@ -192,9 +224,13 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
       );
 
       logger.info({ correlationId: ctx.correlationId, productId: draftResult.productId }, "Draft created");
+      notifier.notifySuccess(ctx.correlationId, processed.titleRu, draftResult.offerId, draftResult.productId).catch(() => {});
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       logger.error({ correlationId: ctx.correlationId, err: error }, "Pipeline failed");
+
+      // Notify failure
+      notifier.notifyFailure(ctx.correlationId, "pipeline", error.message, sourceUrl).catch(() => {});
 
       // Fire-and-forget error recording — don't let DB errors crash the handler
       recordPipelineFailure(ctx, error).catch((dbErr) =>
@@ -236,7 +272,7 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
       // Ozon API calls (not in step functions — wrap errors manually)
       let categoryTree;
       try {
-        categoryTree = await ozonClient.getCategoryTree();
+        categoryTree = await getCategoryTree(ozonClient, { ttlHours: 24 });
       } catch (err) {
         const msg = `Ozon category tree failed: ${(err as Error).message}`;
         ctx.errors.push({ step: "category_tree", message: msg });
@@ -261,6 +297,10 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
         await stepFillAttributes(ctx, deepseekTranslator, translated, category.categoryId, requiredAttributes);
       }
 
+      // Download + upload images
+      const allDetailImages = scraped.detailImages ?? [];
+      await stepDownloadAndUploadImages(ctx, ozonClient, scraper, scraped.specImages, allDetailImages);
+
       const processed = buildProcessedProduct(ctx, {
         exchangeRate: 11.5,
         defaultLength: 20, defaultWidth: 15, defaultHeight: 5, defaultWeight: 0.5,
@@ -273,6 +313,24 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
           success: false,
           error: { code: "VALIDATION_FAILED", message: "Validation failed", retryable: false },
           details: validation.errors,
+          correlationId: ctx.correlationId,
+        });
+        return;
+      }
+
+      // Compliance check
+      const compliance = fullComplianceCheck({
+        categoryId: processed.categoryId,
+        categoryName: processed.categoryName,
+        categoryPath: processed.categoryPath,
+        titleRu: processed.titleRu,
+        descriptionRu: processed.descriptionRu,
+      });
+      if (compliance.blocked) {
+        res.status(422).json({
+          success: false,
+          error: { code: "COMPLIANCE_BLOCKED", message: compliance.blockedReason ?? "Category prohibited", retryable: false },
+          warnings: compliance.warnings,
           correlationId: ctx.correlationId,
         });
         return;
@@ -292,6 +350,7 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
           categoryName: processed.categoryName,
           priceRub: processed.priceRub,
           imagesUploaded: scraped.specImages.length,
+          complianceWarnings: compliance.warnings.length > 0 ? compliance.warnings : undefined,
         },
         correlationId: ctx.correlationId,
       });
@@ -348,7 +407,7 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
       const translated = await stepTranslate(ctx, deepseekTranslator, scraped);
 
       let categoryTree;
-      try { categoryTree = await ozonClient.getCategoryTree(); } catch (err) {
+      try { categoryTree = await getCategoryTree(ozonClient, { ttlHours: 24 }); } catch (err) {
         ctx.errors.push({ step: "category_tree", message: `Ozon category tree failed: ${(err as Error).message}` });
         throw err;
       }
@@ -368,6 +427,10 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
         await stepFillAttributes(ctx, deepseekTranslator, translated, category.categoryId, requiredAttributes);
       }
 
+      // Download + upload images
+      const allDetailImages = scraped.detailImages ?? [];
+      await stepDownloadAndUploadImages(ctx, ozonClient, scraper, scraped.specImages, allDetailImages);
+
       const processed = buildProcessedProduct(ctx, {
         exchangeRate: 11.5, defaultLength: 20, defaultWidth: 15, defaultHeight: 5, defaultWeight: 0.5,
       });
@@ -375,7 +438,25 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
 
       const validation = validator.validate(processed);
       if (!validation.valid) {
-        res.status(422).json({ success: false, error: { code: "VALIDATION_FAILED", message: "Validation failed", retryable: false }, details: validation.errors, correlationId: ctx.correlationId });
+        res.status(422).json({ success: false, error: { code: "VALIDATION_FAILED", message: "Validation failed", retryable: false }, details: validation.errors, correlationId: req.correlationId });
+        return;
+      }
+
+      // Compliance check
+      const compliance = fullComplianceCheck({
+        categoryId: processed.categoryId,
+        categoryName: processed.categoryName,
+        categoryPath: processed.categoryPath,
+        titleRu: processed.titleRu,
+        descriptionRu: processed.descriptionRu,
+      });
+      if (compliance.blocked) {
+        res.status(422).json({
+          success: false,
+          error: { code: "COMPLIANCE_BLOCKED", message: compliance.blockedReason ?? "Category prohibited", retryable: false },
+          warnings: compliance.warnings,
+          correlationId: req.correlationId,
+        });
         return;
       }
 
@@ -385,7 +466,7 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
 
       res.json({
         success: true,
-        data: { taskId: ctx.taskId, draftId: draftResult.offerId, ozonProductId: draftResult.productId, titleRu: processed.titleRu, categoryName: processed.categoryName, priceRub: processed.priceRub, imagesUploaded: processed.specImageUrls.length },
+        data: { taskId: ctx.taskId, draftId: draftResult.offerId, ozonProductId: draftResult.productId, titleRu: processed.titleRu, categoryName: processed.categoryName, priceRub: processed.priceRub, imagesUploaded: processed.specImageUrls.length, complianceWarnings: compliance.warnings.length > 0 ? compliance.warnings : undefined },
         correlationId: ctx.correlationId,
       });
     } catch (err) {

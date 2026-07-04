@@ -140,5 +140,13 @@ export async function initSchema(db: Database): Promise<void> {
       created_at TEXT DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_store_group ON store_configs(group_name);
+
+    -- Category tree cache (reduces Ozon API calls)
+    CREATE TABLE IF NOT EXISTS category_cache (
+      id INTEGER PRIMARY KEY CHECK (id = 1),
+      tree_json TEXT NOT NULL,
+      fetched_at TEXT NOT NULL,
+      ttl_hours INTEGER NOT NULL DEFAULT 24
+    );
   `);
 }

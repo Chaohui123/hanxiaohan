@@ -57,7 +57,18 @@ export class TaskQueue {
 
     if (this.dbAvailable && this.db) {
       try {
-        // Schema is already created by db/schema.ts initSchema()
+        // Recover stuck "processing" tasks from previous crash
+        // Tasks stuck in "processing" for > 15 minutes are reset to "queued"
+        const stuckTimeout = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+        const stuckResult = await this.db.run(
+          "UPDATE task_queue SET status = 'queued', started_at = NULL WHERE status = 'processing' AND started_at < ?",
+          [stuckTimeout]
+        ).catch(() => ({ changes: 0 }));
+        if (stuckResult.changes > 0) {
+          console.log(`[TaskQueue] Recovered ${stuckResult.changes} stuck task(s) from previous crash`);
+        }
+
+        // Load queued + processing tasks into memory
         const rows = await this.db.all(
           "SELECT * FROM task_queue WHERE status IN ('queued','processing') ORDER BY priority, created_at"
         );

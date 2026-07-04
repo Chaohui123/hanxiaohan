@@ -171,13 +171,91 @@ export async function stepFillAttributes(
   }
 }
 
+/**
+ * Download images from 1688 (with referer to bypass hotlink protection)
+ * and upload them to Ozon's CDN. Returns Ozon image IDs.
+ *
+ * Strategy:
+ * 1. Try Ozon URL import first (fast path — Ozon downloads from URL)
+ * 2. For failed URLs, download locally via scraper (with 1688 referer)
+ * 3. Upload downloaded files to Ozon via file upload API
+ */
+export async function stepDownloadAndUploadImages(
+  ctx: PipelineContext,
+  ozonClient: OzonClient,
+  scraper: ProductScraper,
+  specImages: string[],
+  detailImages: string[] = []
+): Promise<string[]> {
+  const allImages = [...new Set([...specImages.slice(0, 10), ...detailImages.slice(0, 5)])];
+  if (allImages.length === 0) {
+    throw new Error("No images to upload");
+  }
+
+  const imageIds: string[] = [];
+  const failedUrls: string[] = [];
+
+  // Phase 1: Try Ozon URL import (fast path)
+  const urlResults = await Promise.allSettled(
+    allImages.map((imgUrl: string) => ozonClient.importImageByUrl(imgUrl))
+  );
+
+  for (let i = 0; i < urlResults.length; i++) {
+    const r = urlResults[i];
+    if (r.status === "fulfilled") {
+      imageIds.push(String(r.value.id));
+    } else {
+      failedUrls.push(allImages[i]);
+    }
+  }
+
+  // Phase 2: Download failed URLs locally and re-upload
+  if (failedUrls.length > 0) {
+    console.log(`[Pipeline] ${imageIds.length} images imported by URL, ${failedUrls.length} failed — downloading locally`);
+
+    try {
+      const downloaded = await scraper.downloadImages(failedUrls, 3);
+
+      for (const img of downloaded) {
+        try {
+          const base64 = img.buffer.toString("base64");
+          const ext = img.contentType.includes("png") ? "png"
+            : img.contentType.includes("webp") ? "webp"
+            : img.contentType.includes("gif") ? "gif"
+            : "jpg";
+          const fileName = `product-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+
+          const result = await ozonClient.uploadLocalImageFile(fileName, base64);
+          imageIds.push(String(result.id));
+          console.log(`[Pipeline] Local upload success: ${fileName} → ${result.id}`);
+        } catch (uploadErr) {
+          console.warn(`[Pipeline] Local upload failed for ${img.url}: ${(uploadErr as Error).message}`);
+        }
+      }
+    } catch (downloadErr) {
+      console.warn(`[Pipeline] Local download batch failed: ${(downloadErr as Error).message}`);
+    }
+  }
+
+  if (imageIds.length === 0) {
+    const msg = "All image uploads failed — both URL import and local upload";
+    ctx.errors.push({ step: "upload_images", message: msg });
+    throw new Error(msg);
+  }
+
+  ctx.imageIds = imageIds;
+  console.log(`[Pipeline] Total images uploaded: ${imageIds.length}/${allImages.length}`);
+  return imageIds;
+}
+
+/** @deprecated Use stepDownloadAndUploadImages instead */
 export async function stepUploadImages(
   ctx: PipelineContext,
   ozonClient: OzonClient,
   specImages: string[]
 ): Promise<string[]> {
+  // Legacy wrapper — delegates to new method but without scraper for local fallback
   try {
-    // Primary: import by URL (1688 image URLs → Ozon)
     const urlResults = await Promise.allSettled(
       specImages.slice(0, 15).map((imgUrl: string) => ozonClient.importImageByUrl(imgUrl))
     );
@@ -218,7 +296,7 @@ export async function stepCreateDraft(
       typeId: resolvedTypeId,
       price: processed.priceRub,
       vat: "0" as const,
-      images: processed.specImageUrls, // 1688 URLs — Ozon downloads directly
+      images: ctx.imageIds ?? processed.specImageUrls, // Ozon image IDs (primary) or raw URLs (fallback)
       attributes: (processed.attributes ?? []).map((a) => ({
         id: a.attributeId,
         values: [{ value: a.value as string }],

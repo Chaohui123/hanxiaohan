@@ -6,6 +6,7 @@ export {
   stepMatchCategory,
   stepFillAttributes,
   stepUploadImages,
+  stepDownloadAndUploadImages,
   stepCreateDraft,
   buildProcessedProduct,
   recordPipelineFailure,

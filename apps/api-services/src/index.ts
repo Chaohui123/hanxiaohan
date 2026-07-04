@@ -13,7 +13,7 @@ import { createHealthRouter } from "./routes/health.route.js";
 import { createTaskRouter } from "./routes/task.route.js";
 import { createProcessRouter } from "./routes/process.route.js";
 import { createStatsRouter } from "./routes/stats.route.js";
-import { createBackupRouter } from "./routes/backup.route.js";
+import { createBackupRouter, startAutoBackup, stopAutoBackup } from "./routes/backup.route.js";
 import { createOrderRouter } from "./routes/order.route.js";
 import { createWebhookRouter } from "./routes/webhook.route.js";
 import { createBulkRouter } from "./routes/bulk.route.js";
@@ -24,6 +24,9 @@ import { createStoreAdminRouter } from "./routes/store-admin.route.js";
 import { createDashboardHtmlRouter } from "./routes/dashboard-html.route.js";
 import { timeoutMiddleware } from "./middleware/timeout.js";
 import { idempotencyMiddleware } from "./middleware/idempotency.js";
+import { authMiddleware } from "./middleware/auth.js";
+import { rateLimitMiddleware } from "./middleware/rate-limit.js";
+import { registerCleanup, setupShutdownHandlers } from "./middleware/shutdown.js";
 import { mockMiddleware } from "./routes/mock.middleware.js";
 import { swaggerSpec } from "./swagger.js";
 import { getDb } from "./db/connection.js";
@@ -39,7 +42,17 @@ const logger = createLogger(config);
 const app = express();
 
 // ---- Middleware ----
-app.use(cors());
+const allowedOrigins = (process.env.CORS_ORIGINS || "http://localhost:3000,http://localhost:5678")
+  .split(",")
+  .map((s) => s.trim())
+  .filter(Boolean);
+
+app.use(cors({
+  origin: allowedOrigins.length > 0 ? allowedOrigins : undefined,
+  methods: ["GET", "POST", "DELETE"],
+  allowedHeaders: ["Content-Type", "Authorization", "X-API-Key", "X-Correlation-ID"],
+  maxAge: 86400,
+}));
 app.use(express.json({
   limit: "10mb",
   verify: (req, _res, buf) => {
@@ -48,7 +61,9 @@ app.use(express.json({
 }));
 app.use(timeoutMiddleware(120_000));
 app.use(correlationIdMiddleware);
+app.use(rateLimitMiddleware);
 app.use(idempotencyMiddleware);
+app.use(authMiddleware);
 app.use(mockMiddleware);
 
 // ---- Routes ----
@@ -75,6 +90,12 @@ const db = await getDb().catch((err) => {
   return null;
 });
 
+// Start auto-backup (every 6h, keeps 7 days)
+if (db) {
+  startAutoBackup();
+  registerCleanup(async () => { stopAutoBackup(); });
+}
+
 // ---- Init Queue ----
 const { TaskQueue } = await import("./db/task-queue.js");
 const taskQueue = new TaskQueue(db);
@@ -98,9 +119,15 @@ app.use("/api", createDashboardRouter(taskQueue));
 app.use(errorHandler);
 
 // ---- Start ----
-app.listen(config.port, () => {
+const server = app.listen(config.port, () => {
   logger.info(`ONZO API Services running on http://localhost:${config.port}`);
   logger.info(`Environment: ${config.nodeEnv}`);
+});
+
+// ---- Graceful Shutdown ----
+setupShutdownHandlers(server, {
+  info: (msg: string) => logger.info(msg),
+  error: (obj: unknown, msg: string) => logger.error(obj as Record<string, unknown>, msg),
 });
 
 export { app };

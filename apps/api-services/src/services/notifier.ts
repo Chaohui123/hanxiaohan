@@ -1,9 +1,6 @@
 // ============================================================
-// Notification Service — Phase 1: Console log + DB record
-// Phase 2: WeChat Work / Telegram / Email webhooks
+// Notification Service — WeChat Work / Telegram / Email
 // ============================================================
-
-import { saveListingRecord } from "../db/models.js";
 
 export interface NotifyPayload {
   level: "info" | "warn" | "error";
@@ -13,50 +10,186 @@ export interface NotifyPayload {
   metadata?: Record<string, unknown>;
 }
 
-export class Notifier {
-  private webhookUrls: { wechat?: string; telegram?: string; email?: string };
+interface WebhookSendResult {
+  channel: string;
+  success: boolean;
+  error?: string;
+}
 
-  constructor(webhooks?: { wechat?: string; telegram?: string; email?: string }) {
-    this.webhookUrls = webhooks ?? {};
-  }
+/**
+ * Format message for WeChat Work Bot (Markdown).
+ * WeChat Work bot limits: max 4096 chars for markdown content.
+ */
+function formatWechatMarkdown(payload: NotifyPayload): string {
+  const emoji = payload.level === "error" ? "🔴" : payload.level === "warn" ? "🟡" : "🟢";
+  const lines = [
+    `## ${emoji} ONZO ${payload.event}`,
+    `> ${payload.message}`,
+    ``,
+    `- **级别**: ${payload.level}`,
+    `- **时间**: ${new Date().toLocaleString("zh-CN")}`,
+    `- **CorrelationID**: \`${payload.correlationId}\``,
+  ];
 
-  /**
-   * Send a notification.
-   * Phase 1: console + DB only.
-   * Phase 2: Dispatch to configured webhooks.
-   */
-  async notify(payload: NotifyPayload): Promise<void> {
-    const ts = new Date().toISOString();
-    const logFn = payload.level === "error" ? console.error : payload.level === "warn" ? console.warn : console.log;
-
-    logFn(`[${payload.level.toUpperCase()}] [${payload.correlationId}] ${payload.event}: ${payload.message}`);
-
-    // Record to listing_records as an event log
-    await saveListingRecord({
-      id: crypto.randomUUID(),
-      sourceUrl: `event:${payload.event}`,
-      status: payload.level === "error" ? "failed" : payload.level === "warn" ? "pending_retry" : "done",
-      correlationId: payload.correlationId,
-      resultJson: JSON.stringify({ event: payload.event, message: payload.message, metadata: payload.metadata, timestamp: ts }),
-    }).catch(() => {});
-
-    // Phase 2: dispatch to webhooks
-    if (this.webhookUrls.wechat) {
-      fetch(this.webhookUrls.wechat, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ msgtype: "text", text: { content: `[ONZO] ${payload.event}: ${payload.message}` } }),
-      }).catch(() => {});
+  if (payload.metadata) {
+    lines.push("");
+    for (const [k, v] of Object.entries(payload.metadata)) {
+      lines.push(`- **${k}**: ${v}`);
     }
   }
 
-  /** Shorthand for pipeline success notification */
-  async notifySuccess(correlationId: string, title: string, draftId: string): Promise<void> {
-    await this.notify({ level: "info", event: "listing_created", message: `Draft ${draftId}: ${title}`, correlationId, metadata: { draftId, title } });
+  return lines.join("\n");
+}
+
+/**
+ * Format message for Telegram Bot (HTML).
+ */
+function formatTelegramHtml(payload: NotifyPayload): string {
+  const emoji = payload.level === "error" ? "🔴" : payload.level === "warn" ? "🟡" : "🟢";
+  let text = `<b>${emoji} ONZO ${payload.event}</b>\n`;
+  text += `<i>${payload.message}</i>\n\n`;
+  text += `<b>级别:</b> ${payload.level}\n`;
+  text += `<b>时间:</b> ${new Date().toLocaleString("zh-CN")}\n`;
+  text += `<b>CorrelationID:</b> <code>${payload.correlationId}</code>`;
+
+  if (payload.metadata) {
+    text += "\n";
+    for (const [k, v] of Object.entries(payload.metadata)) {
+      text += `\n<b>${k}:</b> ${v}`;
+    }
   }
 
-  /** Shorthand for pipeline failure notification */
-  async notifyFailure(correlationId: string, step: string, error: string): Promise<void> {
-    await this.notify({ level: "error", event: "pipeline_failed", message: `[${step}] ${error}`, correlationId, metadata: { step, error } });
+  return text;
+}
+
+/**
+ * Send to WeChat Work Bot webhook.
+ * Documentation: https://developer.work.weixin.qq.com/document/path/91770
+ */
+async function sendWechat(webhookUrl: string, payload: NotifyPayload): Promise<WebhookSendResult> {
+  try {
+    const resp = await fetch(webhookUrl, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        msgtype: "markdown",
+        markdown: { content: formatWechatMarkdown(payload) },
+      }),
+    });
+
+    const data = await resp.json() as { errcode?: number };
+    if (!resp.ok || (data.errcode && data.errcode !== 0)) {
+      return { channel: "wechat", success: false, error: `errcode=${data.errcode}` };
+    }
+    return { channel: "wechat", success: true };
+  } catch (err) {
+    return { channel: "wechat", success: false, error: (err as Error).message };
   }
 }
+
+/**
+ * Send to Telegram Bot API.
+ * Documentation: https://core.telegram.org/bots/api#sendmessage
+ */
+async function sendTelegram(botToken: string, chatId: string, payload: NotifyPayload): Promise<WebhookSendResult> {
+  try {
+    const url = `https://api.telegram.org/bot${botToken}/sendMessage`;
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        chat_id: chatId,
+        text: formatTelegramHtml(payload),
+        parse_mode: "HTML",
+      }),
+    });
+
+    const data = await resp.json() as { ok?: boolean };
+    if (!resp.ok || !data.ok) {
+      return { channel: "telegram", success: false, error: JSON.stringify(data) };
+    }
+    return { channel: "telegram", success: true };
+  } catch (err) {
+    return { channel: "telegram", success: false, error: (err as Error).message };
+  }
+}
+
+export class Notifier {
+  private wechatWebhook: string;
+  private telegramBotToken: string;
+  private telegramChatId: string;
+
+  constructor() {
+    this.wechatWebhook = process.env.NOTIFY_WECHAT_WEBHOOK || "";
+    this.telegramBotToken = process.env.NOTIFY_TELEGRAM_BOT_TOKEN || "";
+    this.telegramChatId = process.env.NOTIFY_TELEGRAM_CHAT_ID || "";
+  }
+
+  get enabled(): boolean {
+    return !!(this.wechatWebhook || (this.telegramBotToken && this.telegramChatId));
+  }
+
+  /**
+   * Send notification to all configured channels.
+   * Phase 1: console log always; webhooks if configured.
+   */
+  async notify(payload: NotifyPayload): Promise<WebhookSendResult[]> {
+    const ts = new Date().toISOString();
+    const logFn = payload.level === "error" ? console.error
+      : payload.level === "warn" ? console.warn
+      : console.log;
+
+    logFn(`[${payload.level.toUpperCase()}] [${payload.correlationId}] ${payload.event}: ${payload.message}`);
+
+    const results: WebhookSendResult[] = [];
+
+    // Fire webhooks concurrently (fire-and-forget per channel)
+    const promises: Promise<WebhookSendResult>[] = [];
+
+    if (this.wechatWebhook) {
+      promises.push(sendWechat(this.wechatWebhook, payload));
+    }
+    if (this.telegramBotToken && this.telegramChatId) {
+      promises.push(sendTelegram(this.telegramBotToken, this.telegramChatId, payload));
+    }
+
+    if (promises.length > 0) {
+      const settled = await Promise.allSettled(promises);
+      for (const r of settled) {
+        if (r.status === "fulfilled") {
+          results.push(r.value);
+          if (!r.value.success) {
+            console.warn(`[Notifier] ${r.value.channel} send failed: ${r.value.error}`);
+          }
+        }
+      }
+    }
+
+    return results;
+  }
+
+  /** Shorthand for pipeline success */
+  async notifySuccess(correlationId: string, title: string, draftId: string, productId?: number): Promise<void> {
+    await this.notify({
+      level: "info",
+      event: "上架成功",
+      message: `商品 "${title}" 已创建草稿`,
+      correlationId,
+      metadata: { draftId, productId: String(productId ?? ""), title },
+    });
+  }
+
+  /** Shorthand for pipeline failure */
+  async notifyFailure(correlationId: string, step: string, error: string, url?: string): Promise<void> {
+    await this.notify({
+      level: "error",
+      event: "上架失败",
+      message: `[${step}] ${error}`,
+      correlationId,
+      metadata: { step, error, url: url ?? "" },
+    });
+  }
+}
+
+// Singleton
+export const notifier = new Notifier();
