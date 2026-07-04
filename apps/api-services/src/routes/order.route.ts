@@ -15,6 +15,7 @@ import { syncReviewStatuses } from "../services/review-sync.js";
 import { writeToDeadLetter } from "../services/dead-letter.js";
 import { getSyncMetrics } from "@onzo/ozon-order";
 import { getWebhookMetrics } from "../services/order-processor.js";
+import { reconcileFinance } from "../services/finance-reconciler.js";
 
 export function createOrderRouter(ozonClient: OzonClient): Router {
   const router = Router();
@@ -228,6 +229,56 @@ export function createOrderRouter(ozonClient: OzonClient): Router {
         error: { code: "BATCH_SHIP_FAILED", message: (err as Error).message, retryable: true },
         correlationId: req.correlationId,
       });
+    }
+  });
+
+  // POST /api/orders/reconcile — trigger finance reconciliation
+  router.post("/orders/reconcile", async (req, res) => {
+    try {
+      const { dateFrom, dateTo } = req.body as { dateFrom: string; dateTo: string };
+      if (!dateFrom || !dateTo) {
+        res.status(400).json({
+          success: false,
+          error: { code: "MISSING_DATES", message: "dateFrom and dateTo required (YYYY-MM-DD)", retryable: false },
+          correlationId: req.correlationId,
+        });
+        return;
+      }
+      const result = await reconcileFinance(ozonClient, dateFrom, dateTo);
+      const db = await getDb().catch(() => null);
+      if (db) {
+        await db.run(
+          `INSERT INTO reconciliation_results (date_from, date_to, total_orders, matched, discrepancies, missing_local, missing_ozon, result_json, created_at)
+           VALUES (?, ?, ?, ?, ?, ?, ?, ?, NOW())`,
+          [dateFrom, dateTo, result.totalOrders, result.matched, result.discrepancies.length, result.missingLocal, result.missingOzon, JSON.stringify(result)]
+        ).catch(() => {});
+      }
+      res.json({ success: true, data: result, correlationId: req.correlationId });
+    } catch (err) {
+      res.status(500).json({
+        success: false,
+        error: { code: "RECONCILE_FAILED", message: (err as Error).message, retryable: true },
+        correlationId: req.correlationId,
+      });
+    }
+  });
+
+  // GET /api/orders/reconcile/latest — most recent reconciliation
+  router.get("/orders/reconcile/latest", async (req, res) => {
+    try {
+      const db = await getDb().catch(() => null);
+      if (!db) { res.json({ success: true, data: null }); return; }
+      const rows = await db.all(
+        "SELECT * FROM reconciliation_results ORDER BY created_at DESC LIMIT 1"
+      ) as Array<Record<string, unknown>>;
+      const latest = rows[0];
+      res.json({
+        success: true,
+        data: latest ? { ...latest, result_json: JSON.parse((latest.result_json as string) || "{}") } : null,
+        correlationId: req.correlationId,
+      });
+    } catch (err) {
+      res.status(500).json({ success: false, error: { code: "DB_ERROR", message: (err as Error).message }, correlationId: req.correlationId });
     }
   });
 

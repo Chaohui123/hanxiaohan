@@ -155,4 +155,22 @@ export const MIGRATIONS: Migration[] = [
       CREATE INDEX IF NOT EXISTS idx_images_status ON images(status);
     `,
   },
+  {
+    version: 3,
+    name: "add-reconciliation-results",
+    sql: `
+      CREATE TABLE IF NOT EXISTS reconciliation_results (
+        id SERIAL PRIMARY KEY,
+        date_from TEXT NOT NULL,
+        date_to TEXT NOT NULL,
+        total_orders INTEGER DEFAULT 0,
+        matched INTEGER DEFAULT 0,
+        discrepancies INTEGER DEFAULT 0,
+        missing_local INTEGER DEFAULT 0,
+        missing_ozon INTEGER DEFAULT 0,
+        result_json TEXT,
+        created_at TIMESTAMP DEFAULT NOW()
+      );
+    `,
+  },
 ];

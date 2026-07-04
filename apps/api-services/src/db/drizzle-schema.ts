@@ -169,3 +169,17 @@ export const images = pgTable("images", {
   createdAt: timestamp("created_at").defaultNow(),
   updatedAt: timestamp("updated_at").defaultNow(),
 });
+
+// ---- Reconciliation Results (finance reconciler) ----
+export const reconciliationResults = pgTable("reconciliation_results", {
+  id: serial("id").primaryKey(),
+  dateFrom: text("date_from").notNull(),
+  dateTo: text("date_to").notNull(),
+  totalOrders: integer("total_orders").default(0),
+  matched: integer("matched").default(0),
+  discrepancies: integer("discrepancies").default(0),
+  missingLocal: integer("missing_local").default(0),
+  missingOzon: integer("missing_ozon").default(0),
+  resultJson: text("result_json"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
