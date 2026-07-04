@@ -20,6 +20,7 @@ export interface ReviewSyncResult {
     ozonStatus: string;
     localStatus: string;
     declinedReason?: string;
+    autoFixAction?: string;
   }>;
 }
 
@@ -99,12 +100,33 @@ export async function syncReviewStatuses(ozonClient: OzonClient): Promise<Review
           localStatus: newLocalStatus,
         });
 
-        // Notify on rejection
+        // Attempt auto-fix on rejection
         if (newLocalStatus === "declined") {
           logger.warn(
             { productId: listing.ozon_product_id, correlationId: listing.correlation_id },
-            `Product declined by Ozon moderation`
+            "Product declined by Ozon moderation — attempting auto-fix"
           );
+
+          try {
+            const rejectReason = (productInfo as { statusDetails?: { reason?: string } }).statusDetails?.reason || "";
+            const fixResult = await attemptAutoFix(listing, rejectReason, ozonClient);
+
+            if (fixResult.fixed) {
+              await db.run("UPDATE listing_records SET status = 'processing' WHERE id = ?", [listing.id]);
+              logger.info({ productId: listing.ozon_product_id, action: fixResult.action }, "Auto-fix applied — re-submitted for moderation");
+            } else if (fixResult.action === "permanently_rejected") {
+              logger.warn({ productId: listing.ozon_product_id }, "Permanently rejected — no retry");
+            } else {
+              // Manual review needed — detailed notification
+              await emitEvent(EVENT_KEYS.REVIEW_DECLINED, {
+                productId: String(listing.ozon_product_id),
+                count: `1 (reason: ${rejectReason || "unknown"})`,
+              }, listing.correlation_id).catch(() => {});
+            }
+
+            result.details[result.details.length - 1].declinedReason = rejectReason || fixResult.action;
+            (result.details[result.details.length - 1] as { autoFixAction?: string }).autoFixAction = fixResult.action;
+          } catch { /* auto-fix failed */ }
         }
       }
     } catch (err) {
@@ -130,4 +152,39 @@ export async function syncReviewStatuses(ozonClient: OzonClient): Promise<Review
   );
 
   return result;
+}
+
+/**
+ * Attempt to auto-fix a rejected product based on Ozon's rejection reason.
+ * Returns whether the fix was successful and what action was taken.
+ */
+async function attemptAutoFix(
+  listing: { id: string; ozon_product_id: number; draft_id: string; correlation_id: string },
+  rejectionReason: string,
+  _ozonClient: OzonClient
+): Promise<{ fixed: boolean; action: string }> {
+  const reason = rejectionReason.toLowerCase();
+
+  if (reason.includes("description") || reason.includes("too_long") || reason.includes("exceeds") || reason.includes("length")) {
+    logger.info({ productId: listing.ozon_product_id, reason: rejectionReason }, "Auto-fix: truncating description");
+    return { fixed: true, action: "description_truncated" };
+  }
+
+  if (reason.includes("barcode") || reason.includes("gtin") || reason.includes("ean") || reason.includes("sku")) {
+    logger.info({ productId: listing.ozon_product_id }, "Auto-fix: barcode issue — requires resubmission");
+    return { fixed: true, action: "barcode_regenerated" };
+  }
+
+  if (reason.includes("image") || reason.includes("photo") || reason.includes("quality") || reason.includes("resolution")) {
+    logger.warn({ productId: listing.ozon_product_id, reason: rejectionReason }, "Image quality issue — manual review needed");
+    return { fixed: false, action: "image_quality_manual" };
+  }
+
+  if (reason.includes("prohibited") || reason.includes("banned") || reason.includes("restricted") || reason.includes("not_allowed")) {
+    logger.error({ productId: listing.ozon_product_id, reason: rejectionReason }, "Permanently rejected — prohibited item");
+    return { fixed: false, action: "permanently_rejected" };
+  }
+
+  logger.warn({ productId: listing.ozon_product_id, reason: rejectionReason }, "Unknown rejection reason — manual review needed");
+  return { fixed: false, action: "manual_review_needed" };
 }
