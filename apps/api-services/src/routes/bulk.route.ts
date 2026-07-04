@@ -210,6 +210,14 @@ export function createBulkRouter(taskQueue: TaskQueue): Router {
     }
   });
 
+  // GET /api/bulk/template — download CSV template
+  router.get("/bulk/template", (_req, res) => {
+    const csv = "标题,价格(元),图片URL,规格,描述\n示例商品,25.0,https://img.example.com/1.jpg;https://img.example.com/2.jpg,颜色:黑色;材质:ABS,商品描述文字\n";
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", "attachment; filename=onzo-bulk-import-template.csv");
+    res.send(csv);
+  });
+
   return router;
 }
 

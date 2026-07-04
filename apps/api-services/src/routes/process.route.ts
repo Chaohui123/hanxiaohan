@@ -9,6 +9,7 @@ import type { AppConfig } from "../config.js";
 import { ProductScraper, BrowserPool } from "@onzo/scraper-1688";
 import { GlmVisionClient, DeepSeekClient, GlmRateLimiter, TokenTracker, estimateCost } from "@onzo/glm-integration";
 import { DeepSeekTranslator } from "../pipelines/deepseek-translator.js";
+import { getExchangeRate } from "../services/exchange-rate.js";
 import { ProductValidator } from "@onzo/validation-layer";
 import { OzonClient, AuthManager } from "@onzo/ozon-api-wrapper";
 import {
@@ -159,8 +160,9 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
       }
 
       // Step 6: Build + validate
+      const fx = await getExchangeRate();
       const processed = buildProcessedProduct(ctx, {
-        exchangeRate: 11.5,
+        exchangeRate: fx.rate,
         defaultLength: 20,
         defaultWidth: 15,
         defaultHeight: 5,
