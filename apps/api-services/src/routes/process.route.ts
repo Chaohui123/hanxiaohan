@@ -10,6 +10,8 @@ import { ProductScraper, BrowserPool } from "@onzo/scraper-1688";
 import { GlmVisionClient, DeepSeekClient, GlmRateLimiter, TokenTracker, estimateCost } from "@onzo/glm-integration";
 import { DeepSeekTranslator } from "../pipelines/deepseek-translator.js";
 import { getExchangeRate } from "../services/exchange-rate.js";
+import { validateBody } from "../middleware/validate.js";
+import { logger } from "@onzo/logger";
 import { ProductValidator } from "@onzo/validation-layer";
 import { OzonClient, AuthManager } from "@onzo/ozon-api-wrapper";
 import {
@@ -56,7 +58,7 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
   const tokenTracker = new TokenTracker({
     dailyLimit,
     onLimitExceeded: (usage) => {
-      console.error(`[TOKEN LIMIT] Daily limit (${dailyLimit}) exceeded! Total: ${usage.totalTokens}`);
+      logger.error({ dailyLimit, totalTokens: usage.totalTokens }, "Token limit exceeded");
     },
     persistFn: async (usage) => {
       const { getDb } = await import("../db/connection.js");
@@ -188,10 +190,10 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
         console.error(`[${ctx.correlationId}] Failed to mark done:`, dbErr)
       );
 
-      console.log(`[${ctx.correlationId}] Draft created: ${draftResult.productId}`);
+      logger.info({ correlationId: ctx.correlationId, productId: draftResult.productId }, "Draft created");
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
-      console.error(`[${ctx.correlationId}] Pipeline failed:`, error.message);
+      logger.error({ correlationId: ctx.correlationId, err: error }, "Pipeline failed");
 
       // Fire-and-forget error recording — don't let DB errors crash the handler
       recordPipelineFailure(ctx, error).catch((dbErr) =>
@@ -308,7 +310,13 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
   });
 
   // POST /api/process/manual — skip scraper, input product JSON manually
-  router.post("/process/manual", async (req, res) => {
+  router.post("/process/manual",
+    validateBody([
+      { field: "title", type: "string", required: true, min: 10, max: 2000 },
+      { field: "priceCny", type: "number", required: true },
+      { field: "specImages", type: "array", required: true, min: 1, max: 15 },
+    ]),
+    async (req, res) => {
     const { title, priceCny, specImages, detailImages, specifications, descriptionText } = req.body as {
       title: string; priceCny: number; specImages: string[]; detailImages?: string[]; specifications?: Array<{name:string;value:string}>; descriptionText?: string;
     };
