@@ -12,6 +12,7 @@ import type { OzonClient } from "@onzo/ozon-api-wrapper";
 import { AuthManager } from "@onzo/ozon-api-wrapper";
 import { batchShipOrders } from "../services/auto-ship.js";
 import { syncReviewStatuses } from "../services/review-sync.js";
+import { writeToDeadLetter } from "../services/dead-letter.js";
 
 export function createOrderRouter(ozonClient: OzonClient): Router {
   const router = Router();
@@ -102,9 +103,17 @@ export function createOrderRouter(ozonClient: OzonClient): Router {
         correlationId: req.correlationId,
       });
     } catch (err) {
+      const errorMsg = (err as Error).message;
+      writeToDeadLetter({
+        taskType: "order_sync",
+        errorMessage: errorMsg,
+        payload: { status, since, until },
+        storeId: syncStoreId,
+        correlationId: req.correlationId,
+      }).catch(() => {});
       res.status(500).json({
         success: false,
-        error: { code: "ORDER_SYNC_FAILED", message: (err as Error).message, retryable: true },
+        error: { code: "ORDER_SYNC_FAILED", message: errorMsg, retryable: true },
         correlationId: req.correlationId,
       });
     }

@@ -6,6 +6,7 @@ import { Router } from "express";
 import { parseWebhookPayload, handleWebhookEvent, type WebhookPayload } from "@onzo/ozon-order/webhook";
 import { getDb } from "../db/connection.js";
 import { logger } from "@onzo/logger";
+import { writeToDeadLetter } from "../services/dead-letter.js";
 
 const API_SECRET = process.env.OZON_API_KEYS || "";
 
@@ -75,6 +76,7 @@ export function createWebhookRouter(): Router {
     const payload: WebhookPayload = parsed;
 
     // Handle the event — update local order status
+    try {
     await handleWebhookEvent(payload, {
       onStatusChanged: async (p) => {
         const db = await getDb().catch(() => null);
@@ -135,6 +137,17 @@ export function createWebhookRouter(): Router {
     });
 
     res.json({ success: true, eventId: payload.eventId, correlationId: req.correlationId });
+    } catch (err) {
+      const errorMsg = (err as Error).message;
+      logger.error({ correlationId: req.correlationId, err: errorMsg }, "Webhook event handling failed");
+      writeToDeadLetter({
+        taskType: "webhook",
+        errorMessage: errorMsg,
+        payload: { eventId: (parsed as { eventId?: string }).eventId ?? "unknown" },
+        correlationId: req.correlationId,
+      }).catch(() => {});
+      res.status(500).json({ success: false, error: { code: "WEBHOOK_FAILED", message: errorMsg, retryable: true }, correlationId: req.correlationId });
+    }
   });
 
   return router;

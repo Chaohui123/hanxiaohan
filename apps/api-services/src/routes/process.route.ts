@@ -11,6 +11,7 @@ import { GlmVisionClient, DeepSeekClient, GlmRateLimiter, TokenTracker, estimate
 import { DeepSeekTranslator } from "../pipelines/deepseek-translator.js";
 import { getExchangeRate } from "../services/exchange-rate.js";
 import { notifier } from "../services/notifier.js";
+import { writeToDeadLetter } from "../services/dead-letter.js";
 import { getCategoryTree } from "../services/category-cache.js";
 import { fullComplianceCheck } from "../services/compliance.js";
 import { validateBody } from "../middleware/validate.js";
@@ -240,6 +241,15 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
       const error = err instanceof Error ? err : new Error(String(err));
       logger.error({ correlationId: ctx.correlationId, err: error }, "Pipeline failed");
 
+      // Write to dead letter queue for smart retry
+      writeToDeadLetter({
+        taskType: "listing",
+        errorMessage: error.message,
+        payload: { url: sourceUrl },
+        storeId: store,
+        correlationId: ctx.correlationId,
+      }).catch(() => {});
+
       // Notify failure
       notifier.notifyFailure(ctx.correlationId, "pipeline", error.message, sourceUrl).catch(() => {});
 
@@ -368,6 +378,15 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
     } catch (err) {
       const error = err instanceof Error ? err : new Error(String(err));
       await recordPipelineFailure(ctx, error);
+
+      // Dead letter for sync pipeline failures
+      writeToDeadLetter({
+        taskType: "listing_sync",
+        errorMessage: error.message,
+        payload: { url: sourceUrl },
+        storeId: storeId ?? "store_1",
+        correlationId: ctx.correlationId,
+      }).catch(() => {});
 
       res.status(500).json({
         success: false,

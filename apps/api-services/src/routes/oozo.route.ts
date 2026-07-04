@@ -13,7 +13,7 @@ import type { DeepSeekClient } from "@onzo/glm-integration";
 import type { GlmVisionClient } from "@onzo/glm-integration";
 import type { OzonClient } from "@onzo/ozon-api-wrapper";
 import { analyzeImage, generateImageOverlayText, applyOverlay } from "../services/image-russianizer.js";
-import { generateVideoScript, generateVoiceover, generateSubtitles, processVideo } from "../services/video-russianizer.js";
+import { generateVideoScript, generateVoiceover, generateSubtitles, processVideoAsync } from "../services/video-russianizer.js";
 import { notifier } from "../services/notifier.js";
 
 export function createOozoRouter(
@@ -167,8 +167,12 @@ async function processProductFolder(
           product.paths.modifiedVideos
         );
 
-        // 4. Combine video + voiceover + subtitles (ffmpeg)
-        await processVideo(vidPath, voiceoverPath, srtPath, product.paths.modifiedVideos);
+        // 4. Enqueue video to async FFmpeg queue (non-blocking)
+        await processVideoAsync(
+          vidPath, voiceoverPath, srtPath,
+          product.paths.modifiedVideos,
+          product.productName
+        );
         videoCount++;
       } catch (err) {
         errors.push(`Video ${vidFile}: ${(err as Error).message}`);

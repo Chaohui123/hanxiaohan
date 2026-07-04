@@ -117,7 +117,7 @@ export class OzonClient {
       name: product.name,
       description: product.description,
       category_id: product.categoryId,
-      type_id: product.typeId ?? product.categoryId,
+      ...(product.typeId && product.typeId > 0 ? { type_id: product.typeId } : {}),
       price: typeof product.price === "number" ? product.price.toFixed(2) : String(product.price),
       vat: product.vat,
       images: product.images,

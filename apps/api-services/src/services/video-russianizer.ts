@@ -10,6 +10,9 @@ import { writeFile, mkdir, readFile } from "node:fs/promises";
 import { existsSync } from "node:fs";
 import { join, basename } from "node:path";
 import { logger } from "@onzo/logger";
+import { ffmpegQueue } from "./async-queue.js";
+
+export type VideoProcessCallback = (result: { success: boolean; outputPath?: string; error?: string }) => void;
 
 export interface VideoScript {
   /** Concise Russian narration (2-4 sentences for a 30s video) */
@@ -141,8 +144,8 @@ export async function generateSubtitles(
 }
 
 /**
- * Process video: replace audio with Russian voiceover + burn subtitles.
- * Uses ffmpeg (must be installed on the system).
+ * Process video SYNCHRONOUSLY via ffmpeg (legacy, use processVideoAsync for API endpoints).
+ * Blocks until transcoding completes.
  */
 export async function processVideo(
   inputVideoPath: string,
@@ -156,7 +159,6 @@ export async function processVideo(
   const outputPath = join(outputDir, `${inputName}_ru.mp4`);
 
   return new Promise<string>((resolve, reject) => {
-    // Use forward slashes + escape for Windows ffmpeg compatibility
     const srtPathSafe = srtPath.replace(/\\/g, "/");
     const outputPathSafe = outputPath.replace(/\\/g, "/");
 
@@ -174,19 +176,60 @@ export async function processVideo(
       outputPathSafe,
     ];
 
-    logger.info({ input: inputVideoPath, output: outputPath }, "ffmpeg processing video");
+    logger.info({ input: inputVideoPath, output: outputPath }, "ffmpeg processing video (sync)");
 
-    execFile("ffmpeg", args, { timeout: 300_000 }, (err, stdout, stderr) => {
+    execFile("ffmpeg", args, { timeout: 300_000 }, (err) => {
       if (err) {
-        // ffmpeg not installed — return original as fallback
-        logger.warn({ err: err.message }, "ffmpeg failed, check if ffmpeg is installed");
-        reject(new Error(`ffmpeg failed: ${err.message}. Install ffmpeg: https://ffmpeg.org/download.html`));
+        logger.warn({ err: err.message }, "ffmpeg failed");
+        reject(new Error(`ffmpeg failed: ${err.message}`));
       } else {
         logger.info({ output: outputPath }, "Video processing complete");
         resolve(outputPath);
       }
     });
   });
+}
+
+/**
+ * Process video ASYNCHRONOUSLY via ffmpegQueue.
+ * Returns immediately; video is transcoded in background.
+ * Use this for API endpoints to avoid blocking the request.
+ */
+export async function processVideoAsync(
+  inputVideoPath: string,
+  voiceoverPath: string,
+  srtPath: string,
+  outputDir: string,
+  productName: string,
+  onComplete?: VideoProcessCallback
+): Promise<string> {
+  if (!existsSync(outputDir)) await mkdir(outputDir, { recursive: true });
+
+  const inputName = basename(inputVideoPath, extname(inputVideoPath));
+  const outputPath = join(outputDir, `${inputName}_ru.mp4`);
+
+  const taskId = await ffmpegQueue.enqueue("transcode", {
+    inputPath: inputVideoPath,
+    voiceoverPath,
+    srtPath,
+    outputDir,
+    productName,
+  });
+
+  // Register handler for ffmpeg queue
+  if (!ffmpegQueue["handlers"].has("transcode")) {
+    ffmpegQueue.registerHandler("transcode", async (task) => {
+      const { inputPath, voiceoverPath, srtPath, outputDir } = task.data;
+      await processVideo(inputPath, voiceoverPath, srtPath, outputDir);
+    });
+
+    ffmpegQueue.onFailed(async (task, error) => {
+      logger.error({ taskId: task.id, error, product: task.data.productName }, "FFmpeg transcode failed after all retries");
+      onComplete?.({ success: false, error });
+    });
+  }
+
+  return outputPath; // Return expected output path (video will appear when done)
 }
 
 // ---- Helpers ----

@@ -331,10 +331,11 @@ export async function stepCreateDraft(
   processed: ProcessedProduct
 ): Promise<{ productId: number; offerId: string }> {
   try {
-    // Resolve type_id from the category tree (leaf nodes have type_id for product/import)
+    // Resolve type_id from category tree leaf nodes.
+    // DO NOT fall back to categoryId — type_id is a different concept.
     const resolvedTypeId = processed.categoryTypeId
       || (ctx.categoryTree ? findLeafTypeId(ctx.categoryTree, processed.categoryId) : null)
-      || processed.categoryId;
+      || null; // null = Ozon will auto-select type_id
 
     const draftInput = {
       name: processed.titleRu,

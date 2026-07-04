@@ -1,6 +1,7 @@
 import type { Request, Response, NextFunction } from "express";
 import { logger } from "@onzo/logger";
 import { AppError } from "../errors/index.js";
+import { writeToDeadLetter } from "../services/dead-letter.js";
 
 export interface ApiErrorResponse {
   success: false;
@@ -37,6 +38,15 @@ export function errorHandler(
   }
 
   logger.error({ correlationId, err: { message: err.message, name: err.name, stack: err.stack } }, "Unhandled request error");
+
+  // Write non-AppError failures to dead letter queue for retry
+  if (!(err instanceof AppError)) {
+    writeToDeadLetter({
+      taskType: req.method + " " + req.path,
+      errorMessage: err.message,
+      correlationId,
+    }).catch(() => {});
+  }
 
   const response: ApiErrorResponse = {
     success: false,
