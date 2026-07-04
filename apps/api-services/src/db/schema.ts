@@ -65,6 +65,7 @@ export async function initSchema(db: Database): Promise<void> {
     -- Orders (synced from Ozon FBO/FBS)
     CREATE TABLE IF NOT EXISTS local_orders (
       id TEXT PRIMARY KEY,
+      store_id TEXT NOT NULL DEFAULT 'store_1',
       posting_number TEXT UNIQUE NOT NULL,
       order_id INTEGER NOT NULL,
       status TEXT NOT NULL,
@@ -82,6 +83,7 @@ export async function initSchema(db: Database): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_orders_status ON local_orders(status);
     CREATE INDEX IF NOT EXISTS idx_orders_posting ON local_orders(posting_number);
+    CREATE UNIQUE INDEX IF NOT EXISTS idx_orders_store_order ON local_orders(store_id, order_id);
 
     -- Inventory management
     CREATE TABLE IF NOT EXISTS inventory (

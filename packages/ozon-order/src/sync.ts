@@ -27,6 +27,7 @@ export async function syncOrders(
     since?: string
     until?: string
     client?: OzonOrderClient
+    storeId?: string
     db?: { all: (sql: string, params?: unknown[]) => Promise<Array<Record<string, unknown>>> }
     processPosting?: ProcessPostingFn
     pageSize?: number
@@ -48,16 +49,17 @@ export async function syncOrders(
       if (!postings || postings.length === 0) break
 
       for (const p of postings) {
-        // idempotency check
-        const postingNumber = p.postingNumber
-        const idempotencyKey = `${postingNumber}`
+        // idempotency check by store and order id when possible
+        const postingNumber = p.postingNumber;
+        const idempotencyKey = `${options?.storeId ?? "store_1"}:${p.orderId}`;
         if (options?.db) {
-          const rows = await options.db.all(`SELECT COUNT(*) as cnt FROM local_orders WHERE posting_number = ?`, [postingNumber])
-          if (rows?.[0]?.cnt && rows[0].cnt > 0) continue
+          const storeId = options.storeId ?? "store_1";
+          const rows = await options.db.all(`SELECT COUNT(*) as cnt FROM local_orders WHERE store_id = ? AND order_id = ?`, [storeId, p.orderId]);
+          if (rows?.[0]?.cnt && rows[0].cnt > 0) continue;
         }
 
         if (options?.processPosting) {
-          await options.processPosting(p, { db: options.db, idempotencyKey })
+          await options.processPosting(p, { db: options.db, idempotencyKey, storeId: options?.storeId ?? "store_1" })
         }
 
         localCount++
