@@ -7,6 +7,11 @@
 // ============================================================
 
 import { emitEvent, EVENT_KEYS } from "./notification-events.js";
+import { cache } from "@onzo/cache";
+
+// Cached exchange rate with 1-hour TTL — key prefix isolates from other cache data
+const rateCache = { prefix: "onzo:exchange-rate", defaultTtlMs: 3600_000 };
+const cacheKey = `${rateCache.prefix}:current`;
 
 interface RateCache {
   rate: number;
@@ -14,7 +19,7 @@ interface RateCache {
   source: string;
 }
 
-let cache: RateCache | null = null;
+let localCache: RateCache | null = null;
 const CACHE_TTL_MS = 3600_000; // 1 hour
 const STALE_WARN_MS = 24 * 3600_000; // 24 hours
 const STALE_BLOCK_MS = 48 * 3600_000; // 48 hours — refuse to use
@@ -85,15 +90,28 @@ async function fetchSecondary(): Promise<number | null> {
  */
 export async function getExchangeRate(): Promise<RateResult> {
   // Fast path: fresh cache
-  if (cache && Date.now() - cache.timestamp < CACHE_TTL_MS) {
-    const hoursStale = (Date.now() - cache.timestamp) / 3600_000;
+  if (localCache && Date.now() - localCache.timestamp < CACHE_TTL_MS) {
+    const hoursStale = (Date.now() - localCache.timestamp) / 3600_000;
     return {
-      rate: cache.rate,
+      rate: localCache.rate,
       cached: true,
       stale: hoursStale > 24,
       reliable: hoursStale < 48,
-      source: cache.source,
+      source: localCache.source,
     };
+  }
+
+  // Check Redis cache first
+  const redisCached = await cache.get(cacheKey).catch(() => null);
+  if (redisCached) {
+    try {
+      const parsed = JSON.parse(redisCached) as RateCache;
+      if (Date.now() - parsed.timestamp < CACHE_TTL_MS) {
+        localCache = parsed;
+        const hoursStale = (Date.now() - parsed.timestamp) / 3600_000;
+        return { rate: parsed.rate, cached: true, stale: hoursStale > 24, reliable: hoursStale < 48, source: parsed.source };
+      }
+    } catch { /* corrupted, fall through */ }
   }
 
   // Try primary + secondary in parallel
@@ -110,11 +128,12 @@ export async function getExchangeRate(): Promise<RateResult> {
     if (deviation > MAX_DEVIATION_PCT) {
       console.warn(
         `[ExchangeRate] Dual-source deviation ${deviation.toFixed(1)}% exceeds ${MAX_DEVIATION_PCT}% threshold. ` +
-        `Primary=${primaryRate.toFixed(2)}, Secondary=${secondaryRate.toFixed(2)}. Using average=${avgRate.toFixed(2)} — listing NOT blocked but rate may be inaccurate.`
+        `Primary=${primaryRate.toFixed(2)}, Secondary=${secondaryRate.toFixed(2)}. Using average=${avgRate.toFixed(2)}`
       );
     }
 
-    cache = { rate: avgRate, timestamp: Date.now(), source: `dual:${avgRate}` };
+    localCache = { rate: avgRate, timestamp: Date.now(), source: `dual:${avgRate}` };
+    cache.set(cacheKey, JSON.stringify(localCache), 3600).catch(() => {});
     return { rate: avgRate, cached: false, stale: false, reliable: deviation <= MAX_DEVIATION_PCT, source: "dual" };
   }
 
@@ -124,52 +143,45 @@ export async function getExchangeRate(): Promise<RateResult> {
     const source = primaryRate ? "primary" : "secondary";
 
     console.warn(`[ExchangeRate] Only ${source} source available. Using rate=${rate}.`);
-    cache = { rate, timestamp: Date.now(), source };
-    // Single source is reliable enough if it's the primary
+    localCache = { rate, timestamp: Date.now(), source };
+    cache.set(cacheKey, JSON.stringify(localCache), 3600).catch(() => {});
     return { rate, cached: false, stale: false, reliable: primaryRate !== null, source };
   }
 
   // Both sources failed — evaluate cache freshness
-  if (cache) {
-    const hoursStale = (Date.now() - cache.timestamp) / 3600_000;
+  if (localCache) {
+    const hoursStale = (Date.now() - localCache.timestamp) / 3600_000;
 
     if (hoursStale > STALE_BLOCK_MS) {
       console.error(
-        `[ExchangeRate] BLOCKING: Cache is ${hoursStale.toFixed(0)}h old (>${STALE_BLOCK_MS / 3600_000}h). ` +
-        `Both rate APIs are down. Refusing to list with unreliable rate.`
+        `[ExchangeRate] BLOCKING: Cache is ${hoursStale.toFixed(0)}h old (>${STALE_BLOCK_MS / 3600_000}h).`
       );
       emitEvent(EVENT_KEYS.EXCHANGE_RATE_STALE, {
         hoursStale: hoursStale.toFixed(0),
-        rate: String(cache.rate),
-        source: cache.source,
+        rate: String(localCache.rate),
+        source: localCache.source,
       }).catch(() => {});
       return {
-        rate: cache.rate,
+        rate: localCache.rate,
         cached: true,
         stale: true,
         reliable: false,
-        source: `stale-cache:${cache.rate}`,
+        source: `stale-cache:${localCache.rate}`,
       };
     }
 
-    console.warn(
-      `[ExchangeRate] Using cached rate ${cache.rate} (${hoursStale.toFixed(0)}h old). ` +
-      `Both rate APIs are unreachable.`
-    );
+    console.warn(`[ExchangeRate] Using cached rate ${localCache.rate} (${hoursStale.toFixed(0)}h old).`);
     return {
-      rate: cache.rate,
+      rate: localCache.rate,
       cached: true,
       stale: hoursStale > 24,
       reliable: hoursStale < 48,
-      source: `cached:${cache.rate}`,
+      source: `cached:${localCache.rate}`,
     };
   }
 
   // No cache, no API — hardcoded fallback
-  console.error(
-    `[ExchangeRate] BLOCKING: No cached rate and both APIs failed. ` +
-    `Using hardcoded ${FALLBACK_RATE} — CNY→RUB pricing WILL be wrong.`
-  );
+  console.error(`[ExchangeRate] BLOCKING: No cache and both APIs failed. Using hardcoded ${FALLBACK_RATE}.`);
   return {
     rate: FALLBACK_RATE,
     cached: true,
@@ -183,5 +195,6 @@ export async function getExchangeRate(): Promise<RateResult> {
  * Force refresh the cached rate (admin use).
  */
 export function clearRateCache(): void {
-  cache = null;
+  localCache = null;
+  cache.del(cacheKey).catch(() => {});
 }
