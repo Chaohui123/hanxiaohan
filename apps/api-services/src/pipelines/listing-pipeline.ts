@@ -244,6 +244,7 @@ export function buildProcessedProduct(
   opts: { exchangeRate: number; defaultLength: number; defaultWidth: number; defaultHeight: number; defaultWeight: number }
 ): ProcessedProduct {
   const scraped = ctx.scraped!;
+  // Base price = CNY cost × FX rate × 1.3 markup (matches price-monitor scorer logic)
   const priceRub = Math.round(scraped.price.currentMin * opts.exchangeRate * 1.3);
 
   return {

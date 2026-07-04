@@ -3,13 +3,16 @@
 // ============================================================
 
 import { Router } from "express";
+import { validateBody } from "../middleware/validate.js";
 import { getDb } from "../db/connection.js";
 
 export function createPriceRouter(): Router {
   const router = Router();
 
   // POST /api/price/scan — ingest competitor prices
-  router.post("/price/scan", async (req, res) => {
+  router.post("/price/scan",
+    validateBody([{ field: "prices", type: "array", required: true, min: 1 }]),
+    async (req, res) => {
     const { prices } = req.body as {
       prices: Array<{
         platform: "ozon" | "wildberries";
@@ -60,7 +63,12 @@ export function createPriceRouter(): Router {
   });
 
   // POST /api/price/score — score a product for competitiveness
-  router.post("/price/score", async (req, res) => {
+  router.post("/price/score",
+    validateBody([
+      { field: "ourPriceRub", type: "number", required: true },
+      { field: "competitorPrices", type: "array", required: true, min: 1 },
+    ]),
+    async (req, res) => {
     const { ourPriceRub, competitorPrices, salesSignals, productSku } = req.body as {
       ourPriceRub: number;
       competitorPrices: Array<{ priceRub: number; platform: string }>;

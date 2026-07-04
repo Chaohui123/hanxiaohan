@@ -4,6 +4,7 @@
 
 import { Router } from "express";
 import { OzonOrderClient, syncOrders } from "@onzo/ozon-order";
+import { validateBody } from "../middleware/validate.js";
 import { getDb } from "../db/connection.js";
 import type { LocalOrder, OzonPosting, OzonOrderStatus } from "@onzo/shared-types";
 import type { OzonClient } from "@onzo/ozon-api-wrapper";
@@ -113,7 +114,13 @@ export function createOrderRouter(ozonClient: OzonClient): Router {
   });
 
   // POST /api/orders/ship — mark FBS order as shipped
-  router.post("/orders/ship", async (req, res) => {
+  router.post("/orders/ship",
+    validateBody([
+      { field: "postingNumber", type: "string", required: true },
+      { field: "trackingNumber", type: "string", required: true },
+      { field: "products", type: "array", required: true, min: 1 },
+    ]),
+    async (req, res) => {
     const { postingNumber, trackingNumber, products } = req.body as {
       postingNumber: string; trackingNumber: string; products: Array<{ sku: number; quantity: number }>;
     };

@@ -8,6 +8,7 @@ import type { DeepSeekClient } from "@onzo/glm-integration";
 import type { TranslationResult, CategoryMatchResult, AttributeFillResult, OzonCategoryNode, OzonAttribute } from "@onzo/shared-types";
 import { TRANSLATION_SYSTEM_PROMPT, buildTranslationPrompt } from "@onzo/glm-integration";
 import { CATEGORY_SYSTEM_PROMPT, buildCategoryPrompt, formatCategoryTree } from "@onzo/glm-integration";
+import { logger } from "@onzo/logger";
 
 export class DeepSeekTranslator {
   private client: DeepSeekClient;
@@ -40,7 +41,7 @@ export class DeepSeekTranslator {
       responseFormat: { type: "json_object" },
     });
 
-    console.log("[DeepSeek] Translation response:", response.content.substring(0, 100));
+    logger.info({ preview: response.content.substring(0, 100) }, "Translation response");
     if (response.parsed) return response.parsed;
 
     return {
@@ -68,7 +69,7 @@ export class DeepSeekTranslator {
       responseFormat: { type: "json_object" },
     });
 
-    console.log("[DeepSeek] Category match response content:", response.content.substring(0, 200));
+    logger.info({ preview: response.content.substring(0, 200) }, "Category match response");
     if (response.parsed) {
       console.log("[DeepSeek] Parsed category:", response.parsed.categoryId, response.parsed.categoryName);
 

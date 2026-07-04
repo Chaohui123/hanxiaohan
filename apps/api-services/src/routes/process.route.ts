@@ -35,6 +35,7 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
   const browserPool = new BrowserPool({ maxBrowsers: config.scraper.maxBrowserPool });
   const scraper = new ProductScraper({
     headless: true,
+    dataDir: "./data/browser",
     minDelayMs: config.scraper.requestDelayMin,
     maxDelayMs: config.scraper.requestDelayMax,
   });
@@ -206,7 +207,9 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
   });
 
   // POST /api/process/sync — synchronous version (for direct testing)
-  router.post("/process/sync", async (req, res) => {
+  router.post("/process/sync",
+    validateBody([{ field: "url", type: "string", required: true }]),
+    async (req, res) => {
     const { url: sourceUrl, storeId } = req.body as { url: string; storeId?: string };
 
     if (!sourceUrl) {

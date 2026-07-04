@@ -3,6 +3,7 @@
 // ============================================================
 
 import { Router } from "express";
+import { validateBody } from "../middleware/validate.js";
 import { getDb } from "../db/connection.js";
 import type { OzonCredentials, OzonClientConfig } from "@onzo/shared-types";
 
@@ -40,7 +41,13 @@ export function createStoreRouter(): Router {
   });
 
   // POST /api/stores — add or update a store
-  router.post("/stores", async (req, res) => {
+  router.post("/stores",
+    validateBody([
+      { field: "storeId", type: "string", required: true },
+      { field: "clientId", type: "string", required: true },
+      { field: "apiKey", type: "string", required: true },
+    ]),
+    async (req, res) => {
     const { storeId, clientId, apiKey, storeName, groupName, proxyUrl } = req.body as {
       storeId: string; clientId: string; apiKey: string; storeName?: string; groupName?: string; proxyUrl?: string;
     };
