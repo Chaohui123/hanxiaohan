@@ -44,7 +44,7 @@ export async function runMigrations(db: DbAdapter, migrations: Migration[]): Pro
     console.log(`[Migration] Applying v${migration.version}: ${migration.name}`);
 
     try {
-      await db.run("BEGIN IMMEDIATE");
+      await db.run("BEGIN");
       await db.exec(migration.sql);
       await db.run(
         "INSERT INTO _migrations (version, name) VALUES (?, ?)",
