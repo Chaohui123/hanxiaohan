@@ -105,4 +105,41 @@ export class InventoryManager {
       lastUpdated: (r.updated_at as string) ?? new Date().toISOString(),
     }));
   }
+
+  /**
+   * Sync local inventory stock level back to Ozon warehouse.
+   * Called after local stock changes to keep Ozon in sync.
+   */
+  async syncStockToOzon(offerId: string, sku: number, stock: number): Promise<{ success: boolean; error?: string }> {
+    try {
+      const { getDb } = await import("../db/connection.js");
+      const db = await getDb();
+      if (!db) return { success: false, error: "DB unavailable" };
+
+      const storeRows = await db.all(
+        "SELECT client_id, api_key FROM store_configs WHERE store_id = 'store_1' AND active = 1 LIMIT 1"
+      ) as Array<{ client_id: string; api_key: string }>;
+
+      if (!storeRows.length) return { success: false, error: "No active store credentials configured" };
+
+      const { isEncrypted, decrypt } = await import("./crypto.js");
+      const { AuthManager, OzonClient } = await import("@onzo/ozon-api-wrapper");
+
+      const store = storeRows[0];
+      const apiKey = isEncrypted(store.api_key) ? decrypt(store.api_key) : store.api_key;
+      const auth = new AuthManager({ clients: [{ clientId: store.client_id, apiKey }] });
+      const ozonClient = new OzonClient({ auth });
+
+      // Update Ozon warehouse stock via generic request (POST /v1/warehouse/stock/update)
+      await (ozonClient as { request: (method: string, path: string, body: unknown) => Promise<unknown> }).request(
+        "POST",
+        "/v1/warehouse/stock/update",
+        { stocks: [{ offer_id: offerId, sku, stock }] }
+      );
+
+      return { success: true };
+    } catch (err) {
+      return { success: false, error: (err as Error).message };
+    }
+  }
 }
