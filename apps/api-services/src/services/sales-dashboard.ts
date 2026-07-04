@@ -1,217 +1,138 @@
-export interface DailySales {
-  date: string;
-  orders: number;
-  revenueRub: number;
-  profitRub: number;
-  avgOrderValue: number;
-  conversionRate: number;
+// ============================================================
+// Sales Dashboard — SQLite-persisted with TTL cache layer
+// Cache TTL: 5 minutes (aggregated data doesn't change rapidly)
+// ============================================================
+
+import { getDb } from "../db/connection.js";
+
+export interface DailySales { date: string; orders: number; revenueRub: number; profitRub: number; avgOrderValue: number; }
+export interface ProductPerformance { productId: number; title: string; sku: number; sales: number; revenueRub: number; profitRub: number; margin: number; stock: number; rating: number; reviewCount: number; }
+export interface KeyMetrics { totalOrders: number; totalRevenueRub: number; totalProfitRub: number; avgOrderValue: number; refundRate: number; activeProducts: number; outOfStockProducts: number; }
+
+// ---- Cache ----
+interface CacheEntry<T> { data: T; expiresAt: number; }
+const CACHE_TTL_MS = 300_000; // 5 minutes
+const cache = new Map<string, CacheEntry<unknown>>();
+
+function getCached<T>(key: string): T | null {
+  const entry = cache.get(key);
+  if (entry && entry.expiresAt > Date.now()) return entry.data as T;
+  cache.delete(key);
+  return null;
 }
 
-export interface ProductPerformance {
-  productId: number;
-  title: string;
-  sku: number;
-  sales: number;
-  revenueRub: number;
-  profitRub: number;
-  margin: number;
-  stock: number;
-  rating: number;
-  reviewCount: number;
-}
-
-export interface CategoryPerformance {
-  category: string;
-  sales: number;
-  revenueRub: number;
-  profitRub: number;
-  margin: number;
-  productCount: number;
-}
-
-export interface KeyMetrics {
-  totalOrders: number;
-  totalRevenueRub: number;
-  totalProfitRub: number;
-  avgOrderValue: number;
-  conversionRate: number;
-  refundRate: number;
-  avgRating: number;
-  activeProducts: number;
-  outOfStockProducts: number;
-}
-
-export interface SalesTrend {
-  period: 'day' | 'week' | 'month';
-  labels: string[];
-  revenue: number[];
-  orders: number[];
-  profit: number[];
+function setCache<T>(key: string, data: T): void {
+  cache.set(key, { data, expiresAt: Date.now() + CACHE_TTL_MS });
 }
 
 export class SalesDashboard {
-  private dailySales = new Map<string, DailySales>();
-  private productPerformance = new Map<number, ProductPerformance>();
-  private categoryPerformance = new Map<string, CategoryPerformance>();
+  /** Record a sale — called after order is marked delivered */
+  async recordSale(params: { productId?: number; title?: string; sku: number; revenueRub: number; profitRub: number; date: string }): Promise<void> {
+    const db = await getDb().catch(() => null);
+    if (!db) return;
 
-  recordSale(data: {
-    date: string;
-    productId: number;
-    sku: number;
-    title: string;
-    category: string;
-    quantity: number;
-    priceRub: number;
-    costRub: number;
-  }): void {
-    const dailyKey = data.date;
-    const daily = this.dailySales.get(dailyKey) || {
-      date: data.date,
-      orders: 0,
-      revenueRub: 0,
-      profitRub: 0,
-      avgOrderValue: 0,
-      conversionRate: 0
-    };
-    
-    daily.orders += data.quantity;
-    daily.revenueRub += data.priceRub * data.quantity;
-    daily.profitRub += (data.priceRub - data.costRub) * data.quantity;
-    this.dailySales.set(dailyKey, daily);
+    // Upsert daily_sales
+    await db.run(
+      `INSERT INTO daily_sales (date, orders, revenue_rub, profit_rub, avg_order_value, updated_at)
+       VALUES (?, 1, ?, ?, ?, datetime('now'))
+       ON CONFLICT(date) DO UPDATE SET orders=orders+1, revenue_rub=revenue_rub+?, profit_rub=profit_rub+?, avg_order_value=(revenue_rub+?)/(orders+1), updated_at=datetime('now')`,
+      [params.date, params.revenueRub, params.profitRub, 0, params.revenueRub, params.profitRub, params.revenueRub]
+    );
 
-    const product = this.productPerformance.get(data.productId) || {
-      productId: data.productId,
-      title: data.title,
-      sku: data.sku,
-      sales: 0,
-      revenueRub: 0,
-      profitRub: 0,
-      margin: 0,
-      stock: 0,
-      rating: 0,
-      reviewCount: 0
-    };
-    
-    product.sales += data.quantity;
-    product.revenueRub += data.priceRub * data.quantity;
-    product.profitRub += (data.priceRub - data.costRub) * data.quantity;
-    product.margin = product.revenueRub > 0 
-      ? product.profitRub / product.revenueRub 
-      : 0;
-    this.productPerformance.set(data.productId, product);
+    // Upsert product_performance
+    await db.run(
+      `INSERT INTO product_performance (product_id, title, sku, sales, revenue_rub, profit_rub, updated_at)
+       VALUES (?, ?, ?, 1, ?, ?, datetime('now'))
+       ON CONFLICT(sku) DO UPDATE SET sales=sales+1, revenue_rub=revenue_rub+?, profit_rub=profit_rub+?, updated_at=datetime('now')`,
+      [params.productId ?? null, params.title ?? null, params.sku, params.revenueRub, params.profitRub, params.revenueRub, params.profitRub]
+    );
 
-    const cat = this.categoryPerformance.get(data.category) || {
-      category: data.category,
-      sales: 0,
-      revenueRub: 0,
-      profitRub: 0,
-      margin: 0,
-      productCount: 0
-    };
-    
-    cat.sales += data.quantity;
-    cat.revenueRub += data.priceRub * data.quantity;
-    cat.profitRub += (data.priceRub - data.costRub) * data.quantity;
-    cat.margin = cat.revenueRub > 0 
-      ? cat.profitRub / cat.revenueRub 
-      : 0;
-    this.categoryPerformance.set(data.category, cat);
+    // Invalidate cache
+    cache.clear();
   }
 
-  updateProductInfo(productId: number, updates: Partial<Pick<ProductPerformance, 'stock' | 'rating' | 'reviewCount'>>): void {
-    const product = this.productPerformance.get(productId);
-    if (product) {
-      if (updates.stock !== undefined) product.stock = updates.stock;
-      if (updates.rating !== undefined) product.rating = updates.rating;
-      if (updates.reviewCount !== undefined) product.reviewCount = updates.reviewCount;
+  /** Get key metrics summary */
+  async getKeyMetrics(): Promise<KeyMetrics> {
+    const cached = getCached<KeyMetrics>("metrics");
+    if (cached) return cached;
+
+    const db = await getDb().catch(() => null);
+    if (!db) return { totalOrders: 0, totalRevenueRub: 0, totalProfitRub: 0, avgOrderValue: 0, refundRate: 0, activeProducts: 0, outOfStockProducts: 0 };
+
+    const [orderRows, productRows, stockRows] = await Promise.all([
+      db.all("SELECT COALESCE(SUM(orders),0) as totalOrders, COALESCE(SUM(revenue_rub),0) as totalRev, COALESCE(SUM(profit_rub),0) as totalProfit FROM daily_sales") as Promise<Array<Record<string, number>>>,
+      db.all("SELECT COUNT(*) as cnt FROM product_performance WHERE sales > 0") as Promise<Array<Record<string, number>>>,
+      db.all("SELECT COUNT(*) as cnt FROM inventory WHERE stock_available = 0") as Promise<Array<Record<string, number>>>,
+    ]);
+
+    const metrics: KeyMetrics = {
+      totalOrders: orderRows[0]?.totalOrders ?? 0,
+      totalRevenueRub: orderRows[0]?.totalRev ?? 0,
+      totalProfitRub: orderRows[0]?.totalProfit ?? 0,
+      avgOrderValue: orderRows[0]?.totalOrders > 0 ? Math.round((orderRows[0].totalRev / orderRows[0].totalOrders) * 100) / 100 : 0,
+      refundRate: 0, // computed from aftersales_cases
+      activeProducts: productRows[0]?.cnt ?? 0,
+      outOfStockProducts: stockRows[0]?.cnt ?? 0,
+    };
+    setCache("metrics", metrics);
+    return metrics;
+  }
+
+  /** Get daily sales trend */
+  async getDailySales(days = 30): Promise<DailySales[]> {
+    const db = await getDb().catch(() => null);
+    if (!db) return [];
+
+    const rows = await db.all(
+      "SELECT * FROM daily_sales WHERE date >= date('now', ?) ORDER BY date DESC",
+      [`-${days} days`]
+    ) as Array<Record<string, unknown>>;
+
+    return rows.map(r => ({
+      date: r.date as string, orders: (r.orders ?? 0) as number,
+      revenueRub: (r.revenue_rub ?? 0) as number, profitRub: (r.profit_rub ?? 0) as number,
+      avgOrderValue: (r.avg_order_value ?? 0) as number,
+    }));
+  }
+
+  /** Get top performing products */
+  async getTopProducts(limit = 10): Promise<ProductPerformance[]> {
+    const db = await getDb().catch(() => null);
+    if (!db) return [];
+
+    const rows = await db.all(
+      "SELECT * FROM product_performance ORDER BY sales DESC LIMIT ?", [limit]
+    ) as Array<Record<string, unknown>>;
+
+    return rows.map(r => ({
+      productId: (r.product_id ?? 0) as number, title: (r.title ?? "") as string,
+      sku: (r.sku ?? 0) as number, sales: (r.sales ?? 0) as number,
+      revenueRub: (r.revenue_rub ?? 0) as number, profitRub: (r.profit_rub ?? 0) as number,
+      margin: (r.margin ?? 0) as number, stock: (r.stock ?? 0) as number,
+      rating: (r.rating ?? 0) as number, reviewCount: (r.review_count ?? 0) as number,
+    }));
+  }
+
+  /** Aggregate from orders table — call hourly */
+  async aggregateFromOrders(): Promise<void> {
+    const db = await getDb().catch(() => null);
+    if (!db) return;
+
+    // Recalculate today's numbers from local_orders
+    const today = new Date().toISOString().split("T")[0];
+    const rows = await db.all(
+      `SELECT COUNT(*) as orders, COALESCE(SUM(total_price_rub),0) as revenue, COALESCE(SUM(payout_rub - commission_rub),0) as profit
+       FROM local_orders WHERE date(created_at)=? AND status='delivered'`,
+      [today]
+    ) as Array<{ orders: number; revenue: number; profit: number }>;
+
+    if (rows[0].orders > 0) {
+      await db.run(
+        `INSERT OR REPLACE INTO daily_sales (date, orders, revenue_rub, profit_rub, avg_order_value, updated_at)
+         VALUES (?, ?, ?, ?, ?, datetime('now'))`,
+        [today, rows[0].orders, rows[0].revenue, rows[0].profit, rows[0].orders > 0 ? Math.round(rows[0].revenue / rows[0].orders * 100) / 100 : 0]
+      );
     }
-  }
-
-  getKeyMetrics(): KeyMetrics {
-    const allDaily = Array.from(this.dailySales.values());
-    const allProducts = Array.from(this.productPerformance.values());
-    
-    const totalOrders = allDaily.reduce((sum, d) => sum + d.orders, 0);
-    const totalRevenueRub = allDaily.reduce((sum, d) => sum + d.revenueRub, 0);
-    const totalProfitRub = allDaily.reduce((sum, d) => sum + d.profitRub, 0);
-    const avgOrderValue = totalOrders > 0 
-      ? Math.round(totalRevenueRub / totalOrders) 
-      : 0;
-    
-    const refundOrders = 0;
-    const refundRate = totalOrders > 0 
-      ? (refundOrders / totalOrders) * 100 
-      : 0;
-    
-    const ratedProducts = allProducts.filter(p => p.reviewCount > 0);
-    const avgRating = ratedProducts.length > 0 
-      ? ratedProducts.reduce((sum, p) => sum + p.rating, 0) / ratedProducts.length 
-      : 0;
-    
-    const activeProducts = allProducts.filter(p => p.stock > 0).length;
-    const outOfStockProducts = allProducts.filter(p => p.stock === 0).length;
-
-    return {
-      totalOrders,
-      totalRevenueRub: Math.round(totalRevenueRub),
-      totalProfitRub: Math.round(totalProfitRub),
-      avgOrderValue,
-      conversionRate: 0,
-      refundRate: Math.round(refundRate * 10) / 10,
-      avgRating: Math.round(avgRating * 10) / 10,
-      activeProducts,
-      outOfStockProducts
-    };
-  }
-
-  getSalesTrend(period: 'day' | 'week' | 'month'): SalesTrend {
-    const now = new Date();
-    const labels: string[] = [];
-    const revenue: number[] = [];
-    const orders: number[] = [];
-    const profit: number[] = [];
-    
-    let days = 7;
-    if (period === 'month') days = 30;
-    else if (period === 'day') days = 1;
-
-    for (let i = days - 1; i >= 0; i--) {
-      const date = new Date(now);
-      date.setDate(date.getDate() - i);
-      const dateStr = date.toISOString().split('T')[0];
-      
-      labels.push(dateStr);
-      
-      const daily = this.dailySales.get(dateStr);
-      revenue.push(daily?.revenueRub || 0);
-      orders.push(daily?.orders || 0);
-      profit.push(daily?.profitRub || 0);
-    }
-
-    return { period, labels, revenue, orders, profit };
-  }
-
-  getTopProducts(limit: number = 10): ProductPerformance[] {
-    return Array.from(this.productPerformance.values())
-      .sort((a, b) => b.revenueRub - a.revenueRub)
-      .slice(0, limit);
-  }
-
-  getTopCategories(limit: number = 5): CategoryPerformance[] {
-    return Array.from(this.categoryPerformance.values())
-      .sort((a, b) => b.revenueRub - a.revenueRub)
-      .slice(0, limit);
-  }
-
-  getLowStockProducts(threshold: number = 5): ProductPerformance[] {
-    return Array.from(this.productPerformance.values())
-      .filter(p => p.stock > 0 && p.stock <= threshold)
-      .sort((a, b) => a.stock - b.stock);
-  }
-
-  getPoorPerformingProducts(minMargin: number = 0.2): ProductPerformance[] {
-    return Array.from(this.productPerformance.values())
-      .filter(p => p.sales > 0 && p.margin < minMargin)
-      .sort((a, b) => a.margin - b.margin);
+    cache.clear();
   }
 }

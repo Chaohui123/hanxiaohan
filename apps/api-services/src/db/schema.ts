@@ -148,6 +148,69 @@ export async function initSchema(db: Database): Promise<void> {
       fetched_at TEXT NOT NULL,
       ttl_hours INTEGER NOT NULL DEFAULT 24
     );
+
+    -- Stock alerts
+    CREATE TABLE IF NOT EXISTS stock_alerts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      sku INTEGER NOT NULL,
+      offer_id TEXT NOT NULL,
+      alert_level TEXT NOT NULL,
+      current_stock INTEGER DEFAULT 0,
+      safety_stock INTEGER DEFAULT 5,
+      suggested_order_qty INTEGER DEFAULT 0,
+      resolved INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      resolved_at TEXT
+    );
+
+    -- Aftersales cases
+    CREATE TABLE IF NOT EXISTS aftersales_cases (
+      id TEXT PRIMARY KEY,
+      order_id TEXT NOT NULL,
+      posting_number TEXT NOT NULL,
+      type TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'pending',
+      reason TEXT DEFAULT 'other',
+      description TEXT,
+      buyer_name TEXT,
+      buyer_message TEXT,
+      refund_amount_rub REAL,
+      resolution_note TEXT,
+      attachments_json TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_aftersales_status ON aftersales_cases(status);
+    CREATE INDEX IF NOT EXISTS idx_aftersales_posting ON aftersales_cases(posting_number);
+
+    -- Daily sales aggregation
+    CREATE TABLE IF NOT EXISTS daily_sales (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      date TEXT UNIQUE NOT NULL,
+      orders INTEGER DEFAULT 0,
+      revenue_rub REAL DEFAULT 0,
+      profit_rub REAL DEFAULT 0,
+      avg_order_value REAL DEFAULT 0,
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_daily_sales_date ON daily_sales(date);
+
+    -- Product performance
+    CREATE TABLE IF NOT EXISTS product_performance (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      product_id INTEGER,
+      title TEXT,
+      sku INTEGER NOT NULL,
+      sales INTEGER DEFAULT 0,
+      revenue_rub REAL DEFAULT 0,
+      profit_rub REAL DEFAULT 0,
+      margin REAL DEFAULT 0,
+      stock INTEGER DEFAULT 0,
+      rating REAL DEFAULT 0,
+      review_count INTEGER DEFAULT 0,
+      updated_at TEXT DEFAULT (datetime('now'))
+    );
+    CREATE INDEX IF NOT EXISTS idx_product_perf_sku ON product_performance(sku);
   `);
 }
 

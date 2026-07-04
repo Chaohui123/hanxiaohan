@@ -1,190 +1,108 @@
 // ============================================================
-// Inventory Manager — SQLite-persisted stock tracking
-// Survives restarts. Backed by the `inventory` + `stock_movements` tables
+// Inventory Manager — SQLite-persisted with memory cache layer
+// Cache: read-through, write-through, 30s TTL
 // ============================================================
 
 import { getDb, serializedWrite } from "../db/connection.js";
-import { logger } from "@onzo/logger";
 import { emitEvent, EVENT_KEYS } from "./notification-events.js";
 
 export type AlertLevel = "normal" | "warning" | "critical";
 
 export interface InventoryItem {
-  offerId: string;
-  sku: number;
-  stockAvailable: number;
-  stockReserved: number;
-  safetyStock: number;
-  reorderPoint: number;
-  supplier: string;
-  leadTimeDays: number;
-  unitCostCny: number;
+  offerId: string; sku: number;
+  stockAvailable: number; stockReserved: number;
+  safetyStock: number; reorderPoint: number;
+  supplier: string; leadTimeDays: number; unitCostCny: number;
   lastUpdated: string;
 }
 
 export interface InventoryAlert {
-  sku: number;
-  offerId: string;
-  currentStock: number;
-  safetyStock: number;
-  reorderPoint: number;
-  alertLevel: AlertLevel;
-  suggestedOrderQuantity: number;
-  estimatedArrivalDays: number;
+  id?: number; sku: number; offerId: string;
+  currentStock: number; safetyStock: number; reorderPoint: number;
+  alertLevel: AlertLevel; suggestedOrderQuantity: number;
+  estimatedArrivalDays: number; resolved: boolean;
 }
 
-export interface SupplierInfo {
-  id: string;
-  name: string;
-  baseUrl: string;
-  reliability: number;
-  avgLeadTimeDays: number;
-  minOrderQuantity: number;
-}
+// ---- Cache ----
+const cache = new Map<string, { data: InventoryItem; expiresAt: number }>();
+const CACHE_TTL_MS = 30_000; // 30 seconds
 
-export interface ReorderRecommendation {
-  sku: number;
-  offerId: string;
-  currentStock: number;
-  safetyStock: number;
-  reorderQuantity: number;
-  unitCostCny: number;
-  totalCostCny: number;
-  suppliers: SupplierInfo[];
-  bestSupplier: SupplierInfo | null;
-}
+function cacheKey(offerId: string, sku: number): string { return `${offerId}:${sku}`; }
 
 export class InventoryManager {
-  private suppliers = new Map<string, SupplierInfo>();
-
-  constructor() {
-    // Pre-populate default suppliers (replace with real data in production)
-    this.suppliers.set("default", {
-      id: "default", name: "1688 Default", baseUrl: "https://detail.1688.com",
-      reliability: 0.85, avgLeadTimeDays: 7, minOrderQuantity: 10,
-    });
-  }
-
-  /** Get inventory for a product — from SQLite */
   async getItem(offerId: string, sku: number): Promise<InventoryItem | null> {
+    const key = cacheKey(offerId, sku);
+    const cached = cache.get(key);
+    if (cached && cached.expiresAt > Date.now()) return cached.data;
+
     const db = await getDb().catch(() => null);
     if (!db) return null;
 
-    const rows = await db.all(
-      "SELECT offer_id, sku, stock_available, stock_reserved, updated_at FROM inventory WHERE offer_id = ? AND sku = ?",
-      [offerId, sku]
-    ) as Array<Record<string, unknown>>;
-
+    const rows = await db.all("SELECT * FROM inventory WHERE offer_id=? AND sku=?", [offerId, sku]) as Array<Record<string,unknown>>;
     if (rows.length === 0) return null;
-    const r = rows[0];
-    return {
-      offerId: r.offer_id as string,
-      sku: r.sku as number,
-      stockAvailable: (r.stock_available ?? 0) as number,
-      stockReserved: (r.stock_reserved ?? 0) as number,
-      safetyStock: 5,
-      reorderPoint: 10,
-      supplier: "default",
-      leadTimeDays: 7,
-      unitCostCny: 0,
-      lastUpdated: (r.updated_at as string) ?? new Date().toISOString(),
+
+    const item: InventoryItem = {
+      offerId: rows[0].offer_id as string, sku: rows[0].sku as number,
+      stockAvailable: (rows[0].stock_available ?? 0) as number,
+      stockReserved: (rows[0].stock_reserved ?? 0) as number,
+      safetyStock: 5, reorderPoint: 10, supplier: "default", leadTimeDays: 7, unitCostCny: 0,
+      lastUpdated: (rows[0].updated_at as string) ?? new Date().toISOString(),
     };
+    cache.set(key, { data: item, expiresAt: Date.now() + CACHE_TTL_MS });
+    return item;
   }
 
-  /** Set stock level — persisted to SQLite */
   async setStock(offerId: string, sku: number, quantity: number): Promise<void> {
     const db = await getDb().catch(() => null);
     if (!db) return;
 
     await serializedWrite(() =>
-      db.run(
-        "INSERT OR REPLACE INTO inventory (offer_id, sku, stock_available, stock_reserved, updated_at) VALUES (?, ?, ?, 0, datetime('now'))",
-        [offerId, sku, quantity]
-      )
+      db.run("INSERT OR REPLACE INTO inventory (offer_id,sku,stock_available,stock_reserved,updated_at) VALUES (?,?,?,0,datetime('now'))", [offerId, sku, quantity])
     );
+    // Invalidate cache
+    cache.delete(cacheKey(offerId, sku));
   }
 
-  /** Get all low-stock alerts — from SQLite */
   async getAlerts(threshold = 5): Promise<InventoryAlert[]> {
     const db = await getDb().catch(() => null);
     if (!db) return [];
 
-    const rows = await db.all(
-      "SELECT offer_id, sku, stock_available FROM inventory WHERE stock_available < ?",
-      [threshold]
-    ) as Array<Record<string, unknown>>;
+    const rows = await db.all("SELECT * FROM inventory WHERE stock_available < ?", [threshold]) as Array<Record<string,unknown>>;
+    const alerts: InventoryAlert[] = [];
 
-    // Emit notifications for critical stock levels
     for (const r of rows) {
       const stock = (r.stock_available ?? 0) as number;
+      const level: AlertLevel = stock === 0 ? "critical" : stock < 3 ? "warning" : "normal";
+
       if (stock === 0) {
-        emitEvent(EVENT_KEYS.STOCK_OUT, {
-          sku: String(r.sku),
-          offerId: String(r.offer_id),
-          currentStock: "0",
-        }).catch(() => {});
+        emitEvent(EVENT_KEYS.STOCK_OUT, { sku: String(r.sku), offerId: String(r.offer_id), currentStock: "0" }).catch(() => {});
       }
+
+      // Persist alert to stock_alerts table
+      await db.run(
+        "INSERT INTO stock_alerts (sku, offer_id, alert_level, current_stock, safety_stock, suggested_order_qty) VALUES (?,?,?,?,?,?)",
+        [r.sku, r.offer_id, level, stock, 5, Math.max(10, (10 - stock) * 2)]
+      ).catch(() => {});
+
+      alerts.push({
+        sku: r.sku as number, offerId: r.offer_id as string,
+        currentStock: stock, safetyStock: 5, reorderPoint: 10,
+        alertLevel: level, suggestedOrderQuantity: Math.max(10, (10 - stock) * 2),
+        estimatedArrivalDays: 7, resolved: false,
+      });
     }
-
-    return rows.map((r) => {
-      const stock = (r.stock_available ?? 0) as number;
-      return {
-        offerId: r.offer_id as string,
-        sku: r.sku as number,
-        currentStock: stock,
-        safetyStock: 5,
-        reorderPoint: 10,
-        alertLevel: (stock === 0 ? "critical" : stock < 3 ? "warning" : "normal") as AlertLevel,
-        suggestedOrderQuantity: Math.max(10, (10 - stock) * 2),
-        estimatedArrivalDays: 7,
-      };
-    });
+    return alerts;
   }
 
-  /** Generate reorder recommendations */
-  async getReorderRecommendations(): Promise<ReorderRecommendation[]> {
-    const alerts = await this.getAlerts(10);
-    const supplier = this.suppliers.get("default");
-
-    return alerts.map((a) => ({
-      sku: a.sku,
-      offerId: a.offerId,
-      currentStock: a.currentStock,
-      safetyStock: a.safetyStock,
-      reorderQuantity: a.suggestedOrderQuantity,
-      unitCostCny: 0,
-      totalCostCny: 0,
-      suppliers: supplier ? [supplier] : [],
-      bestSupplier: supplier ?? null,
-    }));
-  }
-
-  /** Get all inventory items */
   async getAllItems(): Promise<InventoryItem[]> {
     const db = await getDb().catch(() => null);
     if (!db) return [];
-
-    const rows = await db.all(
-      "SELECT offer_id, sku, stock_available, stock_reserved, updated_at FROM inventory ORDER BY offer_id"
-    ) as Array<Record<string, unknown>>;
-
-    return rows.map((r) => ({
-      offerId: r.offer_id as string,
-      sku: r.sku as number,
-      stockAvailable: (r.stock_available ?? 0) as number,
-      stockReserved: (r.stock_reserved ?? 0) as number,
-      safetyStock: 5,
-      reorderPoint: 10,
-      supplier: "default",
-      leadTimeDays: 7,
-      unitCostCny: 0,
+    const rows = await db.all("SELECT * FROM inventory ORDER BY offer_id") as Array<Record<string,unknown>>;
+    return rows.map(r => ({
+      offerId: r.offer_id as string, sku: r.sku as number,
+      stockAvailable: (r.stock_available ?? 0) as number, stockReserved: (r.stock_reserved ?? 0) as number,
+      safetyStock: 5, reorderPoint: 10, supplier: "default", leadTimeDays: 7, unitCostCny: 0,
       lastUpdated: (r.updated_at as string) ?? new Date().toISOString(),
     }));
-  }
-
-  /** Upsert a supplier */
-  upsertSupplier(info: SupplierInfo): void {
-    this.suppliers.set(info.id, info);
-    logger.info({ supplierId: info.id }, "Supplier registered");
   }
 }

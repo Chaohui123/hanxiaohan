@@ -69,3 +69,62 @@ export const storeConfigs = sqliteTable("store_configs", {
   active: integer("active").default(1),
   createdAt: text("created_at").default("(datetime('now'))"),
 });
+
+// ---- Stock Alerts (persisted inventory warnings) ----
+export const stockAlerts = sqliteTable("stock_alerts", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  sku: integer("sku").notNull(),
+  offerId: text("offer_id").notNull(),
+  alertLevel: text("alert_level").notNull(), // normal | warning | critical
+  currentStock: integer("current_stock").notNull().default(0),
+  safetyStock: integer("safety_stock").notNull().default(5),
+  suggestedOrderQty: integer("suggested_order_qty").default(0),
+  resolved: integer("resolved").default(0), // 0=open, 1=resolved
+  createdAt: text("created_at").default("(datetime('now'))"),
+  resolvedAt: text("resolved_at"),
+});
+
+// ---- Aftersales Cases ----
+export const aftersalesCases = sqliteTable("aftersales_cases", {
+  id: text("id").primaryKey(),
+  orderId: text("order_id").notNull(),
+  postingNumber: text("posting_number").notNull(),
+  type: text("type").notNull(), // refund | return | exchange | complaint | question
+  status: text("status").notNull().default("pending"), // pending | processing | resolved | rejected
+  reason: text("reason").notNull().default("other"),
+  description: text("description"),
+  buyerName: text("buyer_name"),
+  buyerMessage: text("buyer_message"),
+  refundAmountRub: real("refund_amount_rub"),
+  resolutionNote: text("resolution_note"),
+  attachmentsJson: text("attachments_json"),
+  createdAt: text("created_at").default("(datetime('now'))"),
+  updatedAt: text("updated_at").default("(datetime('now'))"),
+});
+
+// ---- Daily Sales Aggregation ----
+export const dailySales = sqliteTable("daily_sales", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  date: text("date").notNull().unique(),
+  orders: integer("orders").notNull().default(0),
+  revenueRub: real("revenue_rub").notNull().default(0),
+  profitRub: real("profit_rub").notNull().default(0),
+  avgOrderValue: real("avg_order_value").default(0),
+  updatedAt: text("updated_at").default("(datetime('now'))"),
+});
+
+// ---- Product Performance ----
+export const productPerformance = sqliteTable("product_performance", {
+  id: integer("id").primaryKey({ autoIncrement: true }),
+  productId: integer("product_id"),
+  title: text("title"),
+  sku: integer("sku").notNull(),
+  sales: integer("sales").notNull().default(0),
+  revenueRub: real("revenue_rub").notNull().default(0),
+  profitRub: real("profit_rub").notNull().default(0),
+  margin: real("margin").default(0),
+  stock: integer("stock").default(0),
+  rating: real("rating").default(0),
+  reviewCount: integer("review_count").default(0),
+  updatedAt: text("updated_at").default("(datetime('now'))"),
+});
