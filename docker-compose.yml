@@ -2,9 +2,11 @@ version: '3.8'
 
 # ============================================================
 # ONZO Production Docker Compose
-# Start: docker compose --env-file .env.production up -d
-# Stop:  docker compose down
-# Logs:  docker compose logs -f api-services
+# Start (full stack):  docker compose --profile production --env-file .env.production up -d
+# Start (standalone):  docker compose --profile standalone --env-file .env.production up -d
+# Dev (hot reload):    docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile standalone up -d
+# Stop:                docker compose down
+# Logs:                docker compose logs -f api-services
 # ============================================================
 
 services:
@@ -19,6 +21,12 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-onzo_prod}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-onzo}"]
       interval: 10s
@@ -41,9 +49,15 @@ services:
     image: redis:7-alpine
     container_name: onzo-redis
     restart: unless-stopped
-    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes
+    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes --maxmemory 64mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
@@ -62,6 +76,9 @@ services:
       - production
 
   # ---- ONZO API Services (core) ----
+  # Profiles:
+  #   standalone: runs without PG/Redis (graceful degradation via getDb() catch)
+  #   production: full stack with health-checked PG/Redis dependencies
   api-services:
     build:
       context: .
@@ -80,6 +97,19 @@ services:
       - app_data:/app/data
     ports:
       - "3000:3000"
+    depends_on:
+      postgres:
+        condition: service_started
+        required: false
+      redis:
+        condition: service_started
+        required: false
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+        reservations:
+          memory: 512M
     healthcheck:
       test: ["CMD-SHELL", "wget -qO- http://localhost:3000/health || exit 1"]
       interval: 30s
@@ -93,6 +123,10 @@ services:
         max-file: "10"
     networks:
       - onzo-network
+    profiles:
+      - standalone
+      - production
+      - full
 
   # ---- Web Dashboard (React frontend) ----
   web-dashboard:
@@ -106,11 +140,48 @@ services:
     depends_on:
       api-services:
         condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 64M
     networks:
       - onzo-network
     profiles:
       - full
       - production
+
+  # ---- Ops Agent (AI-powered operations bot) ----
+  ops-agent:
+    build:
+      context: .
+      dockerfile: docker/ops-agent/Dockerfile
+    container_name: onzo-ops-agent
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      - API_BASE_URL=http://api-services:3000
+    depends_on:
+      api-services:
+        condition: service_healthy
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 64M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+    networks:
+      - onzo-network
+    profiles:
+      - production
+      - full
 
   # ---- Caddy HTTPS Reverse Proxy (production) ----
   caddy:
@@ -129,6 +200,12 @@ services:
       - caddy_config:/config
     environment:
       - CADDY_DOMAIN=${CADDY_DOMAIN:-localhost}
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+        reservations:
+          memory: 32M
     logging:
       driver: "json-file"
       options:
@@ -161,11 +238,35 @@ volumes:
   grafana_data:
     driver: local
 
+  # ---- Alertmanager ----
+  alertmanager:
+    image: prom/alertmanager:latest
+    container_name: onzo-alertmanager
+    restart: unless-stopped
+    command:
+      - "--config.file=/etc/alertmanager/alertmanager.yml"
+      - "--storage.path=/alertmanager"
+    volumes:
+      - ./docker/alertmanager/alertmanager.yml:/etc/alertmanager/alertmanager.yml:ro
+    ports:
+      - "9093:9093"
+    networks:
+      - onzo-network
+    profiles:
+      - monitoring
+      - full
+
   # ---- Prometheus Metrics ----
   prometheus:
     image: prom/prometheus:latest
     container_name: onzo-prometheus
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
     command:
       - "--config.file=/etc/prometheus/prometheus.yml"
       - "--storage.tsdb.path=/prometheus"
@@ -186,6 +287,12 @@ volumes:
     image: grafana/grafana:latest
     container_name: onzo-grafana
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+        reservations:
+          memory: 128M
     environment:
       - GF_SECURITY_ADMIN_USER=admin
       - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-onzo2026}
@@ -207,6 +314,12 @@ volumes:
     image: jaegertracing/all-in-one:latest
     container_name: onzo-jaeger
     restart: unless-stopped
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 256M
     environment:
       - COLLECTOR_OTLP_ENABLED=true
     ports:
