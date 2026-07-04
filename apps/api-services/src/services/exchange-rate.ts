@@ -9,9 +9,8 @@
 import { emitEvent, EVENT_KEYS } from "./notification-events.js";
 import { cache } from "@onzo/cache";
 
-// Cached exchange rate with 1-hour TTL — key prefix isolates from other cache data
-const rateCache = { prefix: "onzo:exchange-rate", defaultTtlMs: 3600_000 };
-const cacheKey = `${rateCache.prefix}:current`;
+// Redis cache key — stores JSON: { rate, timestamp, source } with 1h TTL
+const CACHE_KEY = "onzo:exchange-rate:latest";
 
 interface RateCache {
   rate: number;
@@ -89,7 +88,20 @@ async function fetchSecondary(): Promise<number | null> {
  * - Hardcoded fallback 11.5 → reliable=false, BLOCK listing
  */
 export async function getExchangeRate(): Promise<RateResult> {
-  // Fast path: fresh cache
+  // 1. Redis cache (primary — shared across processes)
+  const redisCached = await cache.get(CACHE_KEY).catch(() => null);
+  if (redisCached) {
+    try {
+      const parsed = JSON.parse(redisCached) as RateCache;
+      if (Date.now() - parsed.timestamp < CACHE_TTL_MS) {
+        localCache = parsed;
+        const hoursStale = (Date.now() - parsed.timestamp) / 3600_000;
+        return { rate: parsed.rate, cached: true, stale: hoursStale > 24, reliable: hoursStale < 48, source: parsed.source };
+      }
+    } catch { /* corrupted */ }
+  }
+
+  // 2. Memory fallback (survives Redis restart)
   if (localCache && Date.now() - localCache.timestamp < CACHE_TTL_MS) {
     const hoursStale = (Date.now() - localCache.timestamp) / 3600_000;
     return {
@@ -99,19 +111,6 @@ export async function getExchangeRate(): Promise<RateResult> {
       reliable: hoursStale < 48,
       source: localCache.source,
     };
-  }
-
-  // Check Redis cache first
-  const redisCached = await cache.get(cacheKey).catch(() => null);
-  if (redisCached) {
-    try {
-      const parsed = JSON.parse(redisCached) as RateCache;
-      if (Date.now() - parsed.timestamp < CACHE_TTL_MS) {
-        localCache = parsed;
-        const hoursStale = (Date.now() - parsed.timestamp) / 3600_000;
-        return { rate: parsed.rate, cached: true, stale: hoursStale > 24, reliable: hoursStale < 48, source: parsed.source };
-      }
-    } catch { /* corrupted, fall through */ }
   }
 
   // Try primary + secondary in parallel
@@ -133,7 +132,7 @@ export async function getExchangeRate(): Promise<RateResult> {
     }
 
     localCache = { rate: avgRate, timestamp: Date.now(), source: `dual:${avgRate}` };
-    cache.set(cacheKey, JSON.stringify(localCache), 3600).catch(() => {});
+    cache.set(CACHE_KEY, JSON.stringify(localCache), 3600).catch(() => {});
     return { rate: avgRate, cached: false, stale: false, reliable: deviation <= MAX_DEVIATION_PCT, source: "dual" };
   }
 
@@ -144,7 +143,7 @@ export async function getExchangeRate(): Promise<RateResult> {
 
     console.warn(`[ExchangeRate] Only ${source} source available. Using rate=${rate}.`);
     localCache = { rate, timestamp: Date.now(), source };
-    cache.set(cacheKey, JSON.stringify(localCache), 3600).catch(() => {});
+    cache.set(CACHE_KEY, JSON.stringify(localCache), 3600).catch(() => {});
     return { rate, cached: false, stale: false, reliable: primaryRate !== null, source };
   }
 
@@ -192,9 +191,10 @@ export async function getExchangeRate(): Promise<RateResult> {
 }
 
 /**
- * Force refresh the cached rate (admin use).
+ * Force refresh — clears both Redis and memory cache.
+ * Next getExchangeRate() call will re-fetch from API.
  */
-export function clearRateCache(): void {
+export function forceRefreshRate(): void {
   localCache = null;
-  cache.del(cacheKey).catch(() => {});
+  cache.del(CACHE_KEY).catch(() => {});
 }
