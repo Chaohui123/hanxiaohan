@@ -75,6 +75,21 @@ export async function aiDiagnose(config: ApiConfig, rawData: string): Promise<st
     const content = data.choices?.[0]?.message?.content || "AI 诊断返回空内容";
     const tokens = data.usage?.total_tokens || 0;
 
+    // RAG 写回：记录诊断结果
+    fetch(`${config.apiBase}/api/rag/playbook`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-Key": config.apiKey },
+      body: JSON.stringify({
+        title: `AI 诊断: ${rawData.slice(0, 50)}`,
+        scenario: "diagnosis",
+        content: `诊断结果:\n${content.slice(0, 500)}`,
+        tags: ["诊断", "AI"],
+        author: "ai-diagnose",
+        priority: 1,
+      }),
+      signal: AbortSignal.timeout(3_000),
+    }).catch(() => {});
+
     return `🤖 AI 诊断报告\n\n${content}\n\n---\nAI 诊断 | ${tokens} tokens`;
   } catch (err) {
     return `❌ AI 诊断失败: ${(err as Error).message}`;

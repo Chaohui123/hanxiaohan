@@ -71,6 +71,23 @@ export async function crossValidate(
     "Cross-validation complete",
   );
 
+  // RAG 写回：验证失败时记录到 Playbook
+  if (!passed) {
+    fetch(`${config.apiBase}/api/rag/playbook`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-Key": config.apiKey },
+      body: JSON.stringify({
+        title: `交叉验证失败: ${issues.join(", ")}`,
+        scenario: "ops",
+        content: `验证项:\n- 系统健康: ${systemHealthy.value}\n- API延迟: ${apiLatencyOk.value}\n- 活跃事件: ${noActiveIncidents.value}\n- 预算: ${budgetRemaining.value}\n- 限额: ${dailyLimitNotReached.value}\n\n问题:\n${issues.join("\n")}`,
+        tags: ["验证", "失败"],
+        author: "cross-validator",
+        priority: 1,
+      }),
+      signal: AbortSignal.timeout(3_000),
+    }).catch(() => {});
+  }
+
   return {
     systemHealthy: systemHealthy.value,
     apiLatencyOk: apiLatencyOk.value,

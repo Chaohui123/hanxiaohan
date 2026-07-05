@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// Mock global fetch for RAG write-back calls
+global.fetch = vi.fn().mockResolvedValue({ ok: false }) as unknown as typeof fetch;
+
 // Mock the API client before importing the module under test
 vi.mock("../src/api-client.js", () => ({
   opsApi: {

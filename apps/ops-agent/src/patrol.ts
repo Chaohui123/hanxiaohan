@@ -98,6 +98,21 @@ export async function runPatrolCheck(
 
       await bot.sendMessage(config.chatId, alertMsg);
 
+      // RAG 写回：记录巡检异常
+      fetch(`${config.apiBase}/api/rag/playbook`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-API-Key": config.apiKey },
+        body: JSON.stringify({
+          title: `巡检异常: ${failedNames}`,
+          scenario: "ops",
+          content: `状态变更: ${lastStatus} → ${currentStatus}\n失败组件: ${failedNames}\n${failedChecks}`,
+          tags: ["巡检", "异常"],
+          author: "patrol",
+          priority: 1,
+        }),
+        signal: AbortSignal.timeout(3_000),
+      }).catch(() => {});
+
       // Run AI diagnosis on failure
       const diagnoseData = await apiClient.diagnose(config).catch(() => null);
       if (diagnoseData) {
