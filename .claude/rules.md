@@ -37,15 +37,15 @@
 ## 分阶段允许/禁止清单（Phase1 / Phase2 / Phase3）
 
 - Phase1 (必须遵守，当前开发优先级):
-  - 禁止：Python、LangGraph/LangChain、Qdrant/RAG、Redis/MQ/Kafka、未经审计的影刀RPA、分布式多机部署
+  - 禁止：Python、LangGraph/LangChain、Qdrant独立向量库（已有pgvector替代）、Redis/MQ/Kafka、未经审计的影刀RPA、分布式多机部署
   - 允许：TypeScript/Node.js、pnpm monorepo、Express、Playwright、better-sqlite3 + Drizzle、单机 Docker + n8n
 
 - Phase2 (受控评估后可引入):
-  - 允许（受审批）：影刀RPA 兜底通道（仅在 API 熔断情形并经安全审计）、有限度的 RAG/Qdrant 用于非关键信息检索、多店铺风控策略的配置框架
+  - 允许（受审批）：影刀RPA 兜底通道（仅在 API 熔断情形并经安全审计）、RAG知识库扩展（pgvector已上线，可增量添加新知识域）、多店铺风控策略的配置框架
   - 仍禁止：未审计的第三方复杂 Agent 框架、生产环境下的分布式数据库替换（需满足运维/安全评估）
 
 - Phase3 (长期规划与扩展):
-  - 允许：Qdrant 向量库、LangGraph/复杂 Agent 框架、PostgreSQL 分布式部署（当达到 ≥10 店并通过安全与成本审查）
+  - 允许：Qdrant 向量库（备选，pgvector已为首选）、LangGraph/复杂 Agent 框架、PostgreSQL 分布式部署（当达到 ≥10 店并通过安全与成本审查）
 
 说明：`docs/architecture.md` 中的 P2/P3 方案为长期架构目标；但当前仓库硬性约束以本文件为准（Phase1 禁止项为强制规则）。在推进 Phase2/3 的任何改变前，请提交 PR 并完成安全、成本与隐私评估。
 
@@ -116,7 +116,7 @@
 1. 调用大模型分层规则：视觉OCR固定 glm-4.6v-flash；上架翻译/类目匹配使用 deepseek-v4-flash；仅多竞品深度比价允许 deepseek-v4-pro；
 2. 所有密钥、接口地址、模型名称、并发参数统一读取项目根.env，通过packages/ai/src/config.ts统一导出，禁止硬编码sk密钥、URL、模型名；
 3. 代码必须完整TS类型，复用shared-types内定义，拒绝any；全部外部API增加重试、异常捕获、限流逻辑；
-4. 严格遵守Phase1约束：不引入Python、LangGraph、Qdrant、Redis、影刀RPA、分布式集群；仅单机Docker+SQLite单店架构；
+4. 严格遵守Phase1约束：不引入Python、LangGraph、Qdrant独立向量库、Redis、影刀RPA、分布式集群；仅单机Docker+SQLite单店架构；RAG知识库已通过pgvector上线，所有Agent必须引用；
 5. 代码按Monorepo分包输出，存放路径匹配项目目录结构，支持Vitest单元测试扩展。
 
 # 安全与边界强制审查规范
