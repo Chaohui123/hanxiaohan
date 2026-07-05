@@ -45,7 +45,7 @@
   - 仍禁止：未审计的第三方复杂 Agent 框架、生产环境下的分布式数据库替换（需满足运维/安全评估）
 
 - Phase3 (长期规划与扩展):
-  - 允许：Qdrant 向量库（备选，pgvector已为首选）、LangGraph/复杂 Agent 框架、PostgreSQL 分布式部署（当达到 ≥10 店并通过安全与成本审查）
+  - 允许：LangGraph/复杂 Agent 框架、PostgreSQL 分布式部署（当达到 ≥10 店并通过安全与成本审查）；注意：Qdrant 不再需要，pgvector 已满足需求
 
 说明：`docs/architecture.md` 中的 P2/P3 方案为长期架构目标；但当前仓库硬性约束以本文件为准（Phase1 禁止项为强制规则）。在推进 Phase2/3 的任何改变前，请提交 PR 并完成安全、成本与隐私评估。
 
