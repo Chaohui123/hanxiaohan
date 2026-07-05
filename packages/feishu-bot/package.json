@@ -1,0 +1,11 @@
+{
+  "name": "@onzo/feishu-bot",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./src/index.ts",
+  "dependencies": {
+    "@onzo/logger": "workspace:*",
+    "@larksuiteoapi/node-sdk": "^1.68.0"
+  }
+}

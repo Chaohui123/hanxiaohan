@@ -20,6 +20,7 @@ export interface MsgContext {
 export interface CardActionCtx {
   chatId: string;
   action: string;
+  value?: Record<string, unknown>;
 }
 
 type MsgHandler = (msg: MsgContext) => Promise<void>;
@@ -106,6 +107,21 @@ export class FeishuBot {
       });
     } catch (err) {
       logger.error({ err, chatId }, "Feishu sendConfirmCard failed");
+    }
+  }
+
+  async sendPromoCard(chatId: string, card: Record<string, unknown>): Promise<void> {
+    try {
+      await this.client.im.message.create({
+        params: { receive_id_type: "chat_id" },
+        data: {
+          receive_id: chatId,
+          msg_type: "interactive",
+          content: JSON.stringify(card),
+        },
+      });
+    } catch (err) {
+      logger.error({ err, chatId }, "Feishu sendPromoCard failed");
     }
   }
 
@@ -268,6 +284,7 @@ export class FeishuBot {
     const ctx: CardActionCtx = {
       chatId,
       action: action.value.action,
+      value: action.value as Record<string, unknown>,
     };
 
     this.cardHandler?.(ctx);

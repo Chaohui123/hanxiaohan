@@ -1,4 +1,4 @@
-import type { FeishuBot, MsgContext } from "./feishu.js";
+import type { FeishuBot, MsgContext } from "@onzo/feishu-bot";
 import type { ApiConfig } from "./api-client.js";
 import { apiClient } from "./api-client.js";
 import { aiDiagnose } from "./ai-diagnose.js";

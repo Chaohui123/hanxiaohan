@@ -1,6 +1,6 @@
 import "dotenv/config";
-import { FeishuBot } from "./feishu.js";
-import type { FeishuConfig } from "./feishu.js";
+import { FeishuBot } from "@onzo/feishu-bot";
+import type { FeishuConfig } from "@onzo/feishu-bot";
 import { registerCommands } from "./commands.js";
 import { startPatrol, stopPatrol } from "./patrol.js";
 import { logger } from "@onzo/logger";

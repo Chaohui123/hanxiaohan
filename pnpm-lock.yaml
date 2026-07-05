@@ -32,6 +32,12 @@ importers:
       '@opentelemetry/semantic-conventions':
         specifier: ^1.41.1
         version: 1.41.1
+      '@types/better-sqlite3':
+        specifier: ^7.6.13
+        version: 7.6.13
+      better-sqlite3:
+        specifier: ^12.11.1
+        version: 12.11.1
       cors:
         specifier: ^2.8.6
         version: 2.8.6
@@ -40,7 +46,7 @@ importers:
         version: 17.4.2
       drizzle-orm:
         specifier: ^0.45.2
-        version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(better-sqlite3@12.11.1)(pg@8.22.0)
+        version: 0.45.2(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(better-sqlite3@12.11.1)(pg@8.22.0)
       express:
         specifier: ^4.21.0
         version: 4.22.2
@@ -161,7 +167,7 @@ importers:
         version: 17.4.2
       drizzle-orm:
         specifier: ^0.45.2
-        version: 0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(better-sqlite3@12.11.1)(pg@8.22.0)
+        version: 0.45.2(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(better-sqlite3@12.11.1)(pg@8.22.0)
       express:
         specifier: ^4.21.0
         version: 4.22.2
@@ -190,9 +196,9 @@ importers:
 
   apps/ops-agent:
     dependencies:
-      '@larksuiteoapi/node-sdk':
-        specifier: ^1.68.0
-        version: 1.68.0
+      '@onzo/feishu-bot':
+        specifier: workspace:*
+        version: link:../../packages/feishu-bot
       '@onzo/logger':
         specifier: workspace:*
         version: link:../../packages/logger
@@ -202,6 +208,32 @@ importers:
       dotenv:
         specifier: ^17.0.0
         version: 17.4.2
+    devDependencies:
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@20.19.43)
+
+  apps/promo-agent:
+    dependencies:
+      '@onzo/feishu-bot':
+        specifier: workspace:*
+        version: link:../../packages/feishu-bot
+      '@onzo/logger':
+        specifier: workspace:*
+        version: link:../../packages/logger
+      '@onzo/shared-types':
+        specifier: workspace:*
+        version: link:../../packages/shared-types
+      dotenv:
+        specifier: ^17.0.0
+        version: 17.4.2
+      prom-client:
+        specifier: ^15.1.3
+        version: 15.1.3
+    devDependencies:
+      vitest:
+        specifier: ^2.0.0
+        version: 2.1.9(@types/node@20.19.43)
 
   apps/web-dashboard:
     dependencies:
@@ -266,6 +298,15 @@ importers:
       ioredis:
         specifier: ^5.4.0
         version: 5.11.1
+
+  packages/feishu-bot:
+    dependencies:
+      '@larksuiteoapi/node-sdk':
+        specifier: ^1.68.0
+        version: 1.68.0
+      '@onzo/logger':
+        specifier: workspace:*
+        version: link:../logger
 
   packages/logger:
     dependencies:
@@ -1686,6 +1727,9 @@ packages:
 
   '@types/babel__traverse@7.28.0':
     resolution: {integrity: sha512-8PvcXf70gTDZBgt9ptxJ8elBeBjcLOAcOtoO/mPJjtji1+CdGbHgm77om1GrsPxsiE+uXIpNSK64UYaIwQXd4Q==}
+
+  '@types/better-sqlite3@7.6.13':
+    resolution: {integrity: sha512-NMv9ASNARoKksWtsq/SHakpYAYnhBrQgGD8zkLYk/jaK8jUGn08CfEdTRgYhMypUQAfzSP8W6gNLe0q19/t4VA==}
 
   '@types/body-parser@1.19.6':
     resolution: {integrity: sha512-HLFeCYgz89uk22N5Qg3dvGvsv46B8GLvKKo1zKG4NybA8U2DiEO3w9lqGg29t/tfLRJpJ6iQxnVw4OnB7MoM9g==}
@@ -4839,6 +4883,10 @@ snapshots:
     dependencies:
       '@babel/types': 7.29.7
 
+  '@types/better-sqlite3@7.6.13':
+    dependencies:
+      '@types/node': 20.19.43
+
   '@types/body-parser@1.19.6':
     dependencies:
       '@types/connect': 3.4.38
@@ -5162,8 +5210,7 @@ snapshots:
       - debug
       - supports-color
 
-  base64-js@1.5.1:
-    optional: true
+  base64-js@1.5.1: {}
 
   baseline-browser-mapping@2.10.41: {}
 
@@ -5175,12 +5222,10 @@ snapshots:
     dependencies:
       bindings: 1.5.0
       prebuild-install: 7.1.3
-    optional: true
 
   bindings@1.5.0:
     dependencies:
       file-uri-to-path: 1.0.0
-    optional: true
 
   bintrees@1.0.2: {}
 
@@ -5189,7 +5234,6 @@ snapshots:
       buffer: 5.7.1
       inherits: 2.0.4
       readable-stream: 3.6.2
-    optional: true
 
   body-parser@1.20.5:
     dependencies:
@@ -5222,7 +5266,6 @@ snapshots:
     dependencies:
       base64-js: 1.5.1
       ieee754: 1.2.1
-    optional: true
 
   bytes@3.1.2: {}
 
@@ -5257,8 +5300,7 @@ snapshots:
 
   check-error@2.1.3: {}
 
-  chownr@1.1.4:
-    optional: true
+  chownr@1.1.4: {}
 
   cjs-module-lexer@2.2.0: {}
 
@@ -5403,12 +5445,10 @@ snapshots:
   decompress-response@6.0.0:
     dependencies:
       mimic-response: 3.1.0
-    optional: true
 
   deep-eql@5.0.2: {}
 
-  deep-extend@0.6.0:
-    optional: true
+  deep-extend@0.6.0: {}
 
   delayed-stream@1.0.0: {}
 
@@ -5443,9 +5483,10 @@ snapshots:
       esbuild: 0.25.12
       tsx: 4.22.4
 
-  drizzle-orm@0.45.2(@opentelemetry/api@1.9.1)(@types/pg@8.20.0)(better-sqlite3@12.11.1)(pg@8.22.0):
+  drizzle-orm@0.45.2(@opentelemetry/api@1.9.1)(@types/better-sqlite3@7.6.13)(@types/pg@8.20.0)(better-sqlite3@12.11.1)(pg@8.22.0):
     optionalDependencies:
       '@opentelemetry/api': 1.9.1
+      '@types/better-sqlite3': 7.6.13
       '@types/pg': 8.20.0
       better-sqlite3: 12.11.1
       pg: 8.22.0
@@ -5472,7 +5513,6 @@ snapshots:
   end-of-stream@1.4.5:
     dependencies:
       once: 1.4.0
-    optional: true
 
   env-paths@2.2.1: {}
 
@@ -5616,8 +5656,7 @@ snapshots:
 
   eventemitter3@4.0.7: {}
 
-  expand-template@2.0.3:
-    optional: true
+  expand-template@2.0.3: {}
 
   expect-type@1.4.0: {}
 
@@ -5677,8 +5716,7 @@ snapshots:
     optionalDependencies:
       picomatch: 4.0.5
 
-  file-uri-to-path@1.0.0:
-    optional: true
+  file-uri-to-path@1.0.0: {}
 
   finalhandler@1.3.2:
     dependencies:
@@ -5728,8 +5766,7 @@ snapshots:
 
   fresh@0.5.2: {}
 
-  fs-constants@1.0.0:
-    optional: true
+  fs-constants@1.0.0: {}
 
   fsevents@2.3.2:
     optional: true
@@ -5769,8 +5806,7 @@ snapshots:
     dependencies:
       assert-plus: 1.0.0
 
-  github-from-package@0.0.0:
-    optional: true
+  github-from-package@0.0.0: {}
 
   gopd@1.2.0: {}
 
@@ -5818,8 +5854,7 @@ snapshots:
     dependencies:
       safer-buffer: 2.1.2
 
-  ieee754@1.2.1:
-    optional: true
+  ieee754@1.2.1: {}
 
   import-in-the-middle@3.3.0:
     dependencies:
@@ -5829,8 +5864,7 @@ snapshots:
 
   inherits@2.0.4: {}
 
-  ini@1.3.8:
-    optional: true
+  ini@1.3.8: {}
 
   internmap@2.0.3: {}
 
@@ -5942,14 +5976,11 @@ snapshots:
 
   mimic-fn@3.1.0: {}
 
-  mimic-response@3.1.0:
-    optional: true
+  mimic-response@3.1.0: {}
 
-  minimist@1.2.8:
-    optional: true
+  minimist@1.2.8: {}
 
-  mkdirp-classic@0.5.3:
-    optional: true
+  mkdirp-classic@0.5.3: {}
 
   module-details-from-path@1.0.4: {}
 
@@ -5959,15 +5990,13 @@ snapshots:
 
   nanoid@3.3.15: {}
 
-  napi-build-utils@2.0.0:
-    optional: true
+  napi-build-utils@2.0.0: {}
 
   negotiator@0.6.3: {}
 
   node-abi@3.94.0:
     dependencies:
       semver: 7.8.5
-    optional: true
 
   node-releases@2.0.50: {}
 
@@ -6114,7 +6143,6 @@ snapshots:
       simple-get: 4.0.1
       tar-fs: 2.1.5
       tunnel-agent: 0.6.0
-    optional: true
 
   process-warning@5.0.0: {}
 
@@ -6160,7 +6188,6 @@ snapshots:
     dependencies:
       end-of-stream: 1.4.5
       once: 1.4.0
-    optional: true
 
   punycode@2.3.1: {}
 
@@ -6507,7 +6534,6 @@ snapshots:
       ini: 1.3.8
       minimist: 1.2.8
       strip-json-comments: 2.0.1
-    optional: true
 
   react-dom@18.3.1(react@18.3.1):
     dependencies:
@@ -6559,7 +6585,6 @@ snapshots:
       inherits: 2.0.4
       string_decoder: 1.3.0
       util-deprecate: 1.0.2
-    optional: true
 
   real-require@0.2.0: {}
 
@@ -6767,15 +6792,13 @@ snapshots:
 
   siginfo@2.0.0: {}
 
-  simple-concat@1.0.1:
-    optional: true
+  simple-concat@1.0.1: {}
 
   simple-get@4.0.1:
     dependencies:
       decompress-response: 6.0.0
       once: 1.4.0
       simple-concat: 1.0.1
-    optional: true
 
   sonic-boom@4.2.1:
     dependencies:
@@ -6827,14 +6850,12 @@ snapshots:
   string_decoder@1.3.0:
     dependencies:
       safe-buffer: 5.2.1
-    optional: true
 
   strip-ansi@6.0.1:
     dependencies:
       ansi-regex: 5.0.1
 
-  strip-json-comments@2.0.1:
-    optional: true
+  strip-json-comments@2.0.1: {}
 
   strnum@1.1.2: {}
 
@@ -6877,7 +6898,6 @@ snapshots:
       mkdirp-classic: 0.5.3
       pump: 3.0.4
       tar-stream: 2.2.0
-    optional: true
 
   tar-stream@2.2.0:
     dependencies:
@@ -6886,7 +6906,6 @@ snapshots:
       fs-constants: 1.0.0
       inherits: 2.0.4
       readable-stream: 3.6.2
-    optional: true
 
   tdigest@0.1.2:
     dependencies:
@@ -6960,8 +6979,7 @@ snapshots:
     dependencies:
       punycode: 2.3.1
 
-  util-deprecate@1.0.2:
-    optional: true
+  util-deprecate@1.0.2: {}
 
   utils-merge@1.0.1: {}
 

@@ -12,7 +12,7 @@ version: '3.8'
 services:
   # ---- PostgreSQL (Phase 2+, optional) ----
   postgres:
-    image: postgres:16-alpine
+    image: pgvector/pgvector:pg16
     container_name: onzo-postgres
     restart: unless-stopped
     environment:
@@ -21,6 +21,7 @@ services:
       POSTGRES_DB: ${POSTGRES_DB:-onzo_prod}
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./docker/postgres/init-pgvector.sql:/docker-entrypoint-initdb.d/init-pgvector.sql
     deploy:
       resources:
         limits:
@@ -29,8 +30,8 @@ services:
           memory: 256M
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-onzo}"]
-      interval: 10s
-      timeout: 5s
+      interval: 5s
+      timeout: 3s
       retries: 5
       start_period: 15s
     logging:
@@ -166,6 +167,7 @@ services:
     depends_on:
       api-services:
         condition: service_healthy
+        required: false
     deploy:
       resources:
         limits:
@@ -182,6 +184,52 @@ services:
     profiles:
       - production
       - full
+      - standalone
+
+  # ---- Promo Agent (AI-powered promotion & bidding bot) ----
+  promo-agent:
+    build:
+      context: .
+      dockerfile: docker/promo-agent/Dockerfile
+    container_name: onzo-promo-agent
+    restart: unless-stopped
+    env_file:
+      - .env.production
+    environment:
+      - API_BASE_URL=http://api-services:3000
+      - PROMO_AUTO_DECISION=${PROMO_AUTO_DECISION:-true}
+      - PROMO_MIN_PROFIT_RATE=${PROMO_MIN_PROFIT_RATE:-0.10}
+      - PROMO_MAX_DAILY_SPEND=${PROMO_MAX_DAILY_SPEND:-500}
+      - PROMO_DECISION_INTERVAL_HOURS=${PROMO_DECISION_INTERVAL_HOURS:-4}
+      - PROMO_MAX_DAILY_ACTIONS=${PROMO_MAX_DAILY_ACTIONS:-10}
+      - PROMO_SCORE_THRESHOLD=${PROMO_SCORE_THRESHOLD:-40}
+    depends_on:
+      api-services:
+        condition: service_healthy
+        required: false
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:9101/health || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
+    deploy:
+      resources:
+        limits:
+          memory: 384M
+        reservations:
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+    networks:
+      - onzo-network
+    profiles:
+      - production
+      - full
+      - standalone
 
   # ---- Caddy HTTPS Reverse Proxy (production) ----
   caddy:
@@ -215,28 +263,6 @@ services:
       - onzo-network
     profiles:
       - production
-
-volumes:
-  postgres_data:
-    driver: local
-  redis_data:
-    driver: local
-  app_uploads:
-    driver: local
-  app_dead_letter:
-    driver: local
-  app_logs:
-    driver: local
-  app_data:
-    driver: local
-  caddy_data:
-    driver: local
-  caddy_config:
-    driver: local
-  prometheus_data:
-    driver: local
-  grafana_data:
-    driver: local
 
   # ---- Alertmanager ----
   alertmanager:
@@ -330,6 +356,28 @@ volumes:
     profiles:
       - tracing
       - full
+
+volumes:
+  postgres_data:
+    driver: local
+  redis_data:
+    driver: local
+  app_uploads:
+    driver: local
+  app_dead_letter:
+    driver: local
+  app_logs:
+    driver: local
+  app_data:
+    driver: local
+  caddy_data:
+    driver: local
+  caddy_config:
+    driver: local
+  prometheus_data:
+    driver: local
+  grafana_data:
+    driver: local
 
 networks:
   onzo-network:
