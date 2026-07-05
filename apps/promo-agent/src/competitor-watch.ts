@@ -270,6 +270,22 @@ async function sendAlerts(
   } catch (err) {
     logger.error({ err }, "Failed to send alert");
   }
+
+  // RAG 写回：异步保存竞品分析报告
+  for (const a of alerts) {
+    const reportText = `${a.name} | 我的: ${a.myPrice > 0 ? a.myPrice.toFixed(0) + "₽" : "—"} | 竞品均: ${a.competitorAvg.toFixed(0)}₽ | 降幅: ${a.dropPercent}%`;
+    fetch(`${apiConfig.apiBase}/api/rag/competitor`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-Key": apiConfig.apiKey },
+      body: JSON.stringify({
+        offerId: a.offerId,
+        reportText,
+        priceTrendSummary: `竞品均价 ${a.competitorAvg.toFixed(0)}₽, 降幅 ${a.dropPercent}%`,
+        actionSuggestion: a.dropPercent >= 20 ? "建议立即调价应对" : "建议关注趋势",
+      }),
+      signal: AbortSignal.timeout(3_000),
+    }).catch(() => {}); // fire-and-forget
+  }
 }
 
 async function enrichAlertWithRag(alert: CompetitorAlert, config: ApiConfig): Promise<string> {

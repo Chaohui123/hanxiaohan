@@ -266,7 +266,7 @@ async function writeRagKnowledge(
 |-----------|-----------|-----------|------|
 | decision-engine | ✅ playbook | ✅ playbook | 已完成 |
 | copywriter | ✅ copy | ✅ copy | 已完成 |
-| competitor-watch | ✅ competitor | ❌ | 部分完成 |
+| competitor-watch | ✅ competitor | ✅ competitor | 已完成 |
 | smart-pricing | ✅ playbook + competitor | ✅ playbook | 已完成 |
 | performance | ✅ playbook + copy | ❌ | 已完成 |
 | cross-validator | ✅ playbook | ❌ | 已完成 |
