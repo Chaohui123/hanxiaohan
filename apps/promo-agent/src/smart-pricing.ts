@@ -409,7 +409,7 @@ export async function handlePricingConfirmation(
 }
 
 /** 执行前最终验证 */
-function validateBeforeApply(s: PricingSuggestion): string | null {
+export function validateBeforeApply(s: PricingSuggestion): string | null {
   // 安全上限：变化不超过 ±20%（二次确认）
   if (Math.abs(s.changePercent) > MAX_CHANGE_PERCENT) {
     return `变动幅度 ${s.changePercent}% 超过 ±20% 限制`;
