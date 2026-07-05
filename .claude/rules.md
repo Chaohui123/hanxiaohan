@@ -38,7 +38,7 @@
 
 - Phase1 (必须遵守，当前开发优先级):
   - 禁止：Python、LangGraph/LangChain、Qdrant独立向量库（已有pgvector替代）、Redis/MQ/Kafka、未经审计的影刀RPA、分布式多机部署
-  - 允许：TypeScript/Node.js、pnpm monorepo、Express、Playwright、better-sqlite3 + Drizzle、单机 Docker + n8n
+  - 允许：TypeScript/Node.js、pnpm monorepo、Express、Playwright、better-sqlite3 + Drizzle、单机 Docker + n8n、PostgreSQL + pgvector（RAG知识库已上线）
 
 - Phase2 (受控评估后可引入):
   - 允许（受审批）：影刀RPA 兜底通道（仅在 API 熔断情形并经安全审计）、RAG知识库扩展（pgvector已上线，可增量添加新知识域）、多店铺风控策略的配置框架
