@@ -169,6 +169,7 @@ async function runPricingCycle(
         }
       } catch {
         // 无竞品数据，仅基于成本计算
+      }
     }
 
     // 5. 计算建议价: max(cost × rate × (1+margin), competitorAvg × 0.95)

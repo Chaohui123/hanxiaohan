@@ -6,8 +6,8 @@ import {
   scoreSalesGrowth,
   scoreRating,
   getRecommendation,
-  planActions,
-} from "../src/decision-engine.js";
+} from "../src/scorer.js";
+import { planActions } from "../src/decision-engine.js";
 
 // ============================================================
 // 评分函数
