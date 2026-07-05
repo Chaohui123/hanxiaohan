@@ -26,3 +26,7 @@ server.log
 
 packages/ozon-order/tests/sync.integration.test.ts
 packages/ozon-order/tests/sync.integration.test.ts
+**/dist/
+**/tsconfig.tsbuildinfo
+data/backups/
+data/onzo.db*
