@@ -151,12 +151,14 @@
 
 代码位置：`apps/promo-agent/src/cross-validator.ts:171-187`
 
-### 4.7 ops-agent / patrol（巡检）❌ 待集成
+### 4.7 ops-agent / patrol（巡检）✅ 已集成
 
 | 巡检环节 | 必须查询的知识库 | API 端点 | 状态 |
 |---------|----------------|---------|------|
-| 异常诊断时 | 运营经验手册 | `/rag/playbook/search` | ❌ |
-| 售后相关异常 | 售后话术库 | `/rag/aftersales/search` | ❌ |
+| 异常诊断时 | 运营经验手册 | `/rag/playbook/search` | ✅ |
+| 售后相关异常 | 售后话术库 | `/rag/aftersales/search` | ✅ |
+
+代码位置：`apps/ops-agent/src/patrol.ts:44-88`
 
 ### 4.8 ops-agent / ai-diagnose（AI诊断）❌ 待集成
 
@@ -270,7 +272,7 @@ async function writeRagKnowledge(
 | smart-pricing | ✅ playbook + competitor | ✅ playbook | 已完成 |
 | performance | ✅ playbook + copy | ❌ | 已完成 |
 | cross-validator | ✅ playbook | ❌ | 已完成 |
-| ops-agent/patrol | ❌ | ❌ | **待集成** |
+| ops-agent/patrol | ✅ playbook + aftersales | ❌ | 已完成 |
 | ops-agent/ai-diagnose | ❌ | ❌ | **待集成** |
 | aftersales-manager | ✅ aftersales | ❌ | 已完成 |
 

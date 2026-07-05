@@ -1,5 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 
+// Mock global fetch for RAG queries (patrol now queries RAG on error)
+global.fetch = vi.fn().mockResolvedValue({ ok: false }) as unknown as typeof fetch;
+
 vi.mock("../src/api-client.js", () => ({
   apiClient: {
     ready: vi.fn(),
