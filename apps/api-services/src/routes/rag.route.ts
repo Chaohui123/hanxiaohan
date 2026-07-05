@@ -9,6 +9,7 @@ import { logger } from "@onzo/logger";
 import { EmbeddingClient } from "@onzo/embedding";
 import { validate } from "../middleware/validate.js";
 import { ragRateLimit } from "../middleware/rag-rate-limit.js";
+import { AppError } from "../errors/index.js";
 
 // ---- Zod Schemas ----
 
@@ -67,10 +68,15 @@ function genId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
 }
 
-async function dbOrFail(res: { status: (c: number) => { json: (d: unknown) => unknown } }) {
+async function dbOrFail() {
   const db = await getDb().catch(() => null);
-  if (!db) { res.status(503).json({ error: "DB unavailable" }); return null; }
+  if (!db) throw new AppError("SERVICE_UNAVAILABLE", "Database unavailable", true, 503);
   return db;
+}
+
+function handleError(err: unknown): never {
+  if (err instanceof AppError) throw err;
+  throw new AppError("RAG_ERROR", (err as Error).message, true, 500);
 }
 
 const embeddingClient = new EmbeddingClient();
@@ -88,7 +94,7 @@ export function createRagRouter(): Router {
   router.post("/rag/aftersales/search", validate(SearchSchema), async (req, res) => {
     try {
       const { query, category, topK } = (req as unknown as Record<string, unknown>).validatedBody as z.infer<typeof SearchSchema>;
-      const db = await dbOrFail(res); if (!db) return;
+      const db = await dbOrFail();
       const queryVector = (await embeddingClient.embed(query)).vector;
       const vecStr = `[${queryVector.join(",")}]`;
       const params: unknown[] = [vecStr];
@@ -101,13 +107,13 @@ export function createRagRouter(): Router {
          ORDER BY embedding <=> $1::vector LIMIT $${params.length}`, params,
       );
       res.json({ results: rows, query });
-    } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+    } catch (err) { handleError(err); }
   });
 
   router.post("/rag/aftersales", validate(AftersalesCreateSchema), async (req, res) => {
     try {
       const body = (req as unknown as Record<string, unknown>).validatedBody as z.infer<typeof AftersalesCreateSchema>;
-      const db = await dbOrFail(res); if (!db) return;
+      const db = await dbOrFail();
       const id = genId("script");
       const vector = (await embeddingClient.embed(`${body.scenario} ${body.contentRu}`)).vector;
       await db.run(
@@ -117,13 +123,13 @@ export function createRagRouter(): Router {
           body.keywords || [], body.source || "manual", `[${vector.join(",")}]`],
       );
       res.json({ id, message: "话术已添加" });
-    } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+    } catch (err) { handleError(err); }
   });
 
   router.put("/rag/aftersales/:id/feedback", validate(AftersalesFeedbackSchema), async (req, res) => {
     try {
       const { effective } = (req as unknown as Record<string, unknown>).validatedBody as z.infer<typeof AftersalesFeedbackSchema>;
-      const db = await dbOrFail(res); if (!db) return;
+      const db = await dbOrFail();
       const delta = effective ? 0.1 : -0.1;
       await db.run(
         `UPDATE rag_aftersales_scripts SET usage_count = usage_count + 1,
@@ -131,7 +137,7 @@ export function createRagRouter(): Router {
          WHERE id = $1`, [req.params.id, delta],
       );
       res.json({ message: "反馈已记录" });
-    } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+    } catch (err) { handleError(err); }
   });
 
   // ============================================================
@@ -141,7 +147,7 @@ export function createRagRouter(): Router {
   router.post("/rag/competitor/search", validate(SearchSchema), async (req, res) => {
     try {
       const { query, topK } = (req as unknown as Record<string, unknown>).validatedBody as z.infer<typeof SearchSchema>;
-      const db = await dbOrFail(res); if (!db) return;
+      const db = await dbOrFail();
       const queryVector = (await embeddingClient.embed(query)).vector;
       const rows = await db.all(
         `SELECT id, offer_id, category_id, report_text, price_trend_summary, action_suggestion,
@@ -150,13 +156,13 @@ export function createRagRouter(): Router {
         [`[${queryVector.join(",")}]`, topK],
       );
       res.json({ results: rows, query });
-    } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+    } catch (err) { handleError(err); }
   });
 
   router.post("/rag/competitor", validate(CompetitorCreateSchema), async (req, res) => {
     try {
       const body = (req as unknown as Record<string, unknown>).validatedBody as z.infer<typeof CompetitorCreateSchema>;
-      const db = await dbOrFail(res); if (!db) return;
+      const db = await dbOrFail();
       const id = genId("comp");
       const embedText = `${body.reportText} ${body.priceTrendSummary || ""}`;
       const vector = (await embeddingClient.embed(embedText)).vector;
@@ -166,7 +172,7 @@ export function createRagRouter(): Router {
         [id, body.offerId, body.reportText, body.priceTrendSummary || null, `[${vector.join(",")}]`],
       );
       res.json({ id, message: "竞品报告已保存" });
-    } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+    } catch (err) { handleError(err); }
   });
 
   // ============================================================
@@ -176,7 +182,7 @@ export function createRagRouter(): Router {
   router.post("/rag/product/search", validate(SearchSchema), async (req, res) => {
     try {
       const { query, topK } = (req as unknown as Record<string, unknown>).validatedBody as z.infer<typeof SearchSchema>;
-      const db = await dbOrFail(res); if (!db) return;
+      const db = await dbOrFail();
       const queryVector = (await embeddingClient.embed(query)).vector;
       const rows = await db.all(
         `SELECT id, category_id, category_name, title, content, source_url, keywords, data_source,
@@ -185,13 +191,13 @@ export function createRagRouter(): Router {
         [`[${queryVector.join(",")}]`, topK],
       );
       res.json({ results: rows, query });
-    } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+    } catch (err) { handleError(err); }
   });
 
   router.post("/rag/product", validate(ProductCreateSchema), async (req, res) => {
     try {
       const body = (req as unknown as Record<string, unknown>).validatedBody as z.infer<typeof ProductCreateSchema>;
-      const db = await dbOrFail(res); if (!db) return;
+      const db = await dbOrFail();
       const id = genId("prod");
       const vector = (await embeddingClient.embed(`${body.title} ${body.content}`)).vector;
       await db.run(
@@ -200,7 +206,7 @@ export function createRagRouter(): Router {
         [id, body.category || null, body.title, body.content, null, body.tags || [], `[${vector.join(",")}]`],
       );
       res.json({ id, message: "选品知识已添加" });
-    } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+    } catch (err) { handleError(err); }
   });
 
   // ============================================================
@@ -210,7 +216,7 @@ export function createRagRouter(): Router {
   router.post("/rag/copy/search", validate(SearchSchema), async (req, res) => {
     try {
       const { query, topK } = (req as unknown as Record<string, unknown>).validatedBody as z.infer<typeof SearchSchema>;
-      const db = await dbOrFail(res); if (!db) return;
+      const db = await dbOrFail();
       const queryVector = (await embeddingClient.embed(query)).vector;
       const rows = await db.all(
         `SELECT id, category, category_id, original_text, optimized_text, optimization_notes, performance_score,
@@ -219,13 +225,13 @@ export function createRagRouter(): Router {
         [`[${queryVector.join(",")}]`, topK],
       );
       res.json({ results: rows, query });
-    } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+    } catch (err) { handleError(err); }
   });
 
   router.post("/rag/copy", validate(CopyCreateSchema), async (req, res) => {
     try {
       const body = (req as unknown as Record<string, unknown>).validatedBody as z.infer<typeof CopyCreateSchema>;
-      const db = await dbOrFail(res); if (!db) return;
+      const db = await dbOrFail();
       const id = genId("copy");
       const embedText = `${body.originalText} ${body.optimizedText || ""}`;
       const vector = (await embeddingClient.embed(embedText)).vector;
@@ -235,7 +241,7 @@ export function createRagRouter(): Router {
         [id, body.category, body.originalText, body.optimizedText || null, `[${vector.join(",")}]`],
       );
       res.json({ id, message: "文案模板已添加" });
-    } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+    } catch (err) { handleError(err); }
   });
 
   // ============================================================
@@ -245,7 +251,7 @@ export function createRagRouter(): Router {
   router.post("/rag/playbook/search", validate(SearchSchema), async (req, res) => {
     try {
       const { query, scenario, topK } = (req as unknown as Record<string, unknown>).validatedBody as z.infer<typeof SearchSchema>;
-      const db = await dbOrFail(res); if (!db) return;
+      const db = await dbOrFail();
       const queryVector = (await embeddingClient.embed(query)).vector;
       const params: unknown[] = [`[${queryVector.join(",")}]`];
       if (scenario) params.push(scenario);
@@ -257,13 +263,13 @@ export function createRagRouter(): Router {
          ORDER BY embedding <=> $1::vector LIMIT $${params.length}`, params,
       );
       res.json({ results: rows, query });
-    } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+    } catch (err) { handleError(err); }
   });
 
   router.post("/rag/playbook", validate(PlaybookCreateSchema), async (req, res) => {
     try {
       const body = (req as unknown as Record<string, unknown>).validatedBody as z.infer<typeof PlaybookCreateSchema>;
-      const db = await dbOrFail(res); if (!db) return;
+      const db = await dbOrFail();
       const id = genId("pb");
       const vector = (await embeddingClient.embed(`${body.title} ${body.content}`)).vector;
       await db.run(
@@ -273,7 +279,7 @@ export function createRagRouter(): Router {
           body.priority || 0, `[${vector.join(",")}]`],
       );
       res.json({ id, message: "运营经验已添加" });
-    } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+    } catch (err) { handleError(err); }
   });
 
   // ============================================================
@@ -282,7 +288,7 @@ export function createRagRouter(): Router {
 
   router.post("/rag/import/aftersales-history", validate(ImportSchema), async (req, res) => {
     try {
-      const db = await dbOrFail(res); if (!db) return;
+      const db = await dbOrFail();
       const cases = await db.all(
         `SELECT id, type, reason, buyer_message, resolution_note
          FROM aftersales_cases WHERE status = 'resolved' AND resolution_note IS NOT NULL LIMIT 100`,
@@ -299,7 +305,7 @@ export function createRagRouter(): Router {
         imported++;
       }
       res.json({ imported, total: cases.length });
-    } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+    } catch (err) { handleError(err); }
   });
 
   router.post("/rag/import/competitor-history", validate(ImportSchema), (_req, res) => {
@@ -312,7 +318,7 @@ export function createRagRouter(): Router {
 
   router.get("/rag/stats", async (_req, res) => {
     try {
-      const db = await dbOrFail(res); if (!db) return;
+      const db = await dbOrFail();
       const tables = ["rag_aftersales_scripts", "rag_competitor_reports", "rag_product_knowledge", "rag_copy_templates", "rag_operations_playbook"];
       const stats: Record<string, number> = {};
       for (const t of tables) {
@@ -320,7 +326,7 @@ export function createRagRouter(): Router {
         stats[t] = rows[0]?.cnt || 0;
       }
       res.json(stats);
-    } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+    } catch (err) { handleError(err); }
   });
 
   return router;
