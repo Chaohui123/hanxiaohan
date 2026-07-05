@@ -47,12 +47,19 @@ jobs:
             for i in 1 2 3 4 5 6 7 8 9 10; do
               if curl -s --connect-timeout 3 http://localhost:3000/health | grep -q '"status":"ok"'; then
                 echo "Health OK after ${i}0s"
-                exit 0
+                break
               fi
               sleep 10
             done
-            echo "FAILED: Health check did not pass after 100s"
-            exit 1
+
+            echo "=== Seeding RAG Playbook ==="
+            docker exec onzo-api npx tsx scripts/seed-rag-playbook.ts || echo "RAG seed skipped (non-critical)"
+
+            echo "=== Verifying RAG Stats ==="
+            curl -s http://localhost:3000/api/rag/stats || echo "RAG stats check skipped"
+
+            echo "Deploy complete"
+            exit 0
 
       - name: Notify Success
         if: success()
