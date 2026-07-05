@@ -3,6 +3,7 @@
 // ============================================================
 
 import type { DbAdapter } from "./connection.js";
+import { getAdapterType } from "./connection.js";
 
 export async function initSchema(db: DbAdapter): Promise<void> {
   await db.exec(`
@@ -297,11 +298,19 @@ export async function initSchema(db: DbAdapter): Promise<void> {
       created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW()
     );
 
-    -- IVFFlat indexes (deferred: create manually after data reaches 1000+ rows)
-    -- CREATE INDEX IF NOT EXISTS idx_rag_scripts_embedding ON rag_aftersales_scripts USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50);
-    -- CREATE INDEX IF NOT EXISTS idx_rag_competitor_embedding ON rag_competitor_reports USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50);
-    -- CREATE INDEX IF NOT EXISTS idx_rag_product_embedding ON rag_product_knowledge USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50);
-    -- CREATE INDEX IF NOT EXISTS idx_rag_copy_embedding ON rag_copy_templates USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50);
-    -- CREATE INDEX IF NOT EXISTS idx_rag_playbook_embedding ON rag_operations_playbook USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50);
   `);
+
+  // Create IVFFlat indexes for RAG tables (PG only, silently skip if insufficient data)
+  if (getAdapterType() === "pg") {
+    const indexes = [
+      `CREATE INDEX IF NOT EXISTS idx_rag_scripts_embedding ON rag_aftersales_scripts USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50)`,
+      `CREATE INDEX IF NOT EXISTS idx_rag_competitor_embedding ON rag_competitor_reports USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50)`,
+      `CREATE INDEX IF NOT EXISTS idx_rag_product_embedding ON rag_product_knowledge USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50)`,
+      `CREATE INDEX IF NOT EXISTS idx_rag_copy_embedding ON rag_copy_templates USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50)`,
+      `CREATE INDEX IF NOT EXISTS idx_rag_playbook_embedding ON rag_operations_playbook USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50)`,
+    ];
+    for (const idx of indexes) {
+      try { await db.run(idx); } catch { /* insufficient data, will retry later */ }
+    }
+  }
 }
