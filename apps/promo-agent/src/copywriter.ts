@@ -212,20 +212,24 @@ export async function generateCopy(
   const descAudit = auditText(result.descriptionRu);
   const featuresAudit = auditText(result.features.join(" "));
 
+  // Always apply auto-fixes to each field independently
+  result.titleRu = titleAudit.autoFixed.slice(0, 70);
+  result.descriptionRu = descAudit.autoFixed.slice(0, 5000);
+  // Reconstruct features from the auto-fixed text (features were joined with space for audit)
+  result.features = featuresAudit.autoFixed.split(" ").filter(Boolean).slice(0, 5);
+  if (result.features.length === 0) result.features = parsed.features?.slice(0, 5) || [];
+
   const combinedAudit: AuditResult = {
     passed: titleAudit.passed && descAudit.passed && featuresAudit.passed,
     score: Math.min(titleAudit.score, descAudit.score, featuresAudit.score),
     findings: [...titleAudit.findings, ...descAudit.findings, ...featuresAudit.findings],
     blockedCount: titleAudit.blockedCount + descAudit.blockedCount + featuresAudit.blockedCount,
     warnCount: titleAudit.warnCount + descAudit.warnCount + featuresAudit.warnCount,
-    autoFixed: [titleAudit.autoFixed, descAudit.autoFixed, featuresAudit.autoFixed].join(" | "),
+    autoFixed: `${result.titleRu}\n---\n${result.descriptionRu}`,
     remainingIssues: [...titleAudit.remainingIssues, ...descAudit.remainingIssues, ...featuresAudit.remainingIssues],
   };
 
   if (!combinedAudit.passed) {
-    result.titleRu = titleAudit.autoFixed.slice(0, 70);
-    result.descriptionRu = descAudit.autoFixed.slice(0, 5000);
-    result.features = featuresAudit.autoFixed.split(" | ").slice(0, 5);
     logger.info({ offerId, blocked: combinedAudit.blockedCount, warned: combinedAudit.warnCount }, "Copy auto-fixed by compliance audit");
   }
 
