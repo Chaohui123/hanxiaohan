@@ -164,6 +164,7 @@ services:
       - .env.production
     environment:
       - API_BASE_URL=http://api-services:3000
+      - OPS_FEISHU_PORT=${OPS_FEISHU_PORT:-8181}
     depends_on:
       api-services:
         condition: service_healthy
@@ -203,6 +204,8 @@ services:
       - PROMO_DECISION_INTERVAL_HOURS=${PROMO_DECISION_INTERVAL_HOURS:-4}
       - PROMO_MAX_DAILY_ACTIONS=${PROMO_MAX_DAILY_ACTIONS:-10}
       - PROMO_SCORE_THRESHOLD=${PROMO_SCORE_THRESHOLD:-40}
+      - PROMO_FEISHU_PORT=${PROMO_FEISHU_PORT:-8182}
+      - PROMO_HEALTH_PORT=${PROMO_HEALTH_PORT:-9101}
     depends_on:
       api-services:
         condition: service_healthy
