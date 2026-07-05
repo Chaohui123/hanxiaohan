@@ -264,7 +264,7 @@ async function sendWeeklyReport(bot: FeishuBot, chatId: string, config: ApiConfi
     }
 
     // 下周建议
-    const suggestions = generateWeeklySuggestions({
+    const suggestions = await generateWeeklySuggestions({
       top5,
       bottom5,
       roi,
@@ -273,7 +273,7 @@ async function sendWeeklyReport(bot: FeishuBot, chatId: string, config: ApiConfi
       revenue,
       pricingAdjustments,
       copyOptimizations,
-    });
+    }, config);
 
     // 效果回溯摘要
     const pricingImproved = pricingData?.adjustments?.filter((a: Record<string, unknown>) => Number(a.salesAfter || 0) > Number(a.salesBefore || 0)).length || 0;
@@ -379,6 +379,29 @@ async function runEffectRetrospective(config: ApiConfig): Promise<void> {
       }
     }
 
+    // RAG 知识库增强：查询文案模板库对比效果
+    if (updated > 0) {
+      try {
+        const ragResp = await fetch(`${config.apiBase}/api/rag/copy/search`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-API-Key": config.apiKey },
+          body: JSON.stringify({ query: "推广文案效果对比", topK: 3 }),
+          signal: AbortSignal.timeout(5_000),
+        });
+        if (ragResp.ok) {
+          const ragData = await ragResp.json() as { results?: Array<{ original_text?: string; content?: string }> };
+          if (ragData.results?.length) {
+            const copyTips = ragData.results.map((r) => r.original_text || r.content || "").filter(Boolean);
+            if (copyTips.length > 0) {
+              logger.info({ copyTips }, "RAG copy templates retrieved for retrospective");
+            }
+          }
+        }
+      } catch (err) {
+        logger.warn({ err: (err as Error).message }, "RAG copy query degraded for retrospective");
+      }
+    }
+
     if (updated > 0) logger.info({ updated }, "Effect retrospective complete");
   } catch (err) {
     logger.error({ err }, "Effect retrospective failed");
@@ -387,7 +410,7 @@ async function runEffectRetrospective(config: ApiConfig): Promise<void> {
 
 // ---- 建议生成 ----
 
-function generateWeeklySuggestions(ctx: {
+async function generateWeeklySuggestions(ctx: {
   top5: Array<{ name: string; orders: number }>;
   bottom5: Array<{ name: string; orders: number; stock: number }>;
   roi: number | null;
@@ -396,7 +419,7 @@ function generateWeeklySuggestions(ctx: {
   revenue: number;
   pricingAdjustments: number;
   copyOptimizations: number;
-}): string[] {
+}, config: ApiConfig): Promise<string[]> {
   const suggestions: string[] = [];
 
   // 滞销品处理
@@ -444,6 +467,28 @@ function generateWeeklySuggestions(ctx: {
 
   // 竞品监控
   suggestions.push(`保持竞品监控频率: /promo competitors 每周至少 2 次`);
+
+  // RAG 知识库增强：查询运营经验
+  try {
+    const topCategories = ctx.top5.map((p) => p.name.slice(0, 10)).join(",");
+    const ragResp = await fetch(`${config.apiBase}/api/rag/playbook/search`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-Key": config.apiKey },
+      body: JSON.stringify({ query: `周报优化建议 ${topCategories}`, scenario: "promotion", topK: 3 }),
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (ragResp.ok) {
+      const ragData = await ragResp.json() as { results?: Array<{ content: string }> };
+      if (ragData.results?.length) {
+        suggestions.push("\n💡 运营经验参考：");
+        for (const r of ragData.results) {
+          suggestions.push(`   • ${r.content.slice(0, 120)}`);
+        }
+      }
+    }
+  } catch (err) {
+    logger.warn({ err: (err as Error).message }, "RAG playbook query degraded for weekly suggestions");
+  }
 
   return suggestions;
 }

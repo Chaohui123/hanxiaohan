@@ -124,57 +124,24 @@
 
 代码位置：`apps/promo-agent/src/competitor-watch.ts:256-277`
 
-### 4.4 smart-pricing（智能定价）❌ 待集成
+### 4.4 smart-pricing（智能定价）✅ 已集成
 
 | 定价环节 | 必须查询的知识库 | API 端点 | 状态 |
 |---------|----------------|---------|------|
-| 生成定价建议前 | 运营经验手册（定价策略） | `/rag/playbook/search` | ❌ |
-| 生成定价建议前 | 竞品分析报告 | `/rag/competitor/search` | ❌ |
-| 定价执行后 | 运营经验手册（写回） | `/rag/playbook` | ❌ |
+| 生成定价建议前 | 运营经验手册（定价策略） | `/rag/playbook/search` | ✅ |
+| 生成定价建议前 | 竞品分析报告 | `/rag/competitor/search` | ✅ |
+| 定价执行后 | 运营经验手册（写回） | `/rag/playbook` | ✅ |
 
-**集成代码模板**（加在 `runPricingCycle()` 循环内）：
-```typescript
-// 强制：查询运营经验
-try {
-  const ragResp = await fetch(`${config.apiBase}/api/rag/playbook/search`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query: `定价策略 ${suggestion.category}`, scenario: "pricing", topK: 3 }),
-  });
-  if (ragResp.ok) {
-    const ragData = await ragResp.json() as { results?: Array<{ content: string }> };
-    if (ragData.results?.length) {
-      suggestion.reason += ` | 定价参考: ${ragData.results[0].content.slice(0, 100)}`;
-    }
-  }
-} catch (err) {
-  logger.warn({ err: (err as Error).message }, "RAG playbook query degraded for pricing");
-}
+代码位置：`apps/promo-agent/src/smart-pricing.ts:217-253`
 
-// 强制：查询竞品趋势
-try {
-  const compResp = await fetch(`${config.apiBase}/api/rag/competitor/search`, {
-    method: "POST",
-    headers: { "Content-Type": "application/json" },
-    body: JSON.stringify({ query: `${suggestion.offerId} 价格趋势`, topK: 3 }),
-  });
-  if (compResp.ok) {
-    const compData = await compResp.json() as { results?: Array<{ price_trend_summary?: string }> };
-    if (compData.results?.length && compData.results[0].price_trend_summary) {
-      suggestion.reason += ` | 竞品趋势: ${compData.results[0].price_trend_summary}`;
-    }
-  }
-} catch (err) {
-  logger.warn({ err: (err as Error).message }, "RAG competitor query degraded for pricing");
-}
-```
-
-### 4.5 performance（绩效报告）❌ 待集成
+### 4.5 performance（绩效报告）✅ 已集成
 
 | 报告环节 | 必须查询的知识库 | API 端点 | 状态 |
 |---------|----------------|---------|------|
-| 生成周报建议时 | 运营经验手册 | `/rag/playbook/search` | ❌ |
-| 生成效果回顾时 | 推广文案模板 | `/rag/copy/search` | ❌ |
+| 生成周报建议时 | 运营经验手册 | `/rag/playbook/search` | ✅ |
+| 生成效果回顾时 | 推广文案模板 | `/rag/copy/search` | ✅ |
+
+代码位置：`apps/promo-agent/src/performance.ts:390-490`
 
 ### 4.6 cross-validator（交叉验证）❌ 待集成
 
@@ -298,8 +265,8 @@ async function writeRagKnowledge(
 | decision-engine | ✅ playbook | ✅ playbook | 已完成 |
 | copywriter | ✅ copy | ✅ copy | 已完成 |
 | competitor-watch | ✅ competitor | ❌ | 部分完成 |
-| smart-pricing | ❌ | ❌ | **待集成** |
-| performance | ❌ | ❌ | **待集成** |
+| smart-pricing | ✅ playbook + competitor | ✅ playbook | 已完成 |
+| performance | ✅ playbook + copy | ❌ | 已完成 |
 | cross-validator | ❌ | ❌ | **待集成** |
 | ops-agent/patrol | ❌ | ❌ | **待集成** |
 | ops-agent/ai-diagnose | ❌ | ❌ | **待集成** |
