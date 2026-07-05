@@ -116,7 +116,7 @@
 1. 调用大模型分层规则：视觉OCR固定 glm-4.6v-flash；上架翻译/类目匹配使用 deepseek-v4-flash；仅多竞品深度比价允许 deepseek-v4-pro；
 2. 所有密钥、接口地址、模型名称、并发参数统一读取项目根.env，通过packages/ai/src/config.ts统一导出，禁止硬编码sk密钥、URL、模型名；
 3. 代码必须完整TS类型，复用shared-types内定义，拒绝any；全部外部API增加重试、异常捕获、限流逻辑；
-4. 严格遵守Phase1约束：不引入Python、LangGraph、Qdrant独立向量库、Redis、影刀RPA、分布式集群；仅单机Docker+SQLite单店架构；RAG知识库已通过pgvector上线，所有Agent必须引用；
+4. 严格遵守约束：不引入Python、LangGraph、Qdrant、Redis、影刀RPA、分布式集群；仅单机Docker+SQLite/PostgreSQL单店架构；所有Agent决策前必须查询RAG知识库；
 5. 代码按Monorepo分包输出，存放路径匹配项目目录结构，支持Vitest单元测试扩展。
 
 # 安全与边界强制审查规范
