@@ -160,11 +160,13 @@
 
 代码位置：`apps/ops-agent/src/patrol.ts:44-88`
 
-### 4.8 ops-agent / ai-diagnose（AI诊断）❌ 待集成
+### 4.8 ops-agent / ai-diagnose（AI诊断）✅ 已集成
 
 | 诊断环节 | 必须查询的知识库 | API 端点 | 状态 |
 |---------|----------------|---------|------|
-| 生成诊断建议前 | 运营经验手册 | `/rag/playbook/search` | ❌ |
+| 生成诊断建议前 | 运营经验手册 | `/rag/playbook/search` | ✅ |
+
+代码位置：`apps/ops-agent/src/ai-diagnose.ts:20-36`
 
 ### 4.9 aftersales-manager（售后管理）✅ 已集成
 
@@ -273,7 +275,7 @@ async function writeRagKnowledge(
 | performance | ✅ playbook + copy | ❌ | 已完成 |
 | cross-validator | ✅ playbook | ❌ | 已完成 |
 | ops-agent/patrol | ✅ playbook + aftersales | ❌ | 已完成 |
-| ops-agent/ai-diagnose | ❌ | ❌ | **待集成** |
+| ops-agent/ai-diagnose | ✅ playbook | ❌ | 已完成 |
 | aftersales-manager | ✅ aftersales | ❌ | 已完成 |
 
 **优先级排序**：

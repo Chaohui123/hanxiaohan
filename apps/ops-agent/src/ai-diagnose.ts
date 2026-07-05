@@ -1,5 +1,6 @@
 import type { ApiConfig } from "./api-client.js";
 import { apiClient } from "./api-client.js";
+import { logger } from "@onzo/logger";
 
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || "";
 const DEEPSEEK_BASE = process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com";
@@ -20,6 +21,29 @@ export async function aiDiagnose(config: ApiConfig, rawData: string): Promise<st
     return "⚠️ 未配置 DEEPSEEK_API_KEY，无法生成 AI 诊断\n\n原始数据:\n\n" + rawData.slice(0, 3000) + "\n";
   }
 
+  // RAG 知识库查询：历史诊断经验
+  let ragContext = "";
+  try {
+    const ragResp = await fetch(`${config.apiBase}/api/rag/playbook/search`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-Key": config.apiKey },
+      body: JSON.stringify({ query: `诊断 ${rawData.slice(0, 100)}`, scenario: "diagnosis", topK: 5 }),
+      signal: AbortSignal.timeout(5_000),
+    });
+    if (ragResp.ok) {
+      const ragData = await ragResp.json() as { results?: Array<{ content: string }> };
+      if (ragData.results?.length) {
+        ragContext = `以下是历史诊断经验参考：\n${ragData.results.map((r) => r.content).join("\n")}\n\n请结合以上经验进行诊断。`;
+      }
+    }
+  } catch (err) {
+    logger.warn({ err: (err as Error).message }, "RAG diagnosis query degraded, using pure AI diagnosis");
+  }
+
+  const systemPrompt = ragContext
+    ? `${SYSTEM_PROMPT}\n\n${ragContext}`
+    : SYSTEM_PROMPT;
+
   try {
     const resp = await fetch(`${DEEPSEEK_BASE}/v1/chat/completions`, {
       method: "POST",
@@ -30,7 +54,7 @@ export async function aiDiagnose(config: ApiConfig, rawData: string): Promise<st
       body: JSON.stringify({
         model: "deepseek-chat",
         messages: [
-          { role: "system", content: SYSTEM_PROMPT },
+          { role: "system", content: systemPrompt },
           { role: "user", content: `系统当前状态：\n${rawData.slice(0, 6000)}` },
         ],
         max_tokens: 1000,
