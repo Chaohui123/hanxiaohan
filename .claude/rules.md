@@ -1,12 +1,12 @@
-\# Claude Code 项目全局强制约束（Onzo Ozon自动化 Phase1）
+# Claude Code 项目全局强制约束（Onzo Ozon自动化 Phase1）
 
-\## 一、技术栈硬性禁止项（绝对不能生成/引入）
+## 一、技术栈硬性禁止项（绝对不能生成/引入）
 
 1\. 禁止 Python、Py相关代码、混合多语言调用
 
 2\. 禁止 LangGraph、LangChain 复杂Agent框架，仅允许简单线性流程
 
-3\. 禁止 Qdrant、向量数据库、RAG 相关逻辑（Phase3再落地）
+3\. 禁止 Qdrant 独立向量数据库（已使用 PostgreSQL + pgvector 替代，RAG 知识库已上线，所有 Agent 强制引用，详见 `docs/rag-mandatory-reference.md`）
 
 4\. 禁止 Redis、MQ、Kafka 等中间件，仅允许SQLite本地文件存储
 
@@ -16,7 +16,7 @@
 
 
 
-\## 二、强制技术栈标准
+## 二、强制技术栈标准
 
 1\. 全栈统一 TypeScript / Node.js，pnpm monorepo 分包架构
 
@@ -32,7 +32,7 @@
 
 
 
-\## 三、项目目录结构规范（代码必须匹配该分包）
+## 三、项目目录结构规范（代码必须匹配该分包）
 
 ## 分阶段允许/禁止清单（Phase1 / Phase2 / Phase3）
 
@@ -73,7 +73,7 @@
 └── docs/architecture.md
 
 
-\## 四、开发顺序强制依赖
+## 四、开发顺序强制依赖
 
 1\. 先完成 `packages/ozon-api-wrapper`
 
@@ -85,7 +85,7 @@
 
 
 
-\## 五、代码输出规范
+## 五、代码输出规范
 
 1\. 所有代码必须带完整TS类型，复用 shared-types 内定义，禁止any
 
