@@ -484,7 +484,7 @@ app.use("/api/inventory", createInventoryRouter());
 app.use("/api/aftersales", createAftersalesRouter());
 app.use("/api", createAlertRouter());
 app.use("/api", createPromoRouter());
-app.use("/api", createRagRouter());
+app.use("/api", ragRateLimit, createRagRouter());
 
 // Data export routes
 const { createExportRouter } = await import("./routes/export.route.js");
