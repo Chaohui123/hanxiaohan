@@ -74,7 +74,14 @@ export function verifySignature(
     .update(rawBody)
     .digest("hex");
 
-  if (computed !== signature) {
+  // Constant-time comparison to prevent timing attacks
+  const computedBuf = Buffer.from(computed, "hex");
+  const signatureBuf = Buffer.from(signature, "hex");
+
+  if (
+    computedBuf.length !== signatureBuf.length ||
+    !crypto.timingSafeEqual(computedBuf, signatureBuf)
+  ) {
     return { valid: false, reason: "Signature mismatch" };
   }
 

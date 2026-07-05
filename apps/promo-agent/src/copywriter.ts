@@ -108,7 +108,33 @@ export async function generateCopy(
   const description = String(product.description || "");
   const attributes = JSON.stringify(product.attributes || product.properties || {});
 
-  // 2. 构建 prompt
+  // 2.5 RAG 检索相似文案
+  let ragContext = "";
+  try {
+    const ragResp = await fetch(`${config.apiBase}/api/rag/copy/search`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-Key": config.apiKey },
+      body: JSON.stringify({ query: `${name} ${product.category || product.categoryId || ""}`, category: "product_title", topK: 3 }),
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    if (ragResp.ok) {
+      const ragData = await ragResp.json() as { results?: Array<{ score: number; content?: string; original_text?: string }> };
+      if (ragData.results?.length) {
+        ragContext = ragData.results
+          .map((r) => `参考文案(相似度${(r.score || 0).toFixed(2)}): ${r.content || r.original_text || ""}`)
+          .join("\n");
+      }
+    }
+  } catch (err) {
+    logger.warn({ err }, "RAG copy search failed, continuing without context");
+  }
+
+  // 3. 构建 prompt
+  const systemPrompt = ragContext
+    ? `你是一个俄罗斯电商文案专家。\n\n以下是同类商品的优秀文案参考：\n${ragContext}\n\n请参考以上文案的风格和结构，但不要直接复制。`
+    : COPY_SYSTEM_PROMPT;
+
   const userPrompt = [
     "请为以下商品生成俄语文案：",
     "",
@@ -126,7 +152,7 @@ export async function generateCopy(
     .filter(Boolean)
     .join("\n");
 
-  // 3. 调用 DeepSeek
+  // 4. 调用 DeepSeek
   if (!DEEPSEEK_API_KEY) {
     throw new Error("未配置 DEEPSEEK_API_KEY");
   }
@@ -140,7 +166,7 @@ export async function generateCopy(
     body: JSON.stringify({
       model: "deepseek-chat",
       messages: [
-        { role: "system", content: COPY_SYSTEM_PROMPT },
+        { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
       max_tokens: 2000,
@@ -330,6 +356,19 @@ export async function applyCopy(
     });
 
     logger.info({ offerId }, "Copy applied to product");
+
+    // Auto-save to RAG knowledge base (async, don't block)
+    fetch(`${config.apiBase}/api/rag/copy`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-Key": config.apiKey },
+      body: JSON.stringify({
+        category: "product_title",
+        originalText: copy.offerId,
+        optimizedText: copy.titleRu,
+        optimizationNotes: `Auto-generated copy for ${copy.offerId}`,
+      }),
+      signal: AbortSignal.timeout(5_000),
+    }).catch(() => { /* fire-and-forget */ });
 
     return [
       "✅ 文案已更新到商品",

@@ -32,10 +32,13 @@ if (!API_KEY) {
 // ---- 初始化 ----
 const apiConfig: ApiConfig = { apiBase: API_BASE, apiKey: API_KEY };
 
+const PROMO_FEISHU_PORT = parseInt(process.env.PROMO_FEISHU_PORT || "8182", 10);
+
 const feishuConfig: FeishuConfig = {
   appId: FEISHU_APP_ID,
   appSecret: FEISHU_APP_SECRET,
   chatId: CHAT_ID || undefined,
+  port: PROMO_FEISHU_PORT,
 };
 
 const bot = new FeishuBot(feishuConfig);
@@ -54,7 +57,7 @@ if (CHAT_ID) {
   logger.warn("PROMO_AGENT_CHAT_ID (or OPS_AGENT_CHAT_ID) not set — scheduled tasks disabled");
 }
 
-// ---- Health + Metrics HTTP endpoint ----
+// ---- Health + Metrics + Forward HTTP endpoint ----
 const HEALTH_PORT = parseInt(process.env.PROMO_HEALTH_PORT || "9101", 10);
 const healthServer = createServer(async (req, res) => {
   if (req.url === "/health") {
@@ -71,6 +74,23 @@ const healthServer = createServer(async (req, res) => {
   } else if (req.url === "/metrics") {
     res.writeHead(200, { "Content-Type": register.contentType });
     res.end(await register.metrics());
+  } else if (req.url === "/forward" && req.method === "POST") {
+    // Inter-agent message forwarding from ops-agent
+    let body = "";
+    req.on("data", (chunk: Buffer) => { body += chunk.toString(); });
+    req.on("end", async () => {
+      try {
+        const msg = JSON.parse(body) as { chatId: string; text: string; messageId: string; senderOpenId: string };
+        await bot.triggerMessage({
+          chatId: msg.chatId, chatType: "group",
+          messageId: msg.messageId, text: msg.text, senderOpenId: msg.senderOpenId,
+        });
+        res.writeHead(200).end();
+      } catch (err) {
+        logger.error({ err }, "Forward handler failed");
+        res.writeHead(500).end();
+      }
+    });
   } else {
     res.writeHead(404).end();
   }

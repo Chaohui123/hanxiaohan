@@ -5,7 +5,7 @@ global:
 alerting:
   alertmanagers:
     - static_configs:
-        - targets: []
+        - targets: ["alertmanager:9093"]
 
 rule_files:
   - /etc/prometheus/alerts.yml
@@ -16,6 +16,11 @@ scrape_configs:
     static_configs:
       - targets: ["api-services:3000"]
     scrape_interval: 15s
+
+  - job_name: "promo-agent"
+    static_configs:
+      - targets: ["promo-agent:9101"]
+        labels: { job: "promo-agent" }
 
   - job_name: "prometheus"
     static_configs:

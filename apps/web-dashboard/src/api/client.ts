@@ -1,15 +1,47 @@
 import axios from "axios";
 
-const api = axios.create({
+const AUTH_KEY = "onzo-api-key";
+
+export const api = axios.create({
   baseURL: import.meta.env.VITE_API_BASE || "",
   timeout: 30_000,
   headers: { "Content-Type": "application/json" },
 });
 
+// ---- Request interceptor: inject API key from localStorage or env var ----
+api.interceptors.request.use((config) => {
+  let apiKey = "";
+  try { apiKey = localStorage.getItem(AUTH_KEY) || ""; } catch {}
+
+  // Fallback to build-time env var for dev convenience
+  if (!apiKey) {
+    apiKey = import.meta.env.VITE_API_KEY || "";
+  }
+
+  if (apiKey) {
+    config.headers["X-API-Key"] = apiKey;
+  }
+
+  return config;
+});
+
+// Phase 2 (JWT): replace X-API-Key with Bearer token from localStorage.
+// Refresh flow: on 401, call /api/auth/refresh → store new token → retry original.
+
+// ---- Response interceptor: 401 → redirect to login ----
 api.interceptors.response.use(
   (res) => res.data,
   (err) => {
     const msg = err.response?.data?.error?.message || err.message;
+
+    // 401 — clear stored key and redirect to login
+    if (err.response?.status === 401) {
+      try { localStorage.removeItem(AUTH_KEY); } catch {}
+      if (window.location.pathname !== "/login") {
+        window.location.href = "/login?reason=auth_required&message=" + encodeURIComponent(msg);
+      }
+    }
+
     return Promise.reject(new Error(msg));
   }
 );

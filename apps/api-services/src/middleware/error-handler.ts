@@ -48,11 +48,12 @@ export function errorHandler(
     }).catch(() => {});
   }
 
+  const isProduction = (process.env.ENV || process.env.NODE_ENV) === "production";
   const response: ApiErrorResponse = {
     success: false,
     error: {
       code: "INTERNAL_ERROR",
-      message: err.message || "An unexpected error occurred",
+      message: isProduction ? "An unexpected error occurred" : (err.message || "An unexpected error occurred"),
       retryable: determineRetryable(err),
     },
     correlationId,

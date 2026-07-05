@@ -56,8 +56,13 @@ export function registerCommands(bot: FeishuBot, config: ApiConfig): void {
 
   // === 消息处理 ===
   bot.onMessage(async (ctx: MsgContext) => {
-    const text = ctx.text.trim();
+    // Strip Feishu @mention tags: <at ...>@xxx</at>
+    const cleanText = ctx.text.replace(/<at[^>]*>.*?<\/at>/g, "").trim();
+    const text = cleanText || ctx.text.trim();
     const lower = text.toLowerCase();
+
+    // Debug: log raw message for troubleshooting
+    logger.info({ raw: ctx.text, clean: text, lower }, "promo-agent received message");
 
     // "yes" 确认处理
     if (lower === "yes" || lower === "是") {

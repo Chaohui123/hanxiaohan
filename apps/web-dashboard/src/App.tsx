@@ -1,9 +1,10 @@
-import { BrowserRouter, Routes, Route, Link, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Link, useLocation, Navigate } from "react-router-dom";
 import { Layout, Menu, theme } from "antd";
 import {
   DashboardOutlined, UploadOutlined, ShoppingCartOutlined,
   InboxOutlined, CustomerServiceOutlined, ShopOutlined,
   MonitorOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
+  RocketOutlined, EyeOutlined, LineChartOutlined, FundOutlined, DatabaseOutlined,
 } from "@ant-design/icons";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useAppStore } from "./stores/app-store";
@@ -14,9 +15,22 @@ import Inventory from "./pages/Inventory";
 import Aftersales from "./pages/Aftersales";
 import Stores from "./pages/Stores";
 import Monitoring from "./pages/Monitoring";
+import Login from "./pages/Login";
+import Promo from "./pages/Promo";
+import Competitor from "./pages/Competitor";
+import PricingHistory from "./pages/PricingHistory";
+import PromoEffect from "./pages/PromoEffect";
+import RagKnowledge from "./pages/RagKnowledge";
 
 const { Header, Sider, Content } = Layout;
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } });
+
+/** Redirect to /login if not authenticated */
+function RequireAuth({ children }: { children: React.ReactNode }) {
+  const isAuthenticated = useAppStore((s) => s.isAuthenticated);
+  if (!isAuthenticated) return <Navigate to="/login" replace />;
+  return <>{children}</>;
+}
 
 const menuItems = [
   { key: "/", icon: <DashboardOutlined />, label: <Link to="/">仪表盘</Link> },
@@ -26,6 +40,11 @@ const menuItems = [
   { key: "/aftersales", icon: <CustomerServiceOutlined />, label: <Link to="/aftersales">售后管理</Link> },
   { key: "/stores", icon: <ShopOutlined />, label: <Link to="/stores">店铺管理</Link> },
   { key: "/monitoring", icon: <MonitorOutlined />, label: <Link to="/monitoring">系统监控</Link> },
+  { key: "/promo", icon: <RocketOutlined />, label: <Link to="/promo">推广决策</Link> },
+  { key: "/competitor", icon: <EyeOutlined />, label: <Link to="/competitor">竞品监控</Link> },
+  { key: "/pricing-history", icon: <LineChartOutlined />, label: <Link to="/pricing-history">调价历史</Link> },
+  { key: "/promo-effect", icon: <FundOutlined />, label: <Link to="/promo-effect">推广效果</Link> },
+  { key: "/rag", icon: <DatabaseOutlined />, label: <Link to="/rag">知识库</Link> },
 ];
 
 function AppLayout() {
@@ -68,6 +87,11 @@ function AppLayout() {
             <Route path="/aftersales" element={<Aftersales />} />
             <Route path="/stores" element={<Stores />} />
             <Route path="/monitoring" element={<Monitoring />} />
+            <Route path="/promo" element={<Promo />} />
+            <Route path="/competitor" element={<Competitor />} />
+            <Route path="/pricing-history" element={<PricingHistory />} />
+            <Route path="/promo-effect" element={<PromoEffect />} />
+            <Route path="/rag" element={<RagKnowledge />} />
           </Routes>
         </Content>
       </Layout>
@@ -79,7 +103,14 @@ export default function App() {
   return (
     <QueryClientProvider client={queryClient}>
       <BrowserRouter>
-        <AppLayout />
+        <Routes>
+          <Route path="/login" element={<Login />} />
+          <Route path="*" element={
+            <RequireAuth>
+              <AppLayout />
+            </RequireAuth>
+          } />
+        </Routes>
       </BrowserRouter>
     </QueryClientProvider>
   );

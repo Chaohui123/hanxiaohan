@@ -1,10 +1,46 @@
-﻿node_modules
+node_modules
 dist
+.vite
 *.log
+*.tsbuildinfo
+
+# Secrets (must not leak into Docker image)
+.env
 .env.local
+.env.development
+.env.production
 .env.*.local
+
+# Git
 .git
 .gitignore
+.gitattributes
+
+# Runtime data
 data/
 dead-letter/
 uploads/
+*.db
+*.db-journal
+
+# Test & coverage
+coverage/
+.nyc_output/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Docs (not needed in image)
+docs/
+*.md
+
+# Temp
+tmp/
+temp/

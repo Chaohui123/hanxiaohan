@@ -41,7 +41,7 @@ jobs:
             bash scripts/migrate.sh up
 
             echo "=== Building and restarting via Docker Compose ==="
-            docker compose --env-file .env.production up -d --build api-services web-dashboard
+            docker compose --profile production --env-file .env.production up -d --build
 
             echo "=== Health Check ==="
             for i in 1 2 3 4 5 6 7 8 9 10; do

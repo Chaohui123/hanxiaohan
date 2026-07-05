@@ -1,6 +1,6 @@
 {
   "extends": "../../tsconfig.base.json",
-  "compilerOptions": {
+  "compilerOptions": { "composite": true,
     "outDir": "./dist",
     "rootDir": "./src"
   },
@@ -10,6 +10,7 @@
     { "path": "../../packages/ozon-api-wrapper" },
     { "path": "../../packages/ai" },
     { "path": "../../packages/scraper" },
-    { "path": "../../packages/validator" }
+    { "path": "../../packages/validator" },
+    { "path": "../../packages/embedding" }
   ]
 }

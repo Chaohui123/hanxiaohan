@@ -1,56 +1,170 @@
 groups:
+  # ---- Business Alerts ----
   - name: onzo-business
     rules:
       - alert: ListingFailureRateHigh
-        expr: rate(onzo_listing_pipeline_total{status="failed"}[5m]) / rate(onzo_listing_pipeline_total[5m]) > 0.20
+        expr: |
+          rate(onzo_listing_pipeline_total{status="failed"}[5m])
+          / rate(onzo_listing_pipeline_total[5m]) > 0.20
         for: 5m
-        labels: { severity: critical, category: business }
-        annotations: { summary: "上架失败率超过20%", description: "5分钟内上架失败率 {{ $value | humanizePercentage }}" }
+        labels:
+          severity: critical
+          category: business
+        annotations:
+          summary: "上架失败率超过 20%"
+          description: "5 分钟内上架失败率 {{ $value | humanizePercentage }}"
 
       - alert: OrderSyncDelay
-        expr: onzo_order_sync_duration_seconds{quantile="0.5"} > 1800
+        expr: |
+          histogram_quantile(0.5, rate(onzo_order_sync_duration_seconds_bucket[10m]))
+          > 1800
         for: 10m
-        labels: { severity: warning, category: business }
-        annotations: { summary: "订单同步延迟超过30分钟", description: "P50 同步延迟 {{ $value }}秒" }
+        labels:
+          severity: warning
+          category: business
+        annotations:
+          summary: "订单同步延迟超过 30 分钟"
+          description: "P50 同步延迟 {{ $value }} 秒"
 
-      - alert: DeadLetterBacklog
-        expr: onzo_dead_letter_queue_size > 100
+      - alert: OrderSyncConsecutiveFailures
+        expr: |
+          increase(onzo_errors_total{code="order_sync_failed"}[30m]) > 3
         for: 5m
-        labels: { severity: critical, category: business }
-        annotations: { summary: "死信队列积压超过100", description: "当前死信队列 {{ $value }} 条" }
+        labels:
+          severity: warning
+          category: business
+        annotations:
+          summary: "订单同步连续失败"
+          description: "30 分钟内失败 {{ $value }} 次"
 
+      - alert: ExchangeRateUnreliable
+        expr: |
+          onzo_exchange_rate == 0
+          or
+          onzo_exchange_rate != onzo_exchange_rate
+        for: 1h
+        labels:
+          severity: critical
+          category: business
+        annotations:
+          summary: "汇率数据不可靠超过 1 小时"
+          description: "汇率值为 {{ $value }}，上架已被阻止。检查网络或 API 源。"
+
+  # ---- Token / Cost Alerts ----
   - name: onzo-token
     rules:
-      - alert: TokenLimitReached
-        expr: increase(onzo_token_usage_total[24h]) > 500000
+      - alert: TokenUsageWarning
+        expr: |
+          increase(onzo_token_usage_total[24h]) > 400000
         for: 5m
-        labels: { severity: critical, category: cost }
-        annotations: { summary: "Token日用量超限", description: "24小时Token消耗 {{ $value }}" }
+        labels:
+          severity: warning
+          category: cost
+        annotations:
+          summary: "Token 用量超过 80%"
+          description: "24h 消耗 {{ $value }} / 500000"
 
+      - alert: TokenLimitReached
+        expr: |
+          increase(onzo_token_usage_total[24h]) > 500000
+        for: 5m
+        labels:
+          severity: critical
+          category: cost
+        annotations:
+          summary: "Token 日用量超限"
+          description: "24h 消耗 {{ $value }}，AI 调用已被暂停"
+
+  # ---- Scraper Alerts ----
   - name: onzo-scraper
     rules:
       - alert: ScraperSuccessRateLow
-        expr: rate(onzo_scraper_requests_total{result="success"}[10m]) / rate(onzo_scraper_requests_total[10m]) < 0.50
+        expr: |
+          rate(onzo_scraper_requests_total{result="success"}[10m])
+          / rate(onzo_scraper_requests_total[10m]) < 0.50
         for: 10m
-        labels: { severity: warning, category: scraper }
-        annotations: { summary: "爬虫成功率低于50%", description: "10分钟内爬虫成功率 {{ $value | humanizePercentage }}" }
+        labels:
+          severity: warning
+          category: scraper
+        annotations:
+          summary: "爬虫成功率低于 50%"
+          description: "10 分钟内爬虫成功率 {{ $value | humanizePercentage }}"
 
+  # ---- Infrastructure Alerts ----
   - name: onzo-infra
     rules:
-      - alert: ExchangeRateStale
-        expr: onzo_exchange_rate == 0
-        for: 1h
-        labels: { severity: warning, category: infra }
-        annotations: { summary: "汇率数据缺失超过1小时", description: "汇率gauge值为0" }
+      - alert: DeadLetterBacklog
+        expr: onzo_dead_letter_queue_size > 10
+        for: 5m
+        labels:
+          severity: warning
+          category: infra
+        annotations:
+          summary: "死信队列积压 > 10"
+          description: "当前死信队列 {{ $value }} 条待处理"
+
+      - alert: DeadLetterBacklogCritical
+        expr: onzo_dead_letter_queue_size > 50
+        for: 5m
+        labels:
+          severity: critical
+          category: infra
+        annotations:
+          summary: "死信队列严重积压 > 50"
+          description: "当前死信队列 {{ $value }} 条"
 
       - alert: CircuitBreakerOpen
         expr: onzo_circuit_breaker_state > 0
         for: 5m
-        labels: { severity: warning, category: infra }
-        annotations: { summary: "熔断器打开", description: "{{ $labels.name }} 熔断器处于 OPEN/HALF_OPEN 状态" }
+        labels:
+          severity: warning
+          category: infra
+        annotations:
+          summary: "熔断器打开"
+          description: "{{ $labels.name }} 处于 OPEN/HALF_OPEN 状态"
 
       - alert: WebhookFailureRate
-        expr: rate(onzo_webhook_events_total{result="failed"}[10m]) / rate(onzo_webhook_events_total[10m]) > 0.30
+        expr: |
+          rate(onzo_webhook_events_total{result="failed"}[10m])
+          / rate(onzo_webhook_events_total[10m]) > 0.30
         for: 10m
-        labels: { severity: critical, category: infra }
-        annotations: { summary: "Webhook处理失败率超过30%", description: "10分钟内失败率 {{ $value | humanizePercentage }}" }
+        labels:
+          severity: critical
+          category: infra
+        annotations:
+          summary: "Webhook 失败率 > 30%"
+          description: "10 分钟内失败率 {{ $value | humanizePercentage }}"
+
+      - alert: DBConnectionPoolExhausted
+        expr: onzo_db_pool_connections_waiting > 5
+        for: 2m
+        labels:
+          severity: warning
+          category: infra
+        annotations:
+          summary: "DB 连接池等待 > 5"
+          description: "{{ $value }} 个请求等待连接，考虑增加 pool.max"
+
+      - alert: HTTPErrorRateHigh
+        expr: |
+          rate(onzo_http_requests_total{status_code=~"5.."}[5m])
+          / rate(onzo_http_requests_total[5m]) > 0.10
+        for: 5m
+        labels:
+          severity: critical
+          category: infra
+        annotations:
+          summary: "HTTP 5xx 错误率 > 10%"
+          description: "5 分钟内 5xx 占比 {{ $value | humanizePercentage }}"
+
+      - alert: HighRequestLatency
+        expr: |
+          histogram_quantile(0.95, rate(onzo_http_request_duration_seconds_bucket[5m]))
+          > 5
+        for: 5m
+        labels:
+          severity: warning
+          category: infra
+        annotations:
+          summary: "P95 响应延迟 > 5 秒"
+          description: "P95 延迟 {{ $value }} 秒"

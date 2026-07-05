@@ -72,3 +72,31 @@ export interface OzonProductInfo {
   price: string;
   commissionInfo?: { percent: number };
 }
+
+// ---- Finance / Reconciliation ----
+
+export interface OzonFinanceReportListResponse {
+  result: {
+    rows?: Array<{ report_id: string }>;
+  };
+}
+
+export interface OzonFinanceReportRow {
+  posting_number: string;
+  order_id: string;
+  operation_type: string;
+  amount: number;
+  commission: number;
+  payout: number;
+  services_amount: number;
+}
+
+export interface OzonFinanceReportDetailResponse {
+  result: {
+    report_id: string;
+    begin_date: string;
+    end_date: string;
+    generated_at: string;
+    rows?: OzonFinanceReportRow[];
+  };
+}

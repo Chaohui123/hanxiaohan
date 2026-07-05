@@ -145,6 +145,22 @@ export const NOTIFICATION_EVENTS: NotificationEvent[] = [
     force: false,
     rateLimit: 20,
   },
+  {
+    key: "ORDER_SYNC_MISMATCH",
+    level: "warn",
+    label: "订单数据不一致",
+    template: "订单数量差异 {{deviationPct}}%: 本地 {{localCount}} vs Ozon {{ozonCount}}. 最近24h可能漏单.",
+    force: false,
+    rateLimit: 3,
+  },
+  {
+    key: "DATA_CONSISTENCY_ALERT",
+    level: "warn",
+    label: "数据一致性告警",
+    template: "{{check}}: {{detail}}",
+    force: false,
+    rateLimit: 5,
+  },
 ];
 
 // ---- Event Emitter ----
@@ -201,6 +217,8 @@ export const EVENT_KEYS = {
   EXCHANGE_RATE_STALE: "EXCHANGE_RATE_STALE",
   REVIEW_DECLINED: "REVIEW_DECLINED",
   SHIPMENT_FAILED: "SHIPMENT_FAILED",
+  ORDER_SYNC_MISMATCH: "ORDER_SYNC_MISMATCH",
+  DATA_CONSISTENCY_ALERT: "DATA_CONSISTENCY_ALERT",
 } as const;
 
 export type EventKey = (typeof EVENT_KEYS)[keyof typeof EVENT_KEYS];

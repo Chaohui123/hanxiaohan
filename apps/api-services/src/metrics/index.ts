@@ -98,7 +98,33 @@ export const deadLetterQueueSize = new Gauge({
   help: "Number of items in dead letter queue",
 });
 
+// ---- DB Connection Pool Metrics ----
+export const dbPoolTotal = new Gauge({
+  name: "onzo_db_pool_connections_total",
+  help: "Total PostgreSQL connections in pool",
+});
+
+export const dbPoolIdle = new Gauge({
+  name: "onzo_db_pool_connections_idle",
+  help: "Idle PostgreSQL connections in pool",
+});
+
+export const dbPoolWaiting = new Gauge({
+  name: "onzo_db_pool_connections_waiting",
+  help: "Requests waiting for a PostgreSQL connection",
+});
+
 // ---- Collect & Export ----
+
+/**
+ * Refresh pool metrics before serving /metrics.
+ * Accept stats from connection.getPoolStats() to avoid circular import.
+ */
+export function refreshPoolMetrics(stats: { total: number; idle: number; waiting: number }): void {
+  dbPoolTotal.set(stats.total);
+  dbPoolIdle.set(stats.idle);
+  dbPoolWaiting.set(stats.waiting);
+}
 export async function collectMetrics(): Promise<string> {
   return register.metrics();
 }

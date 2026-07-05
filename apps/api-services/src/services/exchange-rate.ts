@@ -20,8 +20,8 @@ interface RateCache {
 
 let localCache: RateCache | null = null;
 const CACHE_TTL_MS = 3600_000; // 1 hour
-const STALE_WARN_MS = 24 * 3600_000; // 24 hours
-const STALE_BLOCK_MS = 48 * 3600_000; // 48 hours — refuse to use
+const STALE_WARN_HOURS = 24; // 24 hours — log warning
+const STALE_BLOCK_HOURS = 48; // 48 hours — refuse to use, block listing
 const MAX_DEVIATION_PCT = 5; // max % difference between sources before flagging
 const FALLBACK_RATE = 11.5;
 
@@ -96,7 +96,7 @@ export async function getExchangeRate(): Promise<RateResult> {
       if (Date.now() - parsed.timestamp < CACHE_TTL_MS) {
         localCache = parsed;
         const hoursStale = (Date.now() - parsed.timestamp) / 3600_000;
-        return { rate: parsed.rate, cached: true, stale: hoursStale > 24, reliable: hoursStale < 48, source: parsed.source };
+        return { rate: parsed.rate, cached: true, stale: hoursStale > STALE_WARN_HOURS, reliable: hoursStale < STALE_BLOCK_HOURS, source: parsed.source };
       }
     } catch { /* corrupted */ }
   }
@@ -107,8 +107,8 @@ export async function getExchangeRate(): Promise<RateResult> {
     return {
       rate: localCache.rate,
       cached: true,
-      stale: hoursStale > 24,
-      reliable: hoursStale < 48,
+      stale: hoursStale > STALE_WARN_HOURS,
+      reliable: hoursStale < STALE_BLOCK_HOURS,
       source: localCache.source,
     };
   }
@@ -151,9 +151,9 @@ export async function getExchangeRate(): Promise<RateResult> {
   if (localCache) {
     const hoursStale = (Date.now() - localCache.timestamp) / 3600_000;
 
-    if (hoursStale > STALE_BLOCK_MS) {
+    if (hoursStale > STALE_BLOCK_HOURS) {
       console.error(
-        `[ExchangeRate] BLOCKING: Cache is ${hoursStale.toFixed(0)}h old (>${STALE_BLOCK_MS / 3600_000}h).`
+        `[ExchangeRate] BLOCKING: Cache is ${hoursStale.toFixed(0)}h old (>${STALE_BLOCK_HOURS}h).`
       );
       emitEvent(EVENT_KEYS.EXCHANGE_RATE_STALE, {
         hoursStale: hoursStale.toFixed(0),
@@ -173,8 +173,8 @@ export async function getExchangeRate(): Promise<RateResult> {
     return {
       rate: localCache.rate,
       cached: true,
-      stale: hoursStale > 24,
-      reliable: hoursStale < 48,
+      stale: hoursStale > STALE_WARN_HOURS,
+      reliable: hoursStale < STALE_BLOCK_HOURS,
       source: `cached:${localCache.rate}`,
     };
   }

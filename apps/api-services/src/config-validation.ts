@@ -23,6 +23,9 @@ const SECURITY_RULES: ValidationRule[] = [
   { key: "API_KEY", required: true, minLength: 16, blockedSubstrings: ["CHANGE_ME", "YOUR_"] },
   { key: "N8N_PASSWORD", required: true, minLength: 8, blockedSubstrings: ["CHANGE_ME", "change_me"] },
   { key: "N8N_ENCRYPTION_KEY", required: true, minLength: 16, blockedSubstrings: ["CHANGE_ME", "change_me"] },
+  { key: "PUBLIC_DOMAIN", required: true, minLength: 4, blockedSubstrings: ["CHANGE_ME", "YOUR_", "localhost", "nip.io"] },
+  { key: "DATABASE_URL", required: true, minLength: 10, blockedSubstrings: ["CHANGE_ME", "YOUR_"] },
+  { key: "REDIS_URL", required: true, minLength: 10, blockedSubstrings: ["CHANGE_ME", "YOUR_"] },
 ];
 
 const COS_RULES: ValidationRule[] = [
@@ -31,8 +34,8 @@ const COS_RULES: ValidationRule[] = [
 ];
 
 const DOCKER_RULES: ValidationRule[] = [
-  { key: "POSTGRES_PASSWORD", required: false, minLength: 12, blockedSubstrings: ["CHANGE_ME", "Onzo@Prod", "password"] },
-  { key: "REDIS_PASSWORD", required: false, minLength: 12, blockedSubstrings: ["CHANGE_ME", "Redis@Onzo", "password"] },
+  { key: "POSTGRES_PASSWORD", required: true, minLength: 12, blockedSubstrings: ["CHANGE_ME", "password", "postgres"] },
+  { key: "REDIS_PASSWORD", required: true, minLength: 12, blockedSubstrings: ["CHANGE_ME", "password", "redis"] },
 ];
 
 /**
@@ -77,11 +80,11 @@ export function validateProductionConfig(): void {
 
   for (const rule of SECURITY_RULES) check(rule);
 
-  // Docker passwords are only required if Docker services are enabled
-  const usingDocker = process.env.DOCKER_ENABLED === "true" || process.env.POSTGRES_PASSWORD;
+  // Docker passwords are required if Docker services are enabled or PG/REDIS vars exist
+  const usingDocker = process.env.DOCKER_ENABLED === "true" || process.env.POSTGRES_PASSWORD || process.env.REDIS_PASSWORD;
   if (usingDocker) {
     for (const rule of DOCKER_RULES) {
-      if (process.env[rule.key]) check(rule);
+      check(rule);
     }
   }
 

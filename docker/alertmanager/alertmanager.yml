@@ -1,0 +1,40 @@
+# ============================================================
+# Alertmanager Configuration
+# Routes Prometheus alerts → ONZO notifier → Telegram / WeChat
+# ============================================================
+
+global:
+  resolve_timeout: 5m
+
+route:
+  group_by: ["alertname", "severity"]
+  group_wait: 30s
+  group_interval: 5m
+  repeat_interval: 4h
+
+  receiver: "onzo-webhook"
+
+  routes:
+    - match:
+        severity: critical
+      receiver: "onzo-webhook"
+      group_wait: 10s
+      repeat_interval: 15m
+
+    - match:
+        severity: warning
+      receiver: "onzo-webhook"
+      group_wait: 30s
+      repeat_interval: 1h
+
+receivers:
+  - name: "onzo-webhook"
+    webhook_configs:
+      - url: "http://api-services:3000/api/alerts/prometheus"
+        send_resolved: true
+        http_config:
+          follow_redirects: true
+
+  # Fallback: if the ONZO API is down, log to stdout (Docker logs)
+  - name: "stdout"
+    webhook_configs: []

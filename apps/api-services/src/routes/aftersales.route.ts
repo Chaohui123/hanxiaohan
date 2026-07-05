@@ -1,5 +1,6 @@
 import { Router } from "express";
 import { AftersalesManager, type AftersalesCase, type AutoReplyTemplate } from "../services/aftersales-manager.js";
+import { logger } from "@onzo/logger";
 
 export function createAftersalesRouter(): Router {
   const router = Router();
@@ -249,6 +250,28 @@ export function createAftersalesRouter(): Router {
         error: { code: "AFTERSALES_ERROR", message: (err as Error).message, retryable: true },
         correlationId: req.correlationId
       });
+    }
+  });
+
+  // RAG-enhanced auto reply
+  router.post("/aftersales/:id/auto-reply", async (req, res) => {
+    try {
+      const caseItem = await aftersalesManager.getCase(req.params.id);
+      if (!caseItem) {
+        res.status(404).json({ success: false, error: { code: "NOT_FOUND", message: "Case not found" } });
+        return;
+      }
+
+      const result = await aftersalesManager.generateAutoReply(caseItem);
+
+      // Log low-confidence replies for human review
+      if (result.confidence < 0.7) {
+        logger.warn({ caseId: caseItem.id, confidence: result.confidence }, "Low confidence auto-reply — needs human review");
+      }
+
+      res.json({ success: true, data: result, correlationId: req.correlationId });
+    } catch (err) {
+      res.status(500).json({ success: false, error: { code: "AFTERSALES_ERROR", message: (err as Error).message } });
     }
   });
 

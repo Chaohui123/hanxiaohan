@@ -183,3 +183,141 @@ export const reconciliationResults = pgTable("reconciliation_results", {
   resultJson: text("result_json"),
   createdAt: timestamp("created_at").defaultNow(),
 });
+
+// ---- Promo Agent: Watch List ----
+export const promoWatchList = pgTable("promo_watch_list", {
+  offerId: text("offer_id").primaryKey(),
+  name: text("name").notNull(),
+  addedAt: timestamp("added_at").defaultNow(),
+});
+
+// ---- Promo Agent: Competitor Prices ----
+export const promoCompetitorPrices = pgTable("promo_competitor_prices", {
+  id: serial("id").primaryKey(),
+  offerId: text("offer_id").notNull(),
+  price: real("price").notNull(),
+  rating: real("rating").default(0),
+  salesCount: integer("sales_count").default(0),
+  capturedAt: timestamp("captured_at").defaultNow(),
+});
+
+// ---- Promo Agent: Events ----
+export const promoEvents = pgTable("promo_events", {
+  id: serial("id").primaryKey(),
+  type: text("type").notNull(),
+  payloadJson: text("payload_json"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// ---- Promo Agent: Pricing History ----
+export const promoPricingHistory = pgTable("promo_pricing_history", {
+  id: serial("id").primaryKey(),
+  offerId: text("offer_id").notNull(),
+  name: text("name"),
+  oldPrice: real("old_price"),
+  newPrice: real("new_price"),
+  reason: text("reason"),
+  salesBefore: integer("sales_before").default(0),
+  salesAfter7d: integer("sales_after_7d").default(0),
+  appliedAt: timestamp("applied_at").defaultNow(),
+});
+
+// ---- Promo Agent: Copy History ----
+export const promoCopyHistory = pgTable("promo_copy_history", {
+  id: serial("id").primaryKey(),
+  offerId: text("offer_id").notNull(),
+  name: text("name"),
+  titleRu: text("title_ru"),
+  salesBefore: integer("sales_before").default(0),
+  salesAfter7d: integer("sales_after_7d").default(0),
+  appliedAt: timestamp("applied_at").defaultNow(),
+});
+
+// ---- Promo Agent: Decision Plans ----
+export const promoDecisions = pgTable("promo_decisions", {
+  id: text("id").primaryKey(),
+  planJson: text("plan_json").notNull(),
+  status: text("status").notNull().default("pending"),
+  createdAt: timestamp("created_at").defaultNow(),
+  executedAt: timestamp("executed_at"),
+});
+
+// ---- Promo Agent: Audit Log ----
+export const promoAuditLog = pgTable("promo_audit_log", {
+  id: serial("id").primaryKey(),
+  actionType: text("action_type").notNull(),
+  offerId: text("offer_id"),
+  detailsJson: text("details_json"),
+  operator: text("operator").default("auto"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+// ---- RAG Knowledge Base Tables ----
+// Note: embedding fields use text type in Drizzle (PG native vector type accessed via sql``)
+
+export const ragAftersalesScripts = pgTable("rag_aftersales_scripts", {
+  id: text("id").primaryKey(),
+  category: text("category").notNull(),
+  scenario: text("scenario").notNull(),
+  contentRu: text("content_ru").notNull(),
+  contentZh: text("content_zh"),
+  keywords: text("keywords").array(),
+  embedding: text("embedding"),
+  source: text("source").default("manual"),
+  effectivenessScore: real("effectiveness_score").default(0),
+  usageCount: integer("usage_count").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const ragCompetitorReports = pgTable("rag_competitor_reports", {
+  id: text("id").primaryKey(),
+  offerId: text("offer_id").notNull(),
+  categoryId: integer("category_id"),
+  reportText: text("report_text").notNull(),
+  priceTrendSummary: text("price_trend_summary"),
+  actionSuggestion: text("action_suggestion"),
+  embedding: text("embedding"),
+  periodStart: text("period_start"),
+  periodEnd: text("period_end"),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const ragProductKnowledge = pgTable("rag_product_knowledge", {
+  id: text("id").primaryKey(),
+  categoryId: integer("category_id"),
+  categoryName: text("category_name"),
+  title: text("title").notNull(),
+  content: text("content").notNull(),
+  sourceUrl: text("source_url"),
+  keywords: text("keywords").array(),
+  embedding: text("embedding"),
+  dataSource: text("data_source").default("scraper"),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});
+
+export const ragCopyTemplates = pgTable("rag_copy_templates", {
+  id: text("id").primaryKey(),
+  category: text("category").notNull(),
+  categoryId: integer("category_id"),
+  originalText: text("original_text").notNull(),
+  optimizedText: text("optimized_text"),
+  optimizationNotes: text("optimization_notes"),
+  embedding: text("embedding"),
+  performanceScore: real("performance_score").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+});
+
+export const ragOperationsPlaybook = pgTable("rag_operations_playbook", {
+  id: text("id").primaryKey(),
+  title: text("title").notNull(),
+  scenario: text("scenario").notNull(),
+  content: text("content").notNull(),
+  tags: text("tags").array(),
+  embedding: text("embedding"),
+  author: text("author").default("system"),
+  priority: integer("priority").default(0),
+  createdAt: timestamp("created_at").defaultNow(),
+  updatedAt: timestamp("updated_at").defaultNow(),
+});

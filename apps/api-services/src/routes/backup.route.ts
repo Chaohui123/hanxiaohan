@@ -40,14 +40,21 @@ async function runBackup(): Promise<{ name: string; path: string; sizeBytes: num
 
     await rotateBackups();
 
-    const fileStat = await stat(backupPath).catch(() => null);
+    // Encrypt backup if ENCRYPTION_KEY is configured (protects buyer data in raw_json)
+    const finalPath = await encryptBackup(backupPath);
+
+    // Upload to remote storage if RCLONE_REMOTE is configured
+    await uploadToRemote(finalPath);
+
+    const finalName = finalPath.split("/").pop() || backupName;
+    const fileStat = await stat(finalPath).catch(() => null);
     if (!fileStat) {
-      console.error("[Backup] Backup file not created");
+      logger.error("[Backup] Backup file not created");
       return null;
     }
 
-    console.log(`[Backup] Created: ${backupName} (${(fileStat.size / 1024).toFixed(1)} KB)`);
-    return { name: backupName, path: backupPath, sizeBytes: fileStat.size };
+    logger.info(`[Backup] Created: ${finalName} (${(fileStat.size / 1024).toFixed(1)} KB)`);
+    return { name: finalName, path: finalPath, sizeBytes: fileStat.size };
   } catch (err) {
     console.error(`[Backup] Failed: ${(err as Error).message}`);
     return null;
@@ -95,20 +102,28 @@ async function fallbackExport(outputPath: string): Promise<void> {
 
   const gzip = createGzip();
   const output = createWriteStream(outputPath);
-  const write = (s: string) => new Promise<void>((r) => { output.write(s, () => r()); });
+  // Fallback: export key tables as JSON Lines via parameterized SELECT queries.
+  // JSONL is safer than SQL INSERT dumps (no escaping issues, no injection risk).
+  // Restore: parse each JSON line and execute parameterized INSERT via db.run().
+  const write = (s: string): Promise<void> =>
+    new Promise<void>((resolve, reject) => {
+      if (!output.write(s)) {
+        output.once("drain", resolve);
+      } else {
+        resolve();
+      }
+      output.once("error", reject);
+    });
 
   try {
     for (const table of tables) {
-      await write(`-- ONZO backup: ${table}\n`);
-      const rows = await db.all(`SELECT * FROM ${table}`).catch(() => [] as Record<string, unknown>[]);
+      const rows = await db
+        .all(`SELECT * FROM ${table}`)
+        .catch(() => [] as Record<string, unknown>[]);
+
       for (const row of rows) {
-        const cols = Object.keys(row).join(", ");
-        const vals = Object.values(row).map((v) =>
-          v === null ? "NULL" : typeof v === "string" ? `'${v.replace(/'/g, "''")}'` : String(v)
-        ).join(", ");
-        await write(`INSERT INTO ${table} (${cols}) VALUES (${vals});\n`);
+        await write(JSON.stringify({ __table: table, ...row }) + "\n");
       }
-      await write("\n");
     }
     await new Promise<void>((resolve, reject) => {
       gzip.end();
@@ -121,6 +136,66 @@ async function fallbackExport(outputPath: string): Promise<void> {
 }
 
 /**
+ * Encrypt backup file with AES-256-GCM if ENCRYPTION_KEY is configured.
+ * Backups may contain sensitive buyer data (raw_json includes phone numbers, addresses).
+ */
+async function encryptBackup(inputPath: string): Promise<string> {
+  const encKey = process.env.ENCRYPTION_KEY;
+  if (!encKey || encKey.startsWith("CHANGE_ME")) return inputPath;
+
+  const crypto = await import("node:crypto");
+  const { createReadStream, createWriteStream } = await import("node:fs");
+  const { pipeline } = await import("node:stream/promises");
+
+  const encPath = inputPath + ".enc";
+  const key = crypto.scryptSync(encKey, "onzo-backup-salt", 32);
+  const iv = crypto.randomBytes(16);
+  const cipher = crypto.createCipheriv("aes-256-gcm", key, iv);
+
+  const input = createReadStream(inputPath);
+  const output = createWriteStream(encPath);
+  output.write(iv); // prepend IV for decryption
+
+  await pipeline(input, cipher, output);
+  const tag = cipher.getAuthTag();
+  await new Promise<void>((resolve, reject) => {
+    const ws = createWriteStream(encPath, { flags: "a" });
+    ws.end(tag, (err) => (err ? reject(err) : resolve()));
+  });
+
+  // Remove unencrypted original
+  const { unlink } = await import("node:fs/promises");
+  await unlink(inputPath).catch(() => {});
+
+  return encPath;
+}
+
+/**
+ * Upload backup to remote storage via rclone if RCLONE_REMOTE is configured.
+ */
+async function uploadToRemote(backupPath: string): Promise<boolean> {
+  const rcloneRemote = process.env.RCLONE_REMOTE;
+  if (!rcloneRemote || rcloneRemote.includes("CHANGE_ME")) return false;
+
+  try {
+    const { execFile } = await import("node:child_process");
+    await new Promise<void>((resolve, reject) => {
+      execFile(
+        "rclone",
+        ["copyto", backupPath, `${rcloneRemote}/backups/${backupPath.split("/").pop()}`],
+        { timeout: 300_000 },
+        (err) => (err ? reject(err) : resolve())
+      );
+    });
+    logger.info({ remote: rcloneRemote, file: backupPath.split("/").pop() }, "Backup uploaded to remote storage");
+    return true;
+  } catch (err) {
+    logger.warn({ err: (err as Error).message }, "Remote backup upload failed — rclone not configured or unreachable");
+    return false;
+  }
+}
+
+/**
  * Rotate old backups, keeping only the most recent N.
  */
 async function rotateBackups(): Promise<void> {
@@ -128,12 +203,14 @@ async function rotateBackups(): Promise<void> {
     await mkdir(BACKUP_DIR, { recursive: true });
     const files = await readdir(BACKUP_DIR);
     const backupFiles = files
-      .filter((f) => f.startsWith("onzo-") && f.endsWith(".sql.gz"))
+      .filter((f) => f.startsWith("onzo-") && (f.endsWith(".sql.gz") || f.endsWith(".sql.gz.enc")))
       .sort()
       .reverse();
 
     const cutoff = Date.now() - MAX_BACKUP_DAYS * 24 * 60 * 60 * 1000;
-    for (const file of backupFiles.slice(MAX_BACKUP_DAYS)) {
+    for (const file of backupFiles) {
+      const fileMtime = (await stat(join(BACKUP_DIR, file)).catch(() => null))?.mtimeMs;
+      if (fileMtime && fileMtime > cutoff) continue;
       const filePath = join(BACKUP_DIR, file);
       try {
         const fileStat = await stat(filePath);
@@ -204,7 +281,7 @@ export function createBackupRouter(): Router {
       await mkdir(BACKUP_DIR, { recursive: true });
       const files = await readdir(BACKUP_DIR);
       const backupFiles = files
-        .filter((f) => f.startsWith("onzo-") && f.endsWith(".sql.gz"))
+        .filter((f) => f.startsWith("onzo-") && (f.endsWith(".sql.gz") || f.endsWith(".sql.gz.enc")))
         .sort()
         .reverse();
 

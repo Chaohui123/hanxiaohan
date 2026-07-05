@@ -49,6 +49,11 @@ export class FeishuBot {
     this.cardHandler = handler;
   }
 
+  /** Trigger message handler externally (used for inter-agent forwarding) */
+  async triggerMessage(ctx: MsgContext): Promise<void> {
+    if (this.msgHandler) await this.msgHandler(ctx);
+  }
+
   // ---- REST API methods (unchanged) ----
 
   async sendMessage(chatId: string, text: string): Promise<void> {
@@ -191,12 +196,17 @@ export class FeishuBot {
         challenge?: string;
       };
 
-      // URL verification challenge
-      if (payload.header?.event_type === "url_verification") {
-        const challenge = (payload.event as { challenge?: string })?.challenge ||
+      // URL verification challenge (v1: type=url_verification, v2: header.event_type=url_verification)
+      if (
+        payload.header?.event_type === "url_verification" ||
+        (payload as Record<string, unknown>).type === "url_verification"
+      ) {
+        const challenge =
+          (payload.event as { challenge?: string })?.challenge ||
           payload.challenge ||
+          ((payload as Record<string, unknown>).challenge as string) ||
           "";
-        res.writeHead(200, { "Content-Type": "application/json" });
+        res.writeHead(200, { "Content-Type": "application/json; charset=utf-8" });
         res.end(JSON.stringify({ challenge }));
         logger.info("Feishu URL verification completed");
         return;

@@ -11,7 +11,7 @@ vi.mock("../../db/connection.js", () => ({
 vi.mock("@onzo/ozon-order", () => ({ OzonOrderClient: vi.fn(() => ({ shipOrder: vi.fn() })) }));
 vi.mock("@onzo/logistics", () => ({ getLogisticsProvider: vi.fn().mockResolvedValue(null), selectBestProvider: vi.fn().mockResolvedValue(null) }));
 vi.mock("../notifier.js", () => ({ notifier: { notify: vi.fn() } }));
-vi.mock("../notification-events.js", () => ({ emitEvent: vi.fn(), EVENT_KEYS: { SHIPMENT_FAILED: "SF", ORDER_SHIPPED: "OS" } }));
+vi.mock("../notification-events.js", () => ({ emitEvent: vi.fn().mockResolvedValue(undefined), EVENT_KEYS: { SHIPMENT_FAILED: "SF", ORDER_SHIPPED: "OS" } }));
 
 import { batchShipOrders } from "../auto-ship.js";
 const mockClient = {} as Parameters<typeof batchShipOrders>[0];

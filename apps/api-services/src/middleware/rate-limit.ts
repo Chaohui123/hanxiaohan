@@ -35,7 +35,7 @@ function getClientIp(req: Request): string {
 }
 
 export async function rateLimitMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
-  if (req.path === "/health" || req.path === "/ready") {
+  if (req.path === "/health" || req.path === "/ready" || req.path.startsWith("/api/webhook/")) {
     next();
     return;
   }

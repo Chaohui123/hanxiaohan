@@ -441,6 +441,29 @@ export async function scoreAllProducts(config: ApiConfig): Promise<ProductScore[
     productScoreGauge.set({ offerId: p.offerId, recommendation: p.recommendation }, p.totalScore);
   }
 
+  // RAG Playbook enrichment
+  for (const product of scored) {
+    if (product.recommendation === "skip") continue;
+    try {
+      const ragResp = await fetch(`${config.apiBase}/api/rag/playbook/search`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", "X-API-Key": config.apiKey },
+        body: JSON.stringify({
+          query: `${product.recommendation} ${product.name} 利润率${product.marginPercent}%`,
+          scenario: product.recommendation === "pricing" ? "pricing" : "promotion",
+          topK: 2,
+        }),
+        signal: AbortSignal.timeout(8_000),
+      });
+      if (ragResp.ok) {
+        const ragData = await ragResp.json() as { results?: Array<{ content: string }> };
+        if (ragData.results?.length) {
+          product.reason += ` | 参考: ${ragData.results[0].content.slice(0, 80)}`;
+        }
+      }
+    } catch { /* RAG unavailable */ }
+  }
+
   logger.info({ scored: scored.length }, "Product scoring complete");
   return scored;
 }
@@ -659,6 +682,24 @@ async function executePlan(
     } catch (err) {
       logger.warn({ err, offerId: r.offerId }, "Failed to record action event for backtracking");
     }
+  }
+
+  // Auto-save successful actions to RAG Playbook (fire-and-forget)
+  for (const result of results) {
+    if (!result.success) continue;
+    fetch(`${config.apiBase}/api/rag/playbook`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-Key": config.apiKey },
+      body: JSON.stringify({
+        title: `${result.type}操作: ${result.name}`,
+        scenario: result.type === "pricing" ? "pricing" : "promotion",
+        content: `商品: ${result.name}\n操作: ${result.type}\n原因: ${result.message}\n结果: 成功`,
+        tags: [result.type, result.offerId],
+        author: "auto_decision",
+        priority: 1,
+      }),
+      signal: AbortSignal.timeout(5_000),
+    }).catch(() => {}); // fire-and-forget
   }
 
   return results;

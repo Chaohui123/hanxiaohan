@@ -39,6 +39,19 @@ export function registerCommands(bot: FeishuBot, config: ApiConfig): void {
 
   // ---- Message handler ----
   bot.onMessage(async (ctx: MsgContext) => {
+    // Forward promo-agent commands to promo-agent via internal HTTP
+    const lower = ctx.text.toLowerCase().trim();
+    if (lower.startsWith("/promo") || lower.startsWith("promo")) {
+      const promoPort = process.env.PROMO_AGENT_PORT || "8182";
+      fetch(`http://localhost:${promoPort}/forward`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ chatId: ctx.chatId, text: ctx.text, messageId: ctx.messageId, senderOpenId: ctx.senderOpenId }),
+        signal: AbortSignal.timeout(5_000),
+      }).catch(() => {});
+      return;
+    }
+
     // Process "yes" confirmation
     if (ctx.text.toLowerCase() === "yes") {
       for (const prefix of ["backup", "sync", "reconcile"]) {

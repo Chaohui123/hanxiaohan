@@ -16,7 +16,7 @@ export function createExportRouter(): Router {
     if (!db) { res.status(503).json({ error: "DB unavailable" }); return; }
 
     const rows = await db.all(
-      "SELECT * FROM local_orders WHERE created_at >= ? AND created_at <= ? ORDER BY created_at",
+      "SELECT * FROM local_orders WHERE created_at >= ? AND created_at <= ? ORDER BY created_at LIMIT 10000",
       [from || "2020-01-01", to || "2099-12-31"]
     ) as Array<Record<string, unknown>>;
 
@@ -29,7 +29,7 @@ export function createExportRouter(): Router {
     const db = await getDb().catch(() => null);
     if (!db) { res.status(503).json({ error: "DB unavailable" }); return; }
 
-    const rows = await db.all("SELECT * FROM inventory ORDER BY offer_id, sku") as Array<Record<string, unknown>>;
+    const rows = await db.all("SELECT * FROM inventory ORDER BY offer_id, sku LIMIT 10000") as Array<Record<string, unknown>>;
     sendResponse(res, rows, "inventory-snapshot", format as string);
   });
 
@@ -40,7 +40,7 @@ export function createExportRouter(): Router {
     if (!db) { res.status(503).json({ error: "DB unavailable" }); return; }
 
     const rows = await db.all(
-      "SELECT * FROM daily_sales WHERE date >= ? AND date <= ? ORDER BY date",
+      "SELECT * FROM daily_sales WHERE date >= ? AND date <= ? ORDER BY date LIMIT 10000",
       [from || "2020-01-01", to || "2099-12-31"]
     ) as Array<Record<string, unknown>>;
 
@@ -54,7 +54,7 @@ export function createExportRouter(): Router {
     if (!db) { res.status(503).json({ error: "DB unavailable" }); return; }
 
     const rows = await db.all(
-      "SELECT posting_number, order_id, status, total_price_rub, commission_rub, payout_rub, created_at FROM local_orders WHERE created_at >= ? AND created_at <= ? ORDER BY created_at",
+      "SELECT posting_number, order_id, status, total_price_rub, commission_rub, payout_rub, created_at FROM local_orders WHERE created_at >= ? AND created_at <= ? ORDER BY created_at LIMIT 10000",
       [from || "2020-01-01", to || "2099-12-31"]
     ) as Array<Record<string, unknown>>;
 
@@ -67,7 +67,7 @@ export function createExportRouter(): Router {
 // ---- Helper ----
 
 function sendResponse(
-  res: ReturnType<Router> extends Router ? never : import("express").Response,
+  res: import("express").Response,
   rows: Array<Record<string, unknown>>,
   filename: string,
   format: string
@@ -100,9 +100,14 @@ function sendCsv(res: import("express").Response, rows: Array<Record<string, unk
 }
 
 async function sendXlsx(res: import("express").Response, rows: Array<Record<string, unknown>>, filename: string): Promise<void> {
+  if (rows.length === 0) {
+    sendCsv(res, rows, filename);
+    return;
+  }
+
   try {
     const XLSX = await import("xlsx");
-    const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
+    const headers = Object.keys(rows[0]);
     const data = rows.map((r) => {
       const obj: Record<string, unknown> = {};
       for (const h of headers) obj[h] = r[h];
@@ -123,7 +128,7 @@ async function sendXlsx(res: import("express").Response, rows: Array<Record<stri
 }
 
 function csvEscape(value: string): string {
-  if (value.includes(",") || value.includes('"') || value.includes("\n")) {
+  if (value.includes(",") || value.includes('"') || value.includes("\n") || value.includes("\r")) {
     return `"${value.replace(/"/g, '""')}"`;
   }
   return value;

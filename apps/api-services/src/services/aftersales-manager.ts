@@ -4,6 +4,7 @@
 // ============================================================
 
 import { getDb } from "../db/connection.js";
+import { EmbeddingClient } from "@onzo/embedding";
 
 export type AftersalesType = "refund" | "return" | "exchange" | "complaint" | "question";
 export type AftersalesStatus = "pending" | "processing" | "resolved" | "rejected";
@@ -108,7 +109,102 @@ export class AftersalesManager {
     };
   }
 
+  /** Get single case by ID */
+  async getCase(id: string): Promise<AftersalesCase | null> {
+    const db = await getDb().catch(() => null);
+    if (!db) return null;
+    const rows = await db.all("SELECT * FROM aftersales_cases WHERE id = ? LIMIT 1", [id]) as AftersalesCase[];
+    return rows[0] || null;
+  }
+
   /** Get auto-reply templates (static, in-memory) */
   getTemplates(): AutoReplyTemplate[] { return templates; }
-  getTemplateForReason(reason: RefundReason): AutoReplyTemplate | undefined { return templates.find(t => t.reason === reason); }
+  getTemplateForReason(reason: RefundReason): AutoReplyTemplate | undefined { return templates.find((t) => t.reason === reason); }
+
+  /** RAG-enhanced auto reply generation */
+  async generateAutoReply(caseItem: AftersalesCase): Promise<{ reply: string; confidence: number; source: string }> {
+    const db = await getDb().catch(() => null);
+    if (!db) return { reply: "", confidence: 0, source: "none" };
+
+    // 1. Build query text
+    const queryText = `${caseItem.type} ${caseItem.reason} ${caseItem.buyerMessage}`;
+
+    // 2. RAG vector search for similar scripts
+    const embeddingClient = new EmbeddingClient();
+    const queryVector = (await embeddingClient.embed(queryText)).vector;
+
+    const similarScripts = await db.all(
+      `SELECT id, category, scenario, content_ru, effectiveness_score, usage_count,
+              1 - (embedding <=> $1::vector) AS similarity
+       FROM rag_aftersales_scripts
+       WHERE category = $2
+       ORDER BY embedding <=> $1::vector
+       LIMIT 3`,
+      [`[${queryVector.join(",")}]`, caseItem.type],
+    ) as Array<Record<string, unknown> & { similarity: number }>;
+
+    if (similarScripts.length === 0) {
+      const template = this.getTemplateForReason(caseItem.reason);
+      return {
+        reply: template?.body || "Здравствуйте! Мы рассмотрим ваше обращение в ближайшее время.",
+        confidence: 0.3,
+        source: "template_fallback",
+      };
+    }
+
+    // 3. Select best script (weighted: similarity 60% + effectiveness 40%)
+    const best = similarScripts.reduce((prev, curr) => {
+      const prevScore = (prev.similarity || 0) * 0.6 + (Number(prev.effectiveness_score) || 0) * 0.4;
+      const currScore = (curr.similarity || 0) * 0.6 + (Number(curr.effectiveness_score) || 0) * 0.4;
+      return currScore > prevScore ? curr : prev;
+    });
+
+    const confidence = best.similarity || 0;
+
+    // 4. High confidence: use directly
+    if (confidence >= 0.85) {
+      return { reply: String(best.content_ru), confidence, source: "rag_direct" };
+    }
+
+    // 5. Low confidence: use RAG results as context for DeepSeek
+    const context = similarScripts.map((s) => s.content_ru).join("\n---\n");
+    const deepseekApiKey = process.env.DEEPSEEK_API_KEY || "";
+    if (!deepseekApiKey) {
+      return { reply: String(best.content_ru), confidence, source: "rag_fallback" };
+    }
+
+    try {
+      const resp = await fetch("https://api.deepseek.com/v1/chat/completions", {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${deepseekApiKey}` },
+        body: JSON.stringify({
+          model: "deepseek-chat",
+          messages: [{
+            role: "user",
+            content: [
+              "你是一个俄罗斯电商客服。根据以下历史话术参考，生成一段专业的俄语回复。",
+              `买家问题: ${caseItem.buyerMessage}`,
+              `问题类型: ${caseItem.type}`,
+              `原因: ${caseItem.reason}`,
+              `参考话术:\n${context}`,
+              "要求: 1. 用俄语回复 2. 语气专业、礼貌 3. 针对买家具体问题 4. 不超过3句话",
+            ].join("\n\n"),
+          }],
+          temperature: 0.3,
+          max_tokens: 200,
+        }),
+        signal: AbortSignal.timeout(15_000),
+      });
+
+      if (!resp.ok) {
+        return { reply: String(best.content_ru), confidence, source: "rag_fallback" };
+      }
+
+      const data = await resp.json() as { choices?: Array<{ message?: { content?: string } }> };
+      const aiReply = data.choices?.[0]?.message?.content || String(best.content_ru);
+      return { reply: aiReply, confidence: Math.min(confidence + 0.1, 1.0), source: "rag_ai_enhanced" };
+    } catch {
+      return { reply: String(best.content_ru), confidence, source: "rag_fallback" };
+    }
+  }
 }

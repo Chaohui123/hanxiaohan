@@ -75,4 +75,4 @@ EXPOSE 3000
 HEALTHCHECK --interval=30s --timeout=5s --start-period=20s --retries=3 \
   CMD wget -qO- http://localhost:3000/health || exit 1
 
-CMD ["npx", "tsx", "apps/api-services/src/index.ts"]
+CMD ["node", "apps/api-services/dist/index.js"]

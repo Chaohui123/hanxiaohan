@@ -6,6 +6,10 @@
 import { getDb } from "../db/connection.js";
 import { logger } from "@onzo/logger";
 import type { OzonClient } from "@onzo/ozon-api-wrapper";
+import type {
+  OzonFinanceReportListResponse,
+  OzonFinanceReportDetailResponse,
+} from "@onzo/shared-types";
 
 export interface ReconciliationResult {
   totalOrders: number;
@@ -19,22 +23,6 @@ export interface ReconciliationResult {
   }>;
   missingLocal: number;
   missingOzon: number;
-}
-
-interface OzonFinanceReport {
-  report_id: string;
-  begin_date: string;
-  end_date: string;
-  generated_at: string;
-  rows?: Array<{
-    posting_number: string;
-    order_id: string;
-    operation_type: string;
-    amount: number;
-    commission: number;
-    payout: number;
-    services_amount: number;
-  }>;
 }
 
 /**
@@ -65,20 +53,24 @@ export async function reconcileFinance(
   // 1. Fetch Ozon finance reports for the date range
   const ozonRows = new Map<string, { payout: number; commission: number }>();
   try {
-    const reportList = await (ozonClient as { request: (m: string, p: string, b: unknown) => Promise<{ result: { rows?: Array<{ report_id: string }> } }> }).request(
+    const reportList = await ozonClient.request<OzonFinanceReportListResponse>(
       "POST",
       "/v3/finance/reports/list",
-      {
-        date: { from: dateFrom, to: dateTo },
-      }
+      { date: { from: dateFrom, to: dateTo } }
     );
 
     const reportIds = reportList.result?.rows?.map((r) => r.report_id) || [];
+
+    if (reportIds.length === 0) {
+      logger.info({ dateFrom, dateTo }, "No finance reports found for period — skipping reconciliation");
+      return result;
+    }
+
     logger.info({ reportCount: reportIds.length, dateFrom, dateTo }, "Finance reports fetched");
 
     for (const reportId of reportIds.slice(0, 10)) {
       try {
-        const detail = await (ozonClient as { request: (m: string, p: string, b: unknown) => Promise<{ result: OzonFinanceReport }> }).request(
+        const detail = await ozonClient.request<OzonFinanceReportDetailResponse>(
           "POST",
           `/v3/finance/reports/${reportId}/details`,
           {}

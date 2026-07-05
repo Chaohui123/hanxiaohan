@@ -108,6 +108,17 @@ export class Notifier {
     await this.notify({ level, event, message: `库存${level === "critical" ? "为零" : "不足"}: SKU ${sku} (${offerId})`, correlationId: `stock-${offerId}-${sku}`, metadata: { sku: String(sku), offerId } });
   }
 
+  /** Convenience: generic failure notification */
+  async notifyFailure(correlationId: string, service: string, error: string, detail?: string): Promise<void> {
+    await this.notify({
+      level: "error",
+      event: `${service.toUpperCase()}_FAILED`,
+      message: `${service} 失败: ${error}${detail ? ` (${detail})` : ""}`,
+      correlationId,
+      metadata: { service, error, detail: detail ?? "" },
+    });
+  }
+
   /** Get channel health for monitoring */
   getHealth(): ChannelHealth[] {
     return [...channelHealth];

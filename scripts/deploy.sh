@@ -47,7 +47,7 @@ deploy() {
   # 4. Restart via Docker Compose
   echo "[4/5] Rebuilding and restarting..."
   if command -v docker &>/dev/null && docker compose version &>/dev/null; then
-    docker compose --env-file "$ENV_FILE" up -d --build api-services web-dashboard
+    docker compose --profile production --env-file "$ENV_FILE" up -d --build
     echo "  Docker Compose deploy complete"
   else
     echo "  Docker not available — cannot restart"

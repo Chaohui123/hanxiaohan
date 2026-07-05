@@ -1,0 +1,45 @@
+# ============================================================
+# ONZO Development Docker Compose Override
+# Usage: docker compose -f docker-compose.yml -f docker-compose.dev.yml up -d
+# Features: source code mounts, hot reload, no PG/Redis dependency
+# ============================================================
+
+services:
+  api-services:
+    build:
+      dockerfile: docker/api-services/Dockerfile
+    environment:
+      NODE_ENV: development
+      ENV: dev
+    volumes:
+      - ./apps:/app/apps:ro
+      - ./packages:/app/packages:ro
+      - ./package.json:/app/package.json:ro
+      - ./tsconfig.base.json:/app/tsconfig.base.json:ro
+      - app_uploads:/app/uploads
+      - app_dead_letter:/app/dead-letter
+      - app_logs:/app/logs
+      - app_data:/app/data
+    command: ["npx", "tsx", "watch", "apps/api-services/src/index.ts"]
+    ports:
+      - "3000:3000"
+      - "9229:9229" # Node.js debugger
+    profiles:
+      - standalone
+      - dev
+
+  web-dashboard:
+    build:
+      dockerfile: apps/web-dashboard/Dockerfile
+    volumes:
+      - ./apps/web-dashboard/src:/app/src:ro
+      - ./apps/web-dashboard/index.html:/app/index.html:ro
+      - ./apps/web-dashboard/vite.config.ts:/app/vite.config.ts:ro
+    command: ["npx", "vite", "--host", "0.0.0.0", "--port", "80"]
+    ports:
+      - "5173:80"
+    environment:
+      VITE_API_BASE: http://localhost:3000
+    profiles:
+      - standalone
+      - dev

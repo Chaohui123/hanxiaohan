@@ -151,7 +151,7 @@ async function runCompetitorCheck(bot: FeishuBot, config: CompetitorWatchConfig)
 
   // 5. 发送汇总通知
   if (alerts.length > 0) {
-    await sendAlerts(bot, chatId, alerts);
+    await sendAlerts(bot, chatId, alerts, apiConfig);
   }
 
   competitorCheckCounter.inc({ result: scraperBlocked ? "blocked" : "success" });
@@ -239,20 +239,26 @@ async function checkPriceDrop(
   return null;
 }
 
-/** 发送降价通知 */
+/** 发送降价通知（含 RAG 历史分析） */
 async function sendAlerts(
   bot: FeishuBot,
   chatId: string,
   alerts: CompetitorAlert[],
+  apiConfig: ApiConfig,
 ): Promise<void> {
-  const lines = alerts.map((a) => {
+  const lines: string[] = [];
+  for (const a of alerts) {
     const emoji = a.dropPercent >= 20 ? "🔴" : "🟡";
     const myPriceStr = a.myPrice > 0 ? `${a.myPrice.toFixed(0)}₽` : "—";
-    return `${emoji} **${a.name}** | 我的: ${myPriceStr} | 竞品均: ${a.competitorAvg.toFixed(0)}₽ | 降幅: ${a.dropPercent}%`;
-  });
+    lines.push(`${emoji} ${a.name} | 我的: ${myPriceStr} | 竞品均: ${a.competitorAvg.toFixed(0)}₽ | 降幅: ${a.dropPercent}%`);
+
+    // RAG history enrichment
+    const ragCtx = await enrichAlertWithRag(a, apiConfig);
+    if (ragCtx) lines.push(`   ${ragCtx}`);
+  }
 
   const message = [
-    `🚨 **竞品降价警报** (${alerts.length} 项)`,
+    `🚨 竞品降价警报 (${alerts.length} 项)`,
     "",
     ...lines,
     "",
@@ -264,6 +270,26 @@ async function sendAlerts(
   } catch (err) {
     logger.error({ err }, "Failed to send alert");
   }
+}
+
+async function enrichAlertWithRag(alert: CompetitorAlert, config: ApiConfig): Promise<string> {
+  try {
+    const resp = await fetch(`${config.apiBase}/api/rag/competitor/search`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-Key": config.apiKey },
+      body: JSON.stringify({ query: `${alert.name} 价格趋势分析`, offerId: alert.offerId, topK: 2 }),
+      signal: AbortSignal.timeout(8_000),
+    });
+
+    if (!resp.ok) return "";
+    const data = await resp.json() as { results?: Array<{ score: number; priceTrendSummary?: string; reportText?: string }> };
+    if (data.results?.length) {
+      return data.results
+        .map((r) => `📊 历史分析(相似度${(r.score || 0).toFixed(2)}): ${r.priceTrendSummary || (r.reportText || "").slice(0, 100)}`)
+        .join("\n");
+    }
+  } catch { /* RAG unavailable, skip enrichment */ }
+  return "";
 }
 
 // ---- 爬虫联动 ----

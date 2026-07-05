@@ -84,11 +84,19 @@ export class InventoryManager {
         emitEvent(EVENT_KEYS.STOCK_OUT, { sku: String(r.sku), offerId: String(r.offer_id), currentStock: "0" }).catch(() => {});
       }
 
-      // Persist alert to stock_alerts table
-      await db.run(
-        "INSERT INTO stock_alerts (sku, offer_id, alert_level, current_stock, safety_stock, suggested_order_qty) VALUES (?,?,?,?,?,?)",
-        [r.sku, r.offer_id, level, stock, 5, Math.max(10, (10 - stock) * 2)]
-      ).catch(() => {});
+      // Dedup: skip if unresolved alert already exists for this SKU+offer_id
+      const existing = await db.all(
+        "SELECT id FROM stock_alerts WHERE sku=? AND offer_id=? AND resolved=0 LIMIT 1",
+        [r.sku, r.offer_id]
+      ).catch(() => [] as Array<{ id: number }>);
+
+      if (!existing || existing.length === 0) {
+        const suggestedQty = Math.max(10, (10 - stock) * 2);
+        await db.run(
+          "INSERT INTO stock_alerts (sku, offer_id, alert_level, current_stock, safety_stock, suggested_order_qty) VALUES (?,?,?,?,?,?)",
+          [r.sku, r.offer_id, level, stock, 5, suggestedQty]
+        ).catch(() => {});
+      }
 
       alerts.push({
         sku: r.sku as number, offerId: r.offer_id as string,
@@ -118,7 +126,6 @@ export class InventoryManager {
    */
   async syncStockToOzon(offerId: string, sku: number, stock: number): Promise<{ success: boolean; error?: string }> {
     try {
-      const { getDb } = await import("../db/connection.js");
       const db = await getDb();
       if (!db) return { success: false, error: "DB unavailable" };
 
@@ -128,6 +135,9 @@ export class InventoryManager {
 
       if (!storeRows.length) return { success: false, error: "No active store credentials configured" };
 
+      // warehouse_id: default from env var, Ozon requires it for /v2/product/stocks
+      const warehouseId = parseInt(process.env.OZON_WAREHOUSE_ID || "0", 10) || undefined;
+
       const { isEncrypted, decrypt } = await import("./crypto.js");
       const { AuthManager, OzonClient } = await import("@onzo/ozon-api-wrapper");
 
@@ -136,8 +146,8 @@ export class InventoryManager {
       const auth = new AuthManager({ clients: [{ clientId: store.client_id, apiKey }] });
       const ozonClient = new OzonClient({ auth });
 
-      // Push stock to Ozon warehouse
-      await ozonClient.updateStock([{ offerId, stock }]);
+      // Push stock to Ozon warehouse — warehouse_id is required by Ozon API
+      await ozonClient.updateStock([{ offerId, stock, warehouseId }]);
 
       return { success: true };
     } catch (err) {

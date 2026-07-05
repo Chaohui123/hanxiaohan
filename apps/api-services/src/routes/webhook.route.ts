@@ -20,7 +20,10 @@ import { logger } from "@onzo/logger";
 import { writeToDeadLetter } from "../services/dead-letter.js";
 import { processNewOrder, processCancelledOrder, processStatusChange, recordWebhookReceived, recordWebhookProcessed } from "../services/order-processor.js";
 
-const API_SECRET = process.env.OZON_API_KEYS || "";
+// Ozon signs webhooks with HMAC-SHA256 using the API key.
+// Some setups use a dedicated webhook secret (OZON_WEBHOOK_SECRET).
+// Prefer the dedicated secret, fall back to the primary API key.
+const API_SECRET = process.env.OZON_WEBHOOK_SECRET || process.env.OZON_API_KEYS || "";
 
 // In production, reject webhooks without HMAC-SHA256 signature verification
 const ENFORCE_WEBHOOK_SIGNATURE = (process.env.ENV || process.env.NODE_ENV) !== "dev";
@@ -56,6 +59,20 @@ function isIpAllowed(clientIp: string): boolean {
 
 export function createWebhookRouter(): Router {
   const router = Router();
+
+  // Webhook-specific body size guard — Ozon payloads are < 10KB, 100KB is generous
+  router.post("/webhook/ozon", (req, res, next) => {
+    const contentLength = parseInt(req.headers["content-length"] || "0", 10);
+    if (contentLength > 100_000) {
+      res.status(413).json({
+        success: false,
+        error: { code: "PAYLOAD_TOO_LARGE", message: "Webhook body exceeds 100KB limit", retryable: false },
+        correlationId: (req as unknown as { correlationId?: string }).correlationId ?? "unknown",
+      });
+      return;
+    }
+    next();
+  });
 
   router.post("/webhook/ozon", async (req, res) => {
     const rawBodyBuffer = (req as typeof req & { rawBody?: Buffer }).rawBody;

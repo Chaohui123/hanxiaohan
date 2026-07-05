@@ -1,0 +1,17 @@
+{
+  "files": [],
+  "references": [
+    { "path": "packages/shared-types" },
+    { "path": "packages/logger" },
+    { "path": "packages/cache" },
+    { "path": "packages/ozon-api-wrapper" },
+    { "path": "packages/ai" },
+    { "path": "packages/scraper" },
+    { "path": "packages/validator" },
+    { "path": "packages/ozon-order" },
+    { "path": "packages/price-monitor" },
+    { "path": "packages/logistics" },
+    { "path": "apps/api-services" },
+    { "path": "apps/web-dashboard" }
+  ]
+}

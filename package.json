@@ -10,7 +10,8 @@
     "test:watch": "vitest",
     "lint": "eslint packages/*/src apps/*/src",
     "clean": "rm -rf packages/*/dist apps/*/dist",
-    "dev:api": "tsx watch apps/api-services/src/index.ts"
+    "dev:api": "tsx watch apps/api-services/src/index.ts",
+    "seed:rag": "tsx scripts/seed-rag-playbook.ts"
   },
   "devDependencies": {
     "@types/cors": "^2.8.17",
@@ -18,6 +19,7 @@
     "@types/node": "^20.14.0",
     "@types/pg": "^8.20.0",
     "@types/supertest": "^7.2.0",
+    "drizzle-kit": "^0.31.10",
     "supertest": "^7.2.2",
     "tsx": "^4.19.0",
     "typescript": "^5.5.0",
@@ -32,6 +34,8 @@
     "@opentelemetry/sdk-node": "^0.220.0",
     "@opentelemetry/sdk-trace-base": "^2.9.0",
     "@opentelemetry/semantic-conventions": "^1.41.1",
+    "@types/better-sqlite3": "^7.6.13",
+    "better-sqlite3": "^12.11.1",
     "cors": "^2.8.6",
     "dotenv": "^17.4.2",
     "drizzle-orm": "^0.45.2",

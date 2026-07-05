@@ -10,7 +10,7 @@ vi.mock("../../db/connection.js", () => ({
   getDb: vi.fn().mockResolvedValue(mockDb),
   serializedWrite: vi.fn((fn: () => Promise<unknown>) => fn()),
 }));
-vi.mock("../notification-events.js", () => ({ emitEvent: vi.fn(), EVENT_KEYS: { STOCK_OUT: "STOCK_OUT" } }));
+vi.mock("../notification-events.js", () => ({ emitEvent: vi.fn().mockResolvedValue(undefined), EVENT_KEYS: { STOCK_OUT: "STOCK_OUT" } }));
 
 import { InventoryManager } from "../inventory-manager.js";
 
