@@ -32,6 +32,20 @@ const MIN_MARGIN = parseFloat(process.env.PROMO_MIN_PROFIT_RATE || "0.10"); // f
 const MAX_CHANGE_PERCENT = 20; // ±20% per change
 const MAX_ADJUSTMENTS_PER_DAY = 3;
 const PRICING_INTERVAL_MS = 2 * 60 * 60 * 1000; // 2 hours
+const PRICE_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
+
+// ---- 竞品价格缓存 ----
+const priceCache = new Map<string, { price: number; timestamp: number }>();
+
+function getCachedCompetitorPrice(offerId: string): number | null {
+  const entry = priceCache.get(offerId);
+  if (entry && (Date.now() - entry.timestamp) < PRICE_CACHE_TTL_MS) return entry.price;
+  return null;
+}
+
+function setCachedCompetitorPrice(offerId: string, price: number): void {
+  priceCache.set(offerId, { price, timestamp: Date.now() });
+}
 
 // ---- 状态 ----
 
@@ -140,16 +154,21 @@ async function runPricingCycle(
     const cost = Number(item.cost || 0);
     const currentPrice = Number(item.price || 0);
 
-    // 4. 获取竞品均价
+    // 4. 获取竞品均价（30分钟缓存）
     let competitorAvg = 0;
-    try {
-      const priceData = await competitorApi.getPrices(config, offerId, 3);
-      const prices = priceData.prices || [];
-      if (prices.length > 0) {
-        competitorAvg = prices.reduce((s, p) => s + p.price, 0) / prices.length;
-      }
-    } catch {
-      // 无竞品数据，仅基于成本计算
+    const cached = getCachedCompetitorPrice(offerId);
+    if (cached !== null) {
+      competitorAvg = cached;
+    } else {
+      try {
+        const priceData = await competitorApi.getPrices(config, offerId, 3);
+        const prices = priceData.prices || [];
+        if (prices.length > 0) {
+          competitorAvg = prices.reduce((s, p) => s + p.price, 0) / prices.length;
+          setCachedCompetitorPrice(offerId, competitorAvg);
+        }
+      } catch {
+        // 无竞品数据，仅基于成本计算
     }
 
     // 5. 计算建议价: max(cost × rate × (1+margin), competitorAvg × 0.95)
