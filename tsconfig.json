@@ -4,6 +4,8 @@
     { "path": "packages/shared-types" },
     { "path": "packages/logger" },
     { "path": "packages/cache" },
+    { "path": "packages/embedding" },
+    { "path": "packages/feishu-bot" },
     { "path": "packages/ozon-api-wrapper" },
     { "path": "packages/ai" },
     { "path": "packages/scraper" },
@@ -12,6 +14,8 @@
     { "path": "packages/price-monitor" },
     { "path": "packages/logistics" },
     { "path": "apps/api-services" },
+    { "path": "apps/promo-agent" },
+    { "path": "apps/ops-agent" },
     { "path": "apps/web-dashboard" }
   ]
 }
