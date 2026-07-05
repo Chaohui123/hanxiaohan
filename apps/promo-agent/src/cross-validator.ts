@@ -170,10 +170,27 @@ async function checkBudgetRemaining(config: ApiConfig): Promise<CheckResult> {
 
     if (adSpend >= MAX_DAILY_SPEND) {
       logger.warn({ adSpend, maxDaily: MAX_DAILY_SPEND }, "Daily budget exceeded");
-      return {
-        value: false,
-        issue: `今日广告花费 ${adSpend}₽ 已达上限 (${MAX_DAILY_SPEND}₽)`,
-      };
+
+      // RAG 知识库增强：预算优化策略
+      let issue = `今日广告花费 ${adSpend}₽ 已达上限 (${MAX_DAILY_SPEND}₽)`;
+      try {
+        const ragResp = await fetch(`${config.apiBase}/api/rag/playbook/search`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-API-Key": config.apiKey },
+          body: JSON.stringify({ query: "预算不足 优化策略", scenario: "budget", topK: 3 }),
+          signal: AbortSignal.timeout(5_000),
+        });
+        if (ragResp.ok) {
+          const ragData = await ragResp.json() as { results?: Array<{ content: string }> };
+          if (ragData.results?.length) {
+            issue += ` | 优化建议: ${ragData.results[0].content.slice(0, 100)}`;
+          }
+        }
+      } catch (err) {
+        logger.warn({ err: (err as Error).message }, "RAG playbook query degraded for budget check");
+      }
+
+      return { value: false, issue };
     }
     return { value: true, issue: "" };
   } catch (err) {

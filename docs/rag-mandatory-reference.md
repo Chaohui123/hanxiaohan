@@ -143,11 +143,13 @@
 
 代码位置：`apps/promo-agent/src/performance.ts:390-490`
 
-### 4.6 cross-validator（交叉验证）❌ 待集成
+### 4.6 cross-validator（交叉验证）✅ 已集成
 
 | 验证环节 | 必须查询的知识库 | API 端点 | 状态 |
 |---------|----------------|---------|------|
-| 预算检查时 | 运营经验手册（预算策略） | `/rag/playbook/search` | ❌ |
+| 预算检查时 | 运营经验手册（预算策略） | `/rag/playbook/search` | ✅ |
+
+代码位置：`apps/promo-agent/src/cross-validator.ts:171-187`
 
 ### 4.7 ops-agent / patrol（巡检）❌ 待集成
 
@@ -267,7 +269,7 @@ async function writeRagKnowledge(
 | competitor-watch | ✅ competitor | ❌ | 部分完成 |
 | smart-pricing | ✅ playbook + competitor | ✅ playbook | 已完成 |
 | performance | ✅ playbook + copy | ❌ | 已完成 |
-| cross-validator | ❌ | ❌ | **待集成** |
+| cross-validator | ✅ playbook | ❌ | 已完成 |
 | ops-agent/patrol | ❌ | ❌ | **待集成** |
 | ops-agent/ai-diagnose | ❌ | ❌ | **待集成** |
 | aftersales-manager | ✅ aftersales | ❌ | 已完成 |
