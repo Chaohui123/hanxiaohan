@@ -3,6 +3,7 @@ import type { ApiConfig } from "./api-client.js";
 import { promoApi, competitorApi } from "./api-client.js";
 import { logger } from "@onzo/logger";
 import { competitorCheckCounter } from "./metrics.js";
+import { queryRag, writeRag, extractRagContent } from "@onzo/embedding";
 
 // ---- 类型 ----
 
@@ -271,41 +272,23 @@ async function sendAlerts(
     logger.error({ err }, "Failed to send alert");
   }
 
-  // RAG 写回：异步保存竞品分析报告
+  // RAG 写回
   for (const a of alerts) {
-    const reportText = `${a.name} | 我的: ${a.myPrice > 0 ? a.myPrice.toFixed(0) + "₽" : "—"} | 竞品均: ${a.competitorAvg.toFixed(0)}₽ | 降幅: ${a.dropPercent}%`;
-    fetch(`${apiConfig.apiBase}/api/rag/competitor`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-API-Key": apiConfig.apiKey },
-      body: JSON.stringify({
-        offerId: a.offerId,
-        reportText,
-        priceTrendSummary: `竞品均价 ${a.competitorAvg.toFixed(0)}₽, 降幅 ${a.dropPercent}%`,
-        actionSuggestion: a.dropPercent >= 20 ? "建议立即调价应对" : "建议关注趋势",
-      }),
-      signal: AbortSignal.timeout(3_000),
-    }).catch(() => {}); // fire-and-forget
+    writeRag(apiConfig, "competitor", {
+      offerId: a.offerId,
+      reportText: `${a.name} | 我的: ${a.myPrice > 0 ? a.myPrice.toFixed(0) + "₽" : "—"} | 竞品均: ${a.competitorAvg.toFixed(0)}₽ | 降幅: ${a.dropPercent}%`,
+      priceTrendSummary: `竞品均价 ${a.competitorAvg.toFixed(0)}₽, 降幅 ${a.dropPercent}%`,
+      actionSuggestion: a.dropPercent >= 20 ? "建议立即调价应对" : "建议关注趋势",
+    });
   }
 }
 
 async function enrichAlertWithRag(alert: CompetitorAlert, config: ApiConfig): Promise<string> {
-  try {
-    const resp = await fetch(`${config.apiBase}/api/rag/competitor/search`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-API-Key": config.apiKey },
-      body: JSON.stringify({ query: `${alert.name} 价格趋势分析`, offerId: alert.offerId, topK: 2 }),
-      signal: AbortSignal.timeout(8_000),
-    });
-
-    if (!resp.ok) return "";
-    const data = await resp.json() as { results?: Array<{ score: number; priceTrendSummary?: string; reportText?: string }> };
-    if (data.results?.length) {
-      return data.results
-        .map((r) => `📊 历史分析(相似度${(r.score || 0).toFixed(2)}): ${r.priceTrendSummary || (r.reportText || "").slice(0, 100)}`)
-        .join("\n");
-    }
-  } catch { /* RAG unavailable, skip enrichment */ }
-  return "";
+  const results = await queryRag(config, "competitor", `${alert.name} 价格趋势分析`, { offerId: alert.offerId, topK: 2, minScore: 0 });
+  if (!results.length) return "";
+  return results.map((r: Record<string, unknown>) =>
+    `📊 历史分析(相似度${(Number(r.score) || 0).toFixed(2)}): ${r.priceTrendSummary || String(r.reportText || "").slice(0, 100)}`
+  ).join("\n");
 }
 
 // ---- 爬虫联动 ----

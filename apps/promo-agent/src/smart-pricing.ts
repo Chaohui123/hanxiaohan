@@ -2,6 +2,7 @@ import type { FeishuBot } from "@onzo/feishu-bot";
 import type { ApiConfig } from "./api-client.js";
 import { promoApi, competitorApi } from "./api-client.js";
 import { logger } from "@onzo/logger";
+import { queryRag, extractRagContent, writeRag } from "@onzo/embedding";
 
 // ---- 类型 ----
 
@@ -236,42 +237,15 @@ async function runPricingCycle(
     return;
   }
 
-  // RAG 知识库增强：为每个建议附加历史经验
+  // RAG 知识库增强
   for (const s of suggestions) {
-    // 查询运营经验手册
-    try {
-      const ragResp = await fetch(`${config.apiBase}/api/rag/playbook/search`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-API-Key": config.apiKey },
-        body: JSON.stringify({ query: `定价策略 ${s.name}`, scenario: "pricing", topK: 3 }),
-        signal: AbortSignal.timeout(5_000),
-      });
-      if (ragResp.ok) {
-        const ragData = await ragResp.json() as { results?: Array<{ content: string; score: number }> };
-        if (ragData.results?.length && ragData.results[0].score >= 0.7) {
-          s.reason += ` | 定价参考: ${ragData.results[0].content.slice(0, 100)}`;
-        }
-      }
-    } catch (err) {
-      logger.warn({ err: (err as Error).message, offerId: s.offerId }, "RAG playbook query degraded for pricing");
-    }
+    const playbookResults = await queryRag(config, "playbook", `定价策略 ${s.name}`, { scenario: "pricing" });
+    const ctx = extractRagContent(playbookResults, 100);
+    if (ctx) s.reason += ` | 定价参考: ${ctx}`;
 
-    // 查询竞品分析报告
-    try {
-      const compResp = await fetch(`${config.apiBase}/api/rag/competitor/search`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-API-Key": config.apiKey },
-        body: JSON.stringify({ query: `${s.offerId} 价格趋势`, topK: 3 }),
-        signal: AbortSignal.timeout(5_000),
-      });
-      if (compResp.ok) {
-        const compData = await compResp.json() as { results?: Array<{ price_trend_summary?: string }> };
-        if (compData.results?.length && compData.results[0].price_trend_summary) {
-          s.reason += ` | 竞品趋势: ${compData.results[0].price_trend_summary}`;
-        }
-      }
-    } catch (err) {
-      logger.warn({ err: (err as Error).message, offerId: s.offerId }, "RAG competitor query degraded for pricing");
+    const compResults = await queryRag(config, "competitor", `${s.offerId} 价格趋势`);
+    if (compResults.length && compResults[0].price_trend_summary) {
+      s.reason += ` | 竞品趋势: ${compResults[0].price_trend_summary}`;
     }
   }
 
@@ -385,19 +359,12 @@ export async function handlePricingConfirmation(
       result.applied.push(`${s.name}: ${s.currentPrice.toFixed(0)} → ${s.suggestedPrice.toFixed(0)} ₽`);
       logger.info({ offerId: s.offerId, from: s.currentPrice, to: s.suggestedPrice }, "Price updated");
 
-      // RAG 写回：异步记录定价执行经验
-      fetch(`${config.apiBase}/api/rag/playbook`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-API-Key": config.apiKey },
-        body: JSON.stringify({
-          title: `定价执行: ${s.offerId}`,
-          scenario: "pricing",
-          content: `原价${s.currentPrice}→新价${s.suggestedPrice}, 原因: ${s.reason}`,
-          tags: ["定价", "执行"],
-          author: "smart-pricing",
-        }),
-        signal: AbortSignal.timeout(3_000),
-      }).catch(() => {}); // fire-and-forget
+      // RAG 写回
+      writeRag(config, "playbook", {
+        title: `定价执行: ${s.offerId}`, scenario: "pricing",
+        content: `原价${s.currentPrice}→新价${s.suggestedPrice}, 原因: ${s.reason}`,
+        tags: ["定价", "执行"], author: "smart-pricing",
+      });
     } catch (err) {
       result.errors.push(`${s.name}: ${(err as Error).message}`);
       logger.error({ err, offerId: s.offerId }, "Price update failed");

@@ -3,6 +3,7 @@
 // ============================================================
 
 import { Router } from "express";
+import { ragRateLimit } from "../middleware/rag-rate-limit.js";
 import { getCached, getCachedOrStale, invalidateCache } from "../cache/promo-cache.js";
 import {
   queryCompetitorPrices, insertCompetitorPrices,
@@ -15,6 +16,7 @@ import {
 
 export function createPromoDataRouter(): Router {
   const router = Router();
+  router.use(ragRateLimit);
 
   // ---- Competitor Prices ----
   router.post("/promo/competitor-prices/:offerId", async (req, res) => {

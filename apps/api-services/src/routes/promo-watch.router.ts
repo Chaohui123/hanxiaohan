@@ -5,9 +5,11 @@
 import { Router } from "express";
 import { getCachedOrStale, invalidateCache } from "../cache/promo-cache.js";
 import { queryWatchList, insertWatchItem, deleteWatchItem, insertAuditLog } from "../db/promo-db.js";
+import { ragRateLimit } from "../middleware/rag-rate-limit.js";
 
 export function createWatchRouter(): Router {
   const router = Router();
+  router.use(ragRateLimit);
 
   router.get("/promo/watch-list", async (req, res) => {
     try {

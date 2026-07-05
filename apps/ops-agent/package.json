@@ -17,6 +17,7 @@
     "@onzo/logger": "workspace:*",
     "@onzo/shared-types": "workspace:*",
     "@onzo/feishu-bot": "workspace:*",
+    "@onzo/embedding": "workspace:*",
     "dotenv": "^17.0.0"
   }
 }

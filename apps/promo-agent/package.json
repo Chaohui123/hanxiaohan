@@ -15,6 +15,7 @@
   },
   "dependencies": {
     "@onzo/feishu-bot": "workspace:*",
+    "@onzo/embedding": "workspace:*",
     "@onzo/logger": "workspace:*",
     "@onzo/shared-types": "workspace:*",
     "prom-client": "^15.1.3",

@@ -28,6 +28,7 @@ import { createAftersalesRouter } from "./routes/aftersales.route.js";
 import { createAlertRouter } from "./routes/alert.route.js";
 import { createPromoRouter } from "./routes/promo.route.js";
 import { createRagRouter } from "./routes/rag.route.js";
+import { ragRateLimit } from "./middleware/rag-rate-limit.js";
 import { RagIndexer } from "./services/rag-indexer.js";
 import { createDiagnoseRouter } from "./routes/diagnose.route.js";
 import { runSmokeTests } from "./startup-smoke-test.js";

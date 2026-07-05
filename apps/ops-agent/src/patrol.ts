@@ -3,6 +3,7 @@ import type { ApiConfig } from "./api-client.js";
 import { apiClient } from "./api-client.js";
 import { aiDiagnose } from "./ai-diagnose.js";
 import { logger } from "@onzo/logger";
+import { queryRag, writeRag } from "@onzo/embedding";
 
 interface PatrolConfig extends ApiConfig {
   chatId: string;
@@ -59,59 +60,25 @@ export async function runPatrolCheck(
         .join(",");
       const isOrderRelated = failedNames.includes("order") || failedNames.includes("aftersales");
 
-      try {
-        const ragResp = await fetch(`${config.apiBase}/api/rag/playbook/search`, {
-          method: "POST",
-          headers: { "Content-Type": "application/json", "X-API-Key": config.apiKey },
-          body: JSON.stringify({ query: `运维异常 ${failedNames}`, scenario: "ops", topK: 3 }),
-          signal: AbortSignal.timeout(5_000),
-        });
-        if (ragResp.ok) {
-          const ragData = await ragResp.json() as { results?: Array<{ content: string }> };
-          if (ragData.results?.length) {
-            alertMsg += `\n\n🔧 历史处理经验：\n${ragData.results.map((r) => `• ${r.content.slice(0, 150)}`).join("\n")}`;
-          }
-        }
-      } catch (err) {
-        logger.warn({ err: (err as Error).message }, "RAG playbook query degraded for patrol");
+      const playbookResults = await queryRag(config, "playbook", `运维异常 ${failedNames}`, { scenario: "ops" });
+      if (playbookResults.length) {
+        alertMsg += `\n\n🔧 历史处理经验：\n${playbookResults.map((r: Record<string,unknown>) => `• ${String(r.content).slice(0, 150)}`).join("\n")}`;
       }
 
-      // 售后相关异常：额外查询售后话术库
       if (isOrderRelated) {
-        try {
-          const asResp = await fetch(`${config.apiBase}/api/rag/aftersales/search`, {
-            method: "POST",
-            headers: { "Content-Type": "application/json", "X-API-Key": config.apiKey },
-            body: JSON.stringify({ query: `售后处理 ${failedNames}`, topK: 3 }),
-            signal: AbortSignal.timeout(5_000),
-          });
-          if (asResp.ok) {
-            const asData = await asResp.json() as { results?: Array<{ content_ru?: string; content?: string }> };
-            if (asData.results?.length) {
-              alertMsg += `\n\n📞 相关售后话术：\n${asData.results.map((r) => `• ${r.content_ru || r.content || ""}`).join("\n")}`;
-            }
-          }
-        } catch (err) {
-          logger.warn({ err: (err as Error).message }, "RAG aftersales query degraded for patrol");
+        const asResults = await queryRag(config, "aftersales", `售后处理 ${failedNames}`);
+        if (asResults.length) {
+          alertMsg += `\n\n📞 相关售后话术：\n${asResults.map((r: Record<string,unknown>) => `• ${r.content_ru || r.content || ""}`).join("\n")}`;
         }
       }
 
       await bot.sendMessage(config.chatId, alertMsg);
 
-      // RAG 写回：记录巡检异常
-      fetch(`${config.apiBase}/api/rag/playbook`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", "X-API-Key": config.apiKey },
-        body: JSON.stringify({
-          title: `巡检异常: ${failedNames}`,
-          scenario: "ops",
-          content: `状态变更: ${lastStatus} → ${currentStatus}\n失败组件: ${failedNames}\n${failedChecks}`,
-          tags: ["巡检", "异常"],
-          author: "patrol",
-          priority: 1,
-        }),
-        signal: AbortSignal.timeout(3_000),
-      }).catch(() => {});
+      writeRag(config, "playbook", {
+        title: `巡检异常: ${failedNames}`, scenario: "ops",
+        content: `状态变更: ${lastStatus} → ${currentStatus}\n失败组件: ${failedNames}\n${failedChecks}`,
+        tags: ["巡检", "异常"], author: "patrol", priority: 1,
+      });
 
       // Run AI diagnosis on failure
       const diagnoseData = await apiClient.diagnose(config).catch(() => null);

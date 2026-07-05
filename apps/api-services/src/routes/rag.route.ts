@@ -6,6 +6,7 @@ import { Router } from "express";
 import { getDb } from "../db/connection.js";
 import { logger } from "@onzo/logger";
 import { EmbeddingClient } from "@onzo/embedding";
+import { ragRateLimit } from "../middleware/rag-rate-limit.js";
 
 function genId(prefix: string): string {
   return `${prefix}_${Date.now()}_${Math.random().toString(36).slice(2, 8)}`;
@@ -24,6 +25,7 @@ const embeddingClient = new EmbeddingClient();
 
 export function createRagRouter(): Router {
   const router = Router();
+  router.use(ragRateLimit);
 
   // ============================================================
   // 售后话术

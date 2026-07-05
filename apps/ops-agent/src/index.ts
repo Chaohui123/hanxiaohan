@@ -10,7 +10,7 @@ import type { ApiConfig } from "./api-client.js";
 const FEISHU_APP_ID = process.env.FEISHU_APP_ID || "";
 const FEISHU_APP_SECRET = process.env.FEISHU_APP_SECRET || "";
 const API_BASE =
-  process.env.API_BASE_URL || process.env.API_BASE || "http://localhost:3000";
+  process.env.API_BASE_URL || process.env.API_BASE || `http://localhost:${process.env.API_SERVICE_PORT || "3000"}`;
 const API_KEY = process.env.API_KEY || "";
 const CHAT_ID = process.env.OPS_AGENT_CHAT_ID || "";
 
