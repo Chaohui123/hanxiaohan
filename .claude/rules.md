@@ -41,7 +41,7 @@
   - 允许：TypeScript/Node.js、pnpm monorepo、Express、Playwright、better-sqlite3 + Drizzle、单机 Docker + n8n、PostgreSQL + pgvector（RAG知识库已上线）
 
 - Phase2 (受控评估后可引入):
-  - 允许（受审批）：影刀RPA 兜底通道（仅在 API 熔断情形并经安全审计）、RAG知识库扩展（pgvector已上线，可增量添加新知识域）、多店铺风控策略的配置框架
+  - 允许（受审批）：影刀RPA 兜底通道（仅在 API 熔断情形并经安全审计）、RAG 知识库深度集成（强制所有 Agent 引用，详见 docs/rag-mandatory-reference.md）、多店铺风控策略的配置框架
   - 仍禁止：未审计的第三方复杂 Agent 框架、生产环境下的分布式数据库替换（需满足运维/安全评估）
 
 - Phase3 (长期规划与扩展):
