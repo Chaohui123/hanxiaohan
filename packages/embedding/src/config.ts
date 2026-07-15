@@ -6,6 +6,7 @@ export interface EmbeddingConfig {
   apiKey: string;
   maxBatchSize: number;
   maxRetries: number;
+  requestTimeoutMs: number;
 }
 
 export function getEmbeddingConfig(): EmbeddingConfig {
@@ -18,5 +19,6 @@ export function getEmbeddingConfig(): EmbeddingConfig {
     apiKey: process.env.EMBEDDING_API_KEY || process.env.GLM_API_KEY || "",
     maxBatchSize: parseInt(process.env.EMBEDDING_BATCH_SIZE || "16", 10),
     maxRetries: 3,
+    requestTimeoutMs: parseInt(process.env.EMBEDDING_TIMEOUT_MS || "30000", 10),
   };
 }

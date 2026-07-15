@@ -298,6 +298,15 @@ export async function initSchema(db: DbAdapter): Promise<void> {
       created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW()
     );
 
+    -- RAG index watermark (incremental indexing checkpoint)
+    CREATE TABLE IF NOT EXISTS rag_index_watermark (
+      knowledge_type TEXT PRIMARY KEY,
+      last_indexed_at TIMESTAMP NOT NULL,
+      last_count INTEGER DEFAULT 0,
+      status TEXT DEFAULT 'idle',
+      updated_at TIMESTAMP DEFAULT NOW()
+    );
+
   `);
 
   // Create IVFFlat indexes for RAG tables (PG only, silently skip if insufficient data)

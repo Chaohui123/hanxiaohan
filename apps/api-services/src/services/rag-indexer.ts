@@ -13,23 +13,53 @@ export class RagIndexer {
     this.embeddingClient = new EmbeddingClient();
   }
 
+  // ---- 水印机制 ----
+
+  private async getWatermark(knowledgeType: string): Promise<string | null> {
+    const db = await getDb().catch(() => null);
+    if (!db) return null;
+    const rows = await db.all(
+      "SELECT last_indexed_at FROM rag_index_watermark WHERE knowledge_type = $1",
+      [knowledgeType],
+    ) as Array<Record<string, unknown>>;
+    return rows.length > 0 ? String(rows[0].last_indexed_at) : null;
+  }
+
+  private async setWatermark(knowledgeType: string, count: number, status: string): Promise<void> {
+    const db = await getDb().catch(() => null);
+    if (!db) return;
+    await db.run(
+      `INSERT INTO rag_index_watermark (knowledge_type, last_indexed_at, last_count, status, updated_at)
+       VALUES ($1, NOW(), $2, $3, NOW())
+       ON CONFLICT (knowledge_type) DO UPDATE SET
+         last_indexed_at = NOW(), last_count = $2, status = $3, updated_at = NOW()`,
+      [knowledgeType, count, status],
+    );
+  }
+
   /** 从售后工单历史构建话术库 */
   async indexAftersalesHistory(): Promise<number> {
     const db = await getDb().catch(() => null);
     if (!db) return 0;
+
+    await this.setWatermark("aftersales", 0, "running");
+
+    const watermark = await this.getWatermark("aftersales");
+    const watermarkClause = watermark ? `AND ac.updated_at > '${watermark}'` : "";
 
     const cases = await db.all(`
       SELECT ac.id, ac.type, ac.reason, ac.buyer_message, ac.resolution_note
       FROM aftersales_cases ac
       WHERE ac.status = 'resolved'
         AND ac.resolution_note IS NOT NULL
+        ${watermarkClause}
         AND NOT EXISTS (
           SELECT 1 FROM rag_aftersales_scripts ras WHERE ras.id = 'imported_' || ac.id
         )
       LIMIT 50
     `) as Array<Record<string, unknown>>;
 
-    if (cases.length === 0) return 0;
+    if (cases.length === 0) { await this.setWatermark("aftersales", 0, "completed"); return 0; }
 
     const texts = cases.map((c) =>
       `场景: ${c.reason}\n买家消息: ${c.buyer_message}\n回复: ${c.resolution_note}`,
@@ -53,6 +83,7 @@ export class RagIndexer {
       }
     }
 
+    await this.setWatermark("aftersales", indexed, "completed");
     logger.info({ indexed, total: cases.length }, "Aftersales history indexed");
     return indexed;
   }
@@ -61,6 +92,7 @@ export class RagIndexer {
   async indexCompetitorReports(): Promise<number> {
     const db = await getDb().catch(() => null);
     if (!db) return 0;
+    await this.setWatermark("competitor", 0, "running");
 
     const watchItems = await db.all(`
       SELECT pw.offer_id, pw.name,
@@ -108,6 +140,7 @@ export class RagIndexer {
       indexed++;
     }
 
+    await this.setWatermark("competitor", indexed, "completed");
     logger.info({ indexed }, "Competitor reports indexed");
     return indexed;
   }
@@ -116,6 +149,7 @@ export class RagIndexer {
   async indexCategoryOpportunities(): Promise<number> {
     const db = await getDb().catch(() => null);
     if (!db) return 0;
+    await this.setWatermark("category", 0, "running");
 
     const opportunities = await db.all(`
       SELECT category_id, category_name, overall_score, listing_count,
@@ -160,6 +194,7 @@ export class RagIndexer {
       }
     }
 
+    await this.setWatermark("category", indexed, "completed");
     logger.info({ indexed }, "Category opportunities indexed");
     return indexed;
   }
@@ -168,6 +203,7 @@ export class RagIndexer {
   async indexCopyHistory(): Promise<number> {
     const db = await getDb().catch(() => null);
     if (!db) return 0;
+    await this.setWatermark("copy", 0, "running");
 
     const copies = await db.all(`
       SELECT offer_id, name, title_ru
@@ -196,6 +232,7 @@ export class RagIndexer {
       }
     }
 
+    await this.setWatermark("copy", indexed, "completed");
     logger.info({ indexed }, "Copy history indexed");
     return indexed;
   }
@@ -208,10 +245,10 @@ export class RagIndexer {
       category: 0,
       copy: 0,
     };
-    try { results.aftersales = await this.indexAftersalesHistory(); } catch (err) { logger.error({ err }, "Aftersales index failed"); }
-    try { results.competitor = await this.indexCompetitorReports(); } catch (err) { logger.error({ err }, "Competitor index failed"); }
-    try { results.category = await this.indexCategoryOpportunities(); } catch (err) { logger.error({ err }, "Category index failed"); }
-    try { results.copy = await this.indexCopyHistory(); } catch (err) { logger.error({ err }, "Copy index failed"); }
+    try { results.aftersales = await this.indexAftersalesHistory(); } catch (err) { logger.error({ err }, "Aftersales index failed"); await this.setWatermark("aftersales", 0, "failed").catch(() => {}); }
+    try { results.competitor = await this.indexCompetitorReports(); } catch (err) { logger.error({ err }, "Competitor index failed"); await this.setWatermark("competitor", 0, "failed").catch(() => {}); }
+    try { results.category = await this.indexCategoryOpportunities(); } catch (err) { logger.error({ err }, "Category index failed"); await this.setWatermark("category", 0, "failed").catch(() => {}); }
+    try { results.copy = await this.indexCopyHistory(); } catch (err) { logger.error({ err }, "Copy index failed"); await this.setWatermark("copy", 0, "failed").catch(() => {}); }
     return results;
   }
 }

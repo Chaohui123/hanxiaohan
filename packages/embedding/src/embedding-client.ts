@@ -57,6 +57,7 @@ export class EmbeddingClient {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
         body: JSON.stringify({ model, input: texts }),
+        signal: AbortSignal.timeout(this.config.requestTimeoutMs),
       });
       if (!resp.ok) throw new Error(`Zhipu embedding API ${resp.status}: ${(await resp.text()).slice(0, 200)}`);
       const data = await resp.json() as { data: Array<{ index: number; embedding: number[] }> };
@@ -69,6 +70,7 @@ export class EmbeddingClient {
         method: "POST",
         headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
         body: JSON.stringify({ model: "embedding-3", input: texts }),
+        signal: AbortSignal.timeout(this.config.requestTimeoutMs),
       });
       if (!resp.ok) throw new Error(`Embedding fallback API ${resp.status}`);
       const data = await resp.json() as { data: Array<{ index: number; embedding: number[] }> };
