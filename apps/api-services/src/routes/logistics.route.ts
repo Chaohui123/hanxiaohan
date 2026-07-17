@@ -417,53 +417,65 @@ export function createLogisticsRouter(ozonClient: OzonClient): Router {
       const weightMap = new Map<string, number>();
       for (const s of skuRows) weightMap.set(s.ozon_posting_number, s.weight_kg || 0.3);
 
-      // Load original template with formatting preserved (xlsx-populate)
-      const XlsxPopulate = await import("xlsx-populate");
+      // Load original template — edit XML directly to preserve ALL formatting
+      const AdmZip = (await import("adm-zip")).default;
+      const { readFileSync } = await import("node:fs");
       const { join } = await import("node:path");
       const templatePath = join(process.cwd(), "assets", "kuajingbus-template.xlsx");
-      const wb = await XlsxPopulate.fromFileAsync(templatePath);
 
-      // Work on first sheet (基础信息)
-      const ws = wb.sheet(0);
+      const zip = new AdmZip(readFileSync(templatePath));
+      const sheetXml = zip.readAsText("xl/worksheets/sheet1.xml");
 
-      // Find "请在此行开始填写真实订单" row
-      let startRow = 6; // fallback
-      for (let r = 0; r < 50; r++) {
-        const val = ws.cell(r, 0).value();
-        if (val && typeof val === "string" && val.includes("请在此行开始填写真实订单")) {
-          startRow = r + 1;
-          break;
-        }
+      // Find "请在此行开始填写真实订单" — search for the row index
+      const markerMatch = sheetXml.match(/<row r="(\d+)"[^>]*>.*?请在此行开始填写真实订单.*?<\/row>/s);
+      let nextRow = 7; // fallback
+      if (markerMatch) {
+        nextRow = parseInt(markerMatch[1]) + 1;
       }
 
-      // Append purchase data rows
-      let rowIdx = startRow;
+      // Build XML for new data rows (preserving template's column structure)
+      const rowXmls: string[] = [];
       for (const p of purchases) {
         const skus = JSON.parse(p.sku_list_json || "[]") as Array<{ sku: number; quantity: number; unitPriceCny: number }>;
         if (skus.length === 0) continue;
-
         const totalQty = skus.reduce((s, sk) => s + sk.quantity, 0);
         const weight = weightMap.get(p.ozon_posting_number) || "";
 
-        // Column A=0, B=1, ... M=12
-        ws.cell(rowIdx, 0).value("");                          // A 注释
-        ws.cell(rowIdx, 1).value("1052");                       // B 仓库代码
-        ws.cell(rowIdx, 2).value("10");                         // C 服务代码
-        ws.cell(rowIdx, 3).value(p.ozon_posting_number);        // D 电商平台订单号
-        ws.cell(rowIdx, 4).value(p.logistics_tracking || "");   // E 面单条形码
-        ws.cell(rowIdx, 5).value("");                           // F 产品图片 — 人工
-        ws.cell(rowIdx, 6).value("");                           // G 产品名称 — 非必填
-        ws.cell(rowIdx, 7).value(Number(totalQty));             // H 产品数量
-        ws.cell(rowIdx, 8).value("1688");                       // I 打包来源
-        ws.cell(rowIdx, 9).value("");                           // J 快递单号/SKUID — 人工
-        ws.cell(rowIdx, 10).value(weight ? Number(weight) : "");// K 预估重量(kg)
-        ws.cell(rowIdx, 11).value("1688");                      // L 采购平台
-        ws.cell(rowIdx, 12).value(p.id);                        // M 采购单号
+        const vals = [
+          "",                              // A
+          "1052",                          // B
+          "10",                            // C
+          p.ozon_posting_number,           // D
+          p.logistics_tracking || "",      // E
+          "",                              // F
+          "",                              // G
+          String(totalQty),               // H
+          "1688",                          // I
+          "",                              // J
+          weight ? String(weight) : "",    // K
+          "1688",                          // L
+          p.id,                            // M
+        ];
 
-        rowIdx++;
+        // Build row XML: <row r="N"><c r="A7" t="inlineStr"><is><t>val</t></is></c>...</row>
+        let cellsXml = "";
+        for (let ci = 0; ci < vals.length; ci++) {
+          const col = String.fromCharCode(65 + ci); // A, B, C...
+          const ref = `${col}${nextRow}`;
+          const escaped = vals[ci].replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
+          cellsXml += `<c r="${ref}" t="inlineStr"><is><t>${escaped}</t></is></c>`;
+        }
+        rowXmls.push(`<row r="${nextRow}">${cellsXml}</row>`);
+        nextRow++;
       }
 
-      const buf = await wb.outputAsync();
+      // Insert new rows before any existing data rows (after marker row)
+      const insertPos = sheetXml.lastIndexOf("</row>", sheetXml.indexOf(`r="${nextRow - rowXmls.length - 1}"`) + 10) + 6;
+      // Simpler: insert before </sheetData>
+      const newSheetXml = sheetXml.replace("</sheetData>", rowXmls.join("") + "</sheetData>");
+
+      zip.updateFile("xl/worksheets/sheet1.xml", Buffer.from(newSheetXml, "utf-8"));
+      const buf = zip.toBuffer();
       const filename = `跨境巴士_${new Date().toISOString().slice(0, 10)}.xlsx`;
 
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
