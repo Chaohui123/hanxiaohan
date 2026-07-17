@@ -231,11 +231,6 @@ export function createPurchasePayRouter(db: DbAdapter | null): Router {
         return res.status(400).json({ success: false, error: { code: "NO_FIELDS", message: "至少提供一个字段" }, correlationId: req.correlationId });
       }
 
-      // Auto-set completed_at when marking as completed
-      if (paymentStatus === "completed") {
-        sets.push("completed_at = datetime('now')");
-      }
-
       sets.push("updated_at = datetime('now')");
       params.push(id);
 
