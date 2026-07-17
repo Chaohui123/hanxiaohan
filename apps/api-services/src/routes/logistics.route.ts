@@ -413,10 +413,9 @@ export function createLogisticsRouter(ozonClient: OzonClient): Router {
       const weightMap = new Map<string, number>();
       for (const s of skuRows) weightMap.set(s.ozon_posting_number, s.weight_kg || 0.3);
 
-      // Template columns per 跨境巴士:
-      // A=注释 B=仓库代码 C=服务代码(物流方式) D=平台订单号 E=运单号
-      // F=产品图片地址 G=产品名称(颜色+规格) H=产品数量 I=货物来源
-      // J=快递单号/SKUID K=预估重量(kg) L=采购平台 M=采购单号
+      // Template: A=注释 B=仓库代码 C=服务代码 D=电商平台订单号 E=面单条形码
+      // F=产品图片 G=产品名称(非必填) H=产品数量 I=打包来源 J=快递单号/SKUID
+      // K=预估重量(kg) L=采购平台 M=采购单号
       const rows: Record<string, string>[] = [];
       for (const p of purchases) {
         const skus = JSON.parse(p.sku_list_json || "[]") as Array<{ sku: number; quantity: number; unitPriceCny: number }>;
@@ -426,17 +425,17 @@ export function createLogisticsRouter(ozonClient: OzonClient): Router {
         const weight = weightMap.get(p.ozon_posting_number) || "";
 
         rows.push({
-          "A": "",                                    // 注释 — 人工填
-          "B": "123",                                 // 仓库代码 123=东莞常平国际仓
+          "A": "",                                    // 注释
+          "B": "1052",                                // 仓库代码 1052=东莞永泽仓
           "C": "10",                                  // 服务代码 10=OZON UNI
-          "D": p.ozon_posting_number,                 // 平台订单号
-          "E": p.logistics_tracking || "",            // 运单号(国际)
+          "D": p.ozon_posting_number,                 // 电商平台订单号
+          "E": p.logistics_tracking || "",            // 面单条形码
           "F": "",                                    // 产品图片 — 人工填
-          "G": "",                                    // 产品名称(颜色+规格) — 人工填
+          "G": "",                                    // 产品名称 — 非必填
           "H": String(totalQty),                      // 产品数量
-          "I": "快递单号",                            // 货物来源
-          "J": "",                                    // 快递单号(国内1688) — 人工填
-          "K": weight ? String(weight) : "",           // 预估重量
+          "I": "1688",                                // 打包来源
+          "J": "",                                    // 快递单号/SKUID — 人工填
+          "K": weight ? String(weight) : "",           // 预估重量(kg)
           "L": "1688",                                // 采购平台
           "M": p.id,                                  // 采购单号
         });
@@ -445,8 +444,8 @@ export function createLogisticsRouter(ozonClient: OzonClient): Router {
       const XLSX = await import("xlsx");
       const wb = XLSX.utils.book_new();
 
-      const headers = ["注释", "仓库代码", "服务代码", "平台订单号", "运单号",
-        "产品图片地址", "产品名称(颜色+规格)", "产品数量", "货物来源",
+      const headers = ["注释", "仓库代码", "服务代码", "电商平台订单号", "面单条形码",
+        "产品图片地址", "产品名称", "产品数量", "打包来源",
         "快递单号/SKUID", "预估重量(kg)", "采购平台", "采购单号"];
       const keys = ["A","B","C","D","E","F","G","H","I","J","K","L","M"];
       const wsData = XLSX.utils.json_to_sheet(rows, { header: keys });
@@ -460,8 +459,7 @@ export function createLogisticsRouter(ozonClient: OzonClient): Router {
       // Sheet 2: 仓库信息 (reference)
       const warehouseData = [["仓库名称", "仓库代码"]] as unknown[][];
       const warehouses = [
-        ["123东莞市常平国际仓", "123"], ["001深圳市福永仓", "001"],
-        ["002东莞市虎门仓", "002"], ["003东莞市长安仓", "003"],
+        ["1052东莞永泽仓", "1052"],
       ];
       for (const w of warehouses) warehouseData.push(w);
       const wsWH = XLSX.utils.aoa_to_sheet(warehouseData);
