@@ -384,5 +384,121 @@ export function createLogisticsRouter(ozonClient: OzonClient): Router {
     }
   });
 
+  /** GET /api/logistics/export-kuajingbus — export purchase orders to 跨境巴士 template */
+  router.get("/logistics/export-kuajingbus", async (_req, res) => {
+    try {
+      const db = await getDb().catch(() => null);
+      if (!db) return res.status(503).json({ success: false, error: { code: "DB_UNAVAILABLE" } });
+
+      // Fetch paid purchases with logistics info
+      const purchases = await db.all<Record<string, string>>(
+        `SELECT id, ozon_posting_number, logistics_tracking, logistics_carrier,
+                sku_list_json, freight_address, source_1688_url
+         FROM purchase_1688
+         WHERE payment_status IN ('paid','shipped')
+           AND logistics_status != 'idle'
+         ORDER BY created_at DESC
+         LIMIT 100`
+      );
+
+      if (purchases.length === 0) {
+        return res.json({ success: true, data: { count: 0, message: "没有待导出的采购单" } });
+      }
+
+      // Get SKU mapping weight info
+      const skuRows = await db.all<{ ozon_posting_number: string; weight_kg: number }>(
+        `SELECT DISTINCT s.ozon_offer_id, s.weight_kg FROM sku_1688_mapping s`
+      ).catch(() => []);
+
+      const weightMap = new Map<string, number>();
+      for (const s of skuRows) weightMap.set(s.ozon_posting_number, s.weight_kg || 0.3);
+
+      // Build template rows — only B,C,D,E,H,I,J are required by 跨境巴士
+      // A=仓库代码 B=物流代码 C=平台订单号 D=运单号 E=产品图片地址
+      // F=产品名称 G=产品数量 H=货物来源 I=快递单号/SKUID J=预估重量
+      // K=采购平台 L=采购单号
+      const rows: Record<string, string>[] = [];
+      for (const p of purchases) {
+        const skus = JSON.parse(p.sku_list_json || "[]") as Array<{ sku: number; quantity: number; unitPriceCny: number }>;
+        const weight = weightMap.get(p.ozon_posting_number) || 0.5;
+
+        if (skus.length === 0) continue;
+        const totalQty = skus.reduce((s, sk) => s + sk.quantity, 0);
+
+        rows.push({
+          "A": "123",
+          "B": "10",
+          "C": p.ozon_posting_number,
+          "D": p.logistics_tracking || "",
+          "E": "",
+          "F": "",
+          "G": String(totalQty),
+          "H": "快递单号",
+          "I": p.logistics_tracking || "",
+          "J": String(weight),
+          "K": "1688",
+          "L": p.id,
+        });
+      }
+
+      // Write xlsx — use A-L column headers matching 跨境巴士 import format
+      const XLSX = await import("xlsx");
+      const wb = XLSX.utils.book_new();
+
+      const headers = ["仓库代码", "物流代码", "平台订单号", "运单号", "产品图片地址",
+        "产品名称", "产品数量", "货物来源", "快递单号/SKUID", "预估重量", "采购平台", "采购单号"];
+      const wsData = XLSX.utils.json_to_sheet(rows, { header: ["A","B","C","D","E","F","G","H","I","J","K","L"] });
+      // Rename headers from A,B,C... to actual Chinese names
+      for (let i = 0; i < headers.length; i++) {
+        const cell = XLSX.utils.encode_cell({ r: 0, c: i });
+        if (wsData[cell]) wsData[cell].v = headers[i];
+      }
+      XLSX.utils.book_append_sheet(wb, wsData, "基础信息");
+
+      // Sheet 2: 仓库信息 (reference)
+      const warehouseData = [["仓库名称", "仓库代码"]] as unknown[][];
+      const warehouses = [
+        ["123东莞市常平国际仓", "123"], ["001深圳市福永仓", "001"],
+        ["002东莞市虎门仓", "002"], ["003东莞市长安仓", "003"],
+      ];
+      for (const w of warehouses) warehouseData.push(w);
+      const wsWH = XLSX.utils.aoa_to_sheet(warehouseData);
+      XLSX.utils.book_append_sheet(wb, wsWH, "仓库信息");
+
+      // Sheet 3: 物流方式 (reference)
+      const logisticsData = [["物流方式", "物流代码"]] as unknown[][];
+      const methods = [
+        ["OZON UNI", "10"], ["OZON EUB", "15"], ["OZON FBP", "13"],
+        ["OZON CEL", "28"], ["CDEK", "55"], ["Boxberry", "59"],
+      ];
+      for (const m of methods) logisticsData.push(m);
+      const wsLG = XLSX.utils.aoa_to_sheet(logisticsData);
+      XLSX.utils.book_append_sheet(wb, wsLG, "物流方式");
+
+      // Sheet 4: 填写示例 (instructions)
+      const exampleData = [["必填字段说明", "填写内容", "备注"]] as unknown[][];
+      const examples = [
+        ["仓库代码", "123", "对应仓库信息sheet中的代码"],
+        ["物流代码", "10", "对应物流方式sheet中的代码(OZON UNI)"],
+        ["平台订单号", "Ozon posting number", "从采购单自动填入"],
+        ["运单号", "国际物流单号", "货代提供的追踪号"],
+        ["货物来源", "快递单号 或 库存", "1688发货选快递单号"],
+        ["采购平台", "1688", "默认1688"],
+      ];
+      for (const e of examples) exampleData.push(e);
+      const wsEx = XLSX.utils.aoa_to_sheet(exampleData);
+      XLSX.utils.book_append_sheet(wb, wsEx, "填写示例");
+
+      const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+      const filename = `跨境巴士订单_${new Date().toISOString().slice(0, 10)}.xlsx`;
+
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename=${encodeURIComponent(filename)}`);
+      res.send(buf);
+    } catch (err) {
+      res.status(500).json({ success: false, error: { code: "EXPORT_ERROR", message: (err as Error).message } });
+    }
+  });
+
   return router;
 }

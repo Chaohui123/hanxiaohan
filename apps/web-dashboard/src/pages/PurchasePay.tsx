@@ -1,6 +1,6 @@
 import { useState } from "react";
 import { Row, Col, Card, Statistic, Table, Tag, Button, Space, Spin, Modal, Input, InputNumber, Select, message, Tooltip } from "antd";
-import { ReloadOutlined, DollarOutlined, ThunderboltOutlined, EditOutlined, CopyOutlined, EyeOutlined } from "@ant-design/icons";
+import { ReloadOutlined, DollarOutlined, ThunderboltOutlined, EditOutlined, CopyOutlined, EyeOutlined, ExportOutlined } from "@ant-design/icons";
 import { usePurchaseList, usePurchaseBill, usePayMutation, useRetryMutation, useUpdateMutation } from "../api/purchase-api";
 
 // ---- 中文状态映射 ----
