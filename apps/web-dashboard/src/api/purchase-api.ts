@@ -21,6 +21,11 @@ export const purchaseApi = {
   batchPay: (storeId?: string) => api.post("/api/purchase/batch-pay", { storeId }),
 
   dailyBill: (date?: string) => api.get("/api/finance/purchase-bill", { params: { date } }),
+
+  update: (id: string, data: {
+    paymentStatus?: string; paySerial?: string; payTime?: string;
+    logisticsStatus?: string; logisticsTracking?: string; logisticsCarrier?: string;
+  }) => api.put(`/api/purchase/${id}`, data),
 };
 
 // ---- React Query hooks ----
@@ -53,6 +58,15 @@ export function useRetryMutation() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: purchaseApi.retry,
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ["purchase-list"] }); },
+  });
+}
+
+export function useUpdateMutation() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: ({ id, ...data }: { id: string; paymentStatus?: string; paySerial?: string; payTime?: string; logisticsStatus?: string; logisticsTracking?: string; logisticsCarrier?: string }) =>
+      purchaseApi.update(id, data),
     onSuccess: () => { qc.invalidateQueries({ queryKey: ["purchase-list"] }); },
   });
 }

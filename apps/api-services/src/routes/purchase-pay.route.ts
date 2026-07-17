@@ -191,5 +191,46 @@ export function createPurchasePayRouter(db: DbAdapter | null): Router {
     }
   });
 
+  /** PUT /api/purchase/:id — update payment status, logistics, etc. (for MANUAL_PAY_MODE) */
+  router.put("/purchase/:id", async (req, res) => {
+    try {
+      if (!db) return res.status(503).json({ success: false, error: { code: "DB_UNAVAILABLE" }, correlationId: req.correlationId });
+
+      const { id } = req.params;
+      const { paymentStatus, paySerial, payTime, logisticsStatus, logisticsTracking, logisticsCarrier } = req.body as {
+        paymentStatus?: string; paySerial?: string; payTime?: string;
+        logisticsStatus?: string; logisticsTracking?: string; logisticsCarrier?: string;
+      };
+
+      const existing = await db.all<{ id: string }>("SELECT id FROM purchase_1688 WHERE id = ?", [id]);
+      if (existing.length === 0) {
+        return res.status(404).json({ success: false, error: { code: "NOT_FOUND", message: "采购单不存在" }, correlationId: req.correlationId });
+      }
+
+      const sets: string[] = [];
+      const params: unknown[] = [];
+      if (paymentStatus !== undefined) { sets.push("payment_status = ?"); params.push(paymentStatus); }
+      if (paySerial !== undefined) { sets.push("pay_serial = ?"); params.push(paySerial); }
+      if (payTime !== undefined) { sets.push("pay_time = ?"); params.push(payTime); }
+      if (logisticsStatus !== undefined) { sets.push("logistics_status = ?"); params.push(logisticsStatus); }
+      if (logisticsTracking !== undefined) { sets.push("logistics_tracking = ?"); params.push(logisticsTracking); }
+      if (logisticsCarrier !== undefined) { sets.push("logistics_carrier = ?"); params.push(logisticsCarrier); }
+
+      if (sets.length === 0) {
+        return res.status(400).json({ success: false, error: { code: "NO_FIELDS", message: "至少提供一个字段" }, correlationId: req.correlationId });
+      }
+
+      sets.push("updated_at = datetime('now')");
+      params.push(id);
+
+      await db.run(`UPDATE purchase_1688 SET ${sets.join(", ")} WHERE id = ?`, params);
+      logger.info({ id, paymentStatus, logisticsStatus }, "PurchasePay: purchase order updated");
+
+      res.json({ success: true, message: "已更新", correlationId: req.correlationId });
+    } catch (err) {
+      res.status(500).json({ success: false, error: { code: "UPDATE_ERROR", message: (err as Error).message }, correlationId: req.correlationId });
+    }
+  });
+
   return router;
 }

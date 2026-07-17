@@ -1,7 +1,7 @@
 import { useState } from "react";
-import { Row, Col, Card, Statistic, Table, Tag, Button, Space, Spin, Modal, InputNumber, message, Tooltip } from "antd";
-import { ReloadOutlined, DollarOutlined, ThunderboltOutlined, CheckCircleOutlined, CopyOutlined, EyeOutlined } from "@ant-design/icons";
-import { usePurchaseList, usePurchaseBill, usePayMutation, useRetryMutation } from "../api/purchase-api";
+import { Row, Col, Card, Statistic, Table, Tag, Button, Space, Spin, Modal, Input, InputNumber, Select, message, Tooltip } from "antd";
+import { ReloadOutlined, DollarOutlined, ThunderboltOutlined, EditOutlined, CopyOutlined, EyeOutlined } from "@ant-design/icons";
+import { usePurchaseList, usePurchaseBill, usePayMutation, useRetryMutation, useUpdateMutation } from "../api/purchase-api";
 
 // ---- 中文状态映射 ----
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
@@ -41,9 +41,12 @@ export default function PurchasePay() {
   const { data: billData } = usePurchaseBill();
   const payMutation = usePayMutation();
   const retryMutation = useRetryMutation();
+  const updateMutation = useUpdateMutation();
   const [modalOpen, setModalOpen] = useState(false);
   const [detailModal, setDetailModal] = useState<Record<string, unknown> | null>(null);
+  const [editModal, setEditModal] = useState<Record<string, unknown> | null>(null);
   const [payForm, setPayForm] = useState({ postingNumber: "", costCny: 0, sellingPriceRub: 0, ozonOrderId: 0 });
+  const [editForm, setEditForm] = useState({ paymentStatus: "", paySerial: "", logisticsStatus: "", logisticsTracking: "", logisticsCarrier: "" });
 
   if (isLoading) return <Spin size="large" style={{ display: "block", margin: "100px auto" }} />;
 
@@ -96,12 +99,19 @@ export default function PurchasePay() {
                 重试
               </Button>
             )}
-            {(st === "pending_payment" || st === "pending") && (
-              <Button size="small" type="primary" icon={<CheckCircleOutlined />}
-                onClick={() => message.info("请在1688后台完成付款后，联系管理员更新状态")}>
-                已付款
-              </Button>
-            )}
+            <Button size="small" icon={<EditOutlined />}
+              onClick={() => {
+                setEditForm({
+                  paymentStatus: (r.payment_status as string) || "",
+                  paySerial: (r.pay_serial as string) || "",
+                  logisticsStatus: (r.logistics_status as string) || "",
+                  logisticsTracking: (r.logistics_tracking as string) || "",
+                  logisticsCarrier: (r.logistics_carrier as string) || "",
+                });
+                setEditModal(r);
+              }}>
+              编辑
+            </Button>
           </Space>
         );
       },
@@ -152,6 +162,44 @@ export default function PurchasePay() {
             <p><strong>创建时间：</strong>{detailModal.created_at as string}</p>
           </div>
         )}
+      </Modal>
+
+      <Modal title="编辑采购单" open={!!editModal} onCancel={() => setEditModal(null)}
+        onOk={() => {
+          if (!editModal?.id) return;
+          updateMutation.mutate(
+            { id: editModal.id as string, ...editForm },
+            { onSuccess: () => { message.success("已更新"); setEditModal(null); }, onError: (e: Error) => message.error(e.message) }
+          );
+        }}
+        confirmLoading={updateMutation.isPending}
+      >
+        <Space direction="vertical" style={{ width: "100%" }}>
+          <span>付款状态：</span>
+          <Select style={{ width: "100%" }} value={editForm.paymentStatus}
+            onChange={(v) => setEditForm({ ...editForm, paymentStatus: v })}>
+            <Select.Option value="">不变更</Select.Option>
+            <Select.Option value="pending_payment">待付款</Select.Option>
+            <Select.Option value="paying">支付中</Select.Option>
+            <Select.Option value="paid">已支付</Select.Option>
+            <Select.Option value="failed">支付失败</Select.Option>
+            <Select.Option value="cancelled">已取消</Select.Option>
+          </Select>
+          <span>支付流水号：</span>
+          <Input value={editForm.paySerial} onChange={(e) => setEditForm({ ...editForm, paySerial: e.target.value })} placeholder="1688支付流水号" />
+          <span>物流状态：</span>
+          <Select style={{ width: "100%" }} value={editForm.logisticsStatus}
+            onChange={(v) => setEditForm({ ...editForm, logisticsStatus: v })}>
+            <Select.Option value="">不变更</Select.Option>
+            <Select.Option value="idle">未发货</Select.Option>
+            <Select.Option value="shipped">已发货</Select.Option>
+            <Select.Option value="delivered">已签收</Select.Option>
+          </Select>
+          <span>物流单号：</span>
+          <Input value={editForm.logisticsTracking} onChange={(e) => setEditForm({ ...editForm, logisticsTracking: e.target.value })} placeholder="快递单号" />
+          <span>物流公司：</span>
+          <Input value={editForm.logisticsCarrier} onChange={(e) => setEditForm({ ...editForm, logisticsCarrier: e.target.value })} placeholder="如：中通、圆通" />
+        </Space>
       </Modal>
 
       <Modal title="手动发起支付" open={modalOpen} onCancel={() => setModalOpen(false)}
