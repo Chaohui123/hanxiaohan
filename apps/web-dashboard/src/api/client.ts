@@ -57,6 +57,10 @@ export const listingApi = {
 // ---- Dashboard ----
 export const dashboardApi = {
   stats: () => api.get("/api/dashboard"),
+  globalStats: () => api.get("/api/dashboard/global"),
+  alerts: () => api.get("/api/dashboard/alerts"),
+  cosStats: () => api.get("/api/dashboard/cos"),
+  taskList: (status?: string) => api.get("/api/dashboard/tasks", { params: { status } }),
   health: () => api.get("/health"),
   ready: () => api.get("/ready"),
 };

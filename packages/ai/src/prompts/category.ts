@@ -24,6 +24,13 @@ Return this EXACT JSON structure (no extra fields):
   "reasoning": "Brief reason"
 }`;
 
+// Recursive category tree node type
+export interface CategoryTreeNode {
+  categoryId: number;
+  title: string;
+  children: CategoryTreeNode[];
+}
+
 export function buildCategoryPrompt(
   product: { title: string; categoryPath?: string[]; specifications: Array<{ name: string; value: string }> },
   categoryTreePreview: string
@@ -49,7 +56,7 @@ Copy it exactly. Do NOT return 0. If uncertain, pick the closest match from the 
  * Shows level-1 and level-2 categories broadly, limits at depth 3+.
  */
 export function formatCategoryTree(
-  nodes: Array<{ categoryId: number; title: string; children: Array<{ categoryId: number; title: string; children: unknown[] }> }>,
+  nodes: CategoryTreeNode[],
   depth: number = 0
 ): string {
   const lines: string[] = [];
@@ -77,9 +84,9 @@ export function formatCategoryTree(
  * and prevents hallucinated category IDs.
  */
 export function filterCategoryTree(
-  nodes: Array<{ categoryId: number; title: string; children: Array<{ categoryId: number; title: string; children: unknown[] }> }>,
+  nodes: CategoryTreeNode[],
   keywords: string[]
-): Array<{ categoryId: number; title: string; children: Array<{ categoryId: number; title: string; children: unknown[] }> }> {
+): CategoryTreeNode[] {
   if (!keywords.length || keywords.every((k) => k.length < 2)) return nodes;
 
   const lowerKeywords = keywords.map((k) => k.toLowerCase());
@@ -91,9 +98,9 @@ export function filterCategoryTree(
   }
 
   function filterChildren(
-    children: Array<{ categoryId: number; title: string; children: Array<{ categoryId: number; title: string; children: unknown[] }> }>
-  ): Array<{ categoryId: number; title: string; children: Array<{ categoryId: number; title: string; children: unknown[] }> }> {
-    const results: Array<{ categoryId: number; title: string; children: Array<{ categoryId: number; title: string; children: unknown[] }> }> = [];
+    children: CategoryTreeNode[]
+  ): CategoryTreeNode[] {
+    const results: CategoryTreeNode[] = [];
     for (const node of children) {
       const selfMatch = matchesKeyword(node.title);
       const filteredChildren = node.children?.length ? filterChildren(node.children) : [];

@@ -403,7 +403,7 @@ export class OzonClient {
         });
 
         await this.handleResponseError(res);
-        const data = await res.json();
+        const data = await res.json() as Record<string, unknown>;
         return data.result as OzonUploadApi;
       });
     });
@@ -464,14 +464,14 @@ export class OzonClient {
     let message = `Ozon API error: ${response.status} ${response.statusText}`;
 
     try {
-      const body = await response.json();
+      const body = await response.json() as Record<string, unknown>;
       // Prefer body.error (more detailed), fall back to body.code
       if (body.error) {
-        ozonCode = body.error.code;
-        message = body.error.message ?? message;
+        ozonCode = (body.error as Record<string, unknown>).code as string | undefined;
+        message = ((body.error as Record<string, unknown>).message as string) ?? message;
       } else if (body.code) {
-        ozonCode = body.code;
-        message = body.message ?? message;
+        ozonCode = body.code as string;
+        message = (body.message as string) ?? message;
       }
     } catch {
       // No JSON body — use default message

@@ -109,6 +109,7 @@ export async function checkPipelineHealth(): Promise<PipelineHealth> {
     const t0 = Date.now();
     let browserOk = false;
     try {
+      // @ts-expect-error — playwright is optional (Phase 2+), not installed by default
       const pw = await import("playwright");
       const browser = await pw.chromium.launch({ headless: true });
       await browser.close();

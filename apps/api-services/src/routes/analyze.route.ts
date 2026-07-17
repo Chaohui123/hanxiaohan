@@ -58,7 +58,7 @@ export function createAnalyzeRouter(ozonClient?: OzonClient): Router {
   router.get("/analyze/russia-market", (req, res) => {
     try {
       const query = (req.query.query as string) || "";
-      const analysis = analyzeProductForRussia({ title: query, categoryPath: [], price: { currentMin: 0, currentMax: 0, currency: "CNY" }, sourceUrl: "", descriptionText: "", specifications: [], specImages: [], detailImages: [] });
+      const analysis = analyzeProductForRussia(query, "", [], 0.5);
       const highDemand = getHighDemandCategoriesForCurrentSeason();
       const autoParts = getAutoPartCategoriesSorted();
       res.json({ success: true, data: { analysis, highDemand, autoParts }, correlationId: req.correlationId });

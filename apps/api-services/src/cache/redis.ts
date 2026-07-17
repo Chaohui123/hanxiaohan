@@ -11,8 +11,9 @@ async function loadRedis() {
   if (!redisUrl) return null;
 
   try {
-    // @ts-expect-error — ioredis is optional (Phase 2+), not installed by default
-    const { default: Redis } = await import("ioredis");
+    const RedisMod = await import("ioredis");
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const Redis = (RedisMod as any).default || RedisMod;
     const client = new Redis(redisUrl);
     client.on("error", (err: Error) => {
       console.error("Redis error:", err);

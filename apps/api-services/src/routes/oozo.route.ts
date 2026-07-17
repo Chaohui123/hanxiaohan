@@ -121,7 +121,8 @@ async function processProductFolder(
         const analysis = await analyzeImage(visionClient, fileUrl);
 
         // 2. Generate Russian overlay text
-        const overlays = await generateImageOverlayText(deepseekClient, analysis, {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const overlays = await generateImageOverlayText(deepseekClient as any, analysis, {
           titleCn: product.productName,
           specs: specFromName.map((s) => ({ name: "", value: s })),
         });
@@ -150,7 +151,8 @@ async function processProductFolder(
           ? `${csvInfo["标题"] || csvInfo["title"] || product.productName}. ${csvInfo["属性"] || csvInfo["规格"] || ""}`
           : `Товар: ${product.productName}`;
 
-        const script = await generateVideoScript(deepseekClient, {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        const script = await generateVideoScript(deepseekClient as any, {
           titleCn: csvInfo?.["标题"] || csvInfo?.["title"] || product.productName,
           descriptionCn,
         });

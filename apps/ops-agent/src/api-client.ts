@@ -14,7 +14,7 @@ async function api<T>(config: ApiConfig, method: string, path: string, body?: un
     method,
     headers,
     body: body ? JSON.stringify(body) : undefined,
-    signal: AbortSignal.timeout(30_000),
+    signal: AbortSignal.timeout(90_000),
   });
   if (!resp.ok) {
     const text = await resp.text().catch(() => "");
@@ -35,6 +35,8 @@ export const apiClient = {
   taskStats: (c: ApiConfig) => api<Record<string, unknown>>(c, "GET", "/api/task/queue/stats"),
   syncOrders: (c: ApiConfig) => api<Record<string, unknown>>(c, "POST", "/api/orders/sync"),
   backup: (c: ApiConfig) => api<Record<string, unknown>>(c, "POST", "/api/db/backup"),
+  cleanup: (c: ApiConfig) => api<Record<string, unknown>>(c, "POST", "/api/ops/cleanup"),
+  healthPanel: (c: ApiConfig) => api<Record<string, unknown>>(c, "GET", "/api/ops/health-panel"),
   reconcile: (c: ApiConfig, dateFrom: string, dateTo: string) =>
     api<Record<string, unknown>>(c, "POST", "/api/orders/reconcile", { dateFrom, dateTo }),
   pipelineHealth: (c: ApiConfig) => api<Record<string, unknown>>(c, "GET", "/ready/pipeline"),

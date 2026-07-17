@@ -7,7 +7,7 @@
 import type { DeepSeekClient } from "@onzo/glm-integration";
 import type { TranslationResult, CategoryMatchResult, AttributeFillResult, OzonCategoryNode, OzonAttribute } from "@onzo/shared-types";
 import { TRANSLATION_SYSTEM_PROMPT, buildTranslationPrompt } from "@onzo/glm-integration";
-import { CATEGORY_SYSTEM_PROMPT, buildCategoryPrompt, formatCategoryTree, filterCategoryTree } from "@onzo/glm-integration";
+import { CATEGORY_SYSTEM_PROMPT, buildCategoryPrompt, formatCategoryTree, filterCategoryTree, type CategoryTreeNode } from "@onzo/glm-integration";
 import { logger } from "@onzo/logger";
 
 export class DeepSeekTranslator {
@@ -53,7 +53,8 @@ export class DeepSeekTranslator {
 
   async matchCategory(
     product: { title: string; categoryPath?: string[]; specifications: Array<{ name: string; value: string }> },
-    categoryTree: OzonCategoryNode[]
+    categoryTree: OzonCategoryNode[],
+    ragContext?: string
   ): Promise<CategoryMatchResult> {
     // Pre-filter tree to relevant branches based on product keywords
     // This prevents LLM hallucination from truncated tree views
@@ -64,17 +65,22 @@ export class DeepSeekTranslator {
       ...product.specifications.map((s) => s.value),
     ];
     const filteredTree = filterCategoryTree(
-      categoryTree as Array<{ categoryId: number; title: string; children: Array<{ categoryId: number; title: string; children: unknown[] }> }>,
+      categoryTree as CategoryTreeNode[],
       keywords
     );
 
     const treePreview = formatCategoryTree(filteredTree);
     const userPrompt = buildCategoryPrompt(product, treePreview);
 
+    // Inject RAG context into system prompt (Top5 similar historical products)
+    const systemPrompt = ragContext
+      ? `${CATEGORY_SYSTEM_PROMPT}\n\n${ragContext}`
+      : CATEGORY_SYSTEM_PROMPT;
+
     const response = await this.client.chatCompletion<CategoryMatchResult>({
       model: "flash",
       messages: [
-        { role: "system", content: CATEGORY_SYSTEM_PROMPT },
+        { role: "system", content: systemPrompt },
         { role: "user", content: userPrompt },
       ],
       temperature: 0.2,
@@ -107,7 +113,7 @@ export class DeepSeekTranslator {
   ): Promise<CategoryMatchResult> {
     // Try AI retry with unfiltered tree (first 200 lines)
     const treePreview = formatCategoryTree(
-      categoryTree as Array<{ categoryId: number; title: string; children: Array<{ categoryId: number; title: string; children: unknown[] }> }>
+      categoryTree as CategoryTreeNode[]
     );
     const shortTree = treePreview.split("\n").slice(0, 200).join("\n");
 
@@ -130,7 +136,7 @@ Tree (first 200 lines):\n${shortTree}\n\nReturn JSON with a valid categoryId (NO
     if (response.parsed?.categoryId && response.parsed.categoryId > 0) {
       // Verify the returned ID actually exists in the tree
       const exists = categoryIdExists(
-        categoryTree as Array<{ categoryId: number; title: string; children: unknown[] }>,
+        categoryTree as CategoryTreeNode[],
         response.parsed.categoryId
       );
       if (exists) {
@@ -143,7 +149,7 @@ Tree (first 200 lines):\n${shortTree}\n\nReturn JSON with a valid categoryId (NO
     // AI failed — do programmatic search through the tree by keyword
     console.log("[DeepSeek] AI retry failed — searching tree programmatically for:", product.title);
     const searchResult = searchCategoryTree(
-      categoryTree as Array<{ categoryId: number; title: string; children: Array<{ categoryId: number; title: string; children: unknown[] }> }>,
+      categoryTree as CategoryTreeNode[],
       [...product.title.split(/\s+/).filter((w) => w.length > 2), ...(product.categoryPath ?? [])]
     );
 
@@ -207,14 +213,14 @@ Return JSON:
 
 // ---- Programmatic category tree helpers (fallback when AI fails) ----
 
-type TreeNode = { categoryId: number; title: string; children: Array<{ categoryId: number; title: string; children: unknown[] }> };
+type TreeNode = CategoryTreeNode;
 
 /** Check whether a categoryId exists anywhere in the tree. */
-function categoryIdExists(nodes: TreeNode[], targetId: number): boolean {
+function categoryIdExists(nodes: CategoryTreeNode[], targetId: number): boolean {
   for (const node of nodes) {
     if (node.categoryId === targetId) return true;
     if (node.children?.length > 0) {
-      if (categoryIdExists(node.children as TreeNode[], targetId)) return true;
+      if (categoryIdExists(node.children, targetId)) return true;
     }
   }
   return false;
@@ -222,7 +228,7 @@ function categoryIdExists(nodes: TreeNode[], targetId: number): boolean {
 
 /** Search the tree for categories whose title matches any keyword (case-insensitive). */
 function searchCategoryTree(
-  nodes: TreeNode[],
+  nodes: CategoryTreeNode[],
   keywords: string[]
 ): { categoryId: number; categoryName: string; categoryPath: string[]; confidence: number; reasoning: string } | null {
   const lowerKeywords = keywords
@@ -248,10 +254,10 @@ function searchCategoryTree(
   }
 
   // Find the best matching leaf node
-  let bestMatch: { node: TreeNode; path: string[] } | null = null;
+  let bestMatch: { node: CategoryTreeNode; path: string[] } | null = null;
   let bestScore = 0;
 
-  function search(nodes: TreeNode[], path: string[]) {
+  function search(nodes: CategoryTreeNode[], path: string[]) {
     for (const node of nodes) {
       const currentPath = [...path, node.title];
       if (match(node.title)) {
@@ -263,7 +269,7 @@ function searchCategoryTree(
         }
       }
       if (node.children?.length > 0) {
-        search(node.children as TreeNode[], currentPath);
+        search(node.children, currentPath);
       }
     }
   }
@@ -272,10 +278,11 @@ function searchCategoryTree(
 
   if (!bestMatch) return null;
 
+  const result = bestMatch as { node: CategoryTreeNode; path: string[] };
   return {
-    categoryId: bestMatch.node.categoryId,
-    categoryName: bestMatch.path.join(" > "),
-    categoryPath: bestMatch.path,
+    categoryId: result.node.categoryId,
+    categoryName: result.path.join(" > "),
+    categoryPath: result.path,
     confidence: 0.5, // programmatic match is lower confidence than AI
     reasoning: `Programmatic keyword match: ${keywords.filter((k) => k.length > 2).join(", ")}`,
   };

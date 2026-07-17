@@ -56,7 +56,7 @@ async function createShipment(
         lengthCm: (orderData.length as number) || 20,
         widthCm: (orderData.width as number) || 15,
         heightCm: (orderData.height as number) || 5,
-        items: (orderData.products as Array<{ name: string; quantity: number; price: number }>) || [],
+        items: (orderData.products as Array<{ name: string; quantity: number; priceRub: number }>) || [],
       },
     };
 
@@ -116,15 +116,15 @@ export async function batchShipOrders(ozonClient: OzonClient): Promise<BatchShip
   let shipped = 0, skipped = 0, failed = 0;
 
   for (const order of pendingOrders) {
+    // Parse products and order data from raw_json (declared outside try for catch visibility)
+    let products: Array<{ sku: number; quantity: number }> = [];
     try {
-      // Parse products and order data from raw_json
-      let products: Array<{ sku: number; quantity: number }> = [];
       let raw: Record<string, unknown> = {};
       try {
         raw = JSON.parse(order.raw_json || "{}");
-        products = (raw.products || raw.items || []).map((p: { sku?: number; product_id?: number; quantity: number }) => ({
-          sku: p.sku ?? p.product_id ?? 0,
-          quantity: p.quantity ?? 1,
+        products = ((raw.products || raw.items || []) as Array<Record<string, unknown>>).map((p) => ({
+          sku: (p.sku ?? p.product_id ?? 0) as number,
+          quantity: (p.quantity ?? 1) as number,
         }));
       } catch {
         results.push({ postingNumber: order.posting_number, status: "skipped", error: "Cannot parse product list" });
@@ -174,7 +174,7 @@ export async function batchShipOrders(ozonClient: OzonClient): Promise<BatchShip
       if (msg.includes("CDEK") || msg.includes("Russian Post")) {
         try {
           const fallbackTracking = `ONZO-${Date.now().toString(36)}-${order.posting_number.slice(-6)}`;
-          await client.shipOrder(order.posting_number, fallbackTracking, products);
+          await client.shipOrder(order.posting_number, fallbackTracking, products as Array<{ sku: number; quantity: number }>);
           await serializedWrite(() =>
             db.run("UPDATE local_orders SET status = 'delivering', tracking_number = ? WHERE posting_number = ?",
               [fallbackTracking, order.posting_number])

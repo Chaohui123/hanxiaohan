@@ -3,23 +3,12 @@
 // ============================================================
 
 import type { Request, Response, NextFunction } from "express";
-import crypto from "node:crypto";
-import { cache } from "@onzo/cache";
-
-const recentHashes = new Map<string, number>(); // hash → expiry timestamp
-const DEDUP_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
-
-/** Clean expired entries periodically */
-setInterval(() => {
-  const now = Date.now();
-  for (const [key, expiry] of recentHashes) {
-    if (expiry <= now) recentHashes.delete(key);
-  }
-}, 60_000);
+import { TTL } from "@onzo/cache";
+import { lockDedupListing } from "../services/redis-lock.js";
 
 export async function idempotencyMiddleware(req: Request, res: Response, next: NextFunction): Promise<void> {
-  // Only check POST /api/process/*
-  if (!req.path.startsWith("/api/process")) {
+  // Only check POST /api/process/* and /api/v1/process/*
+  if (!req.path.startsWith("/api/process") && !req.path.startsWith("/api/v1/process")) {
     next();
     return;
   }
@@ -30,18 +19,14 @@ export async function idempotencyMiddleware(req: Request, res: Response, next: N
     return;
   }
 
-  const hash = crypto.createHash("sha256").update(url.trim()).digest("hex").substring(0, 16);
-
-  // Check Redis first (shared across processes), fall back to memory
-  const redisCheck = await cache.get(`idem:${hash}`).catch(() => null);
-  const existing = redisCheck ? parseInt(redisCheck) : recentHashes.get(hash);
-
-  if (existing && existing > Date.now()) {
+  // Use Redis distributed lock for dedup (cross-process safe)
+  const token = await lockDedupListing(url);
+  if (!token) {
     res.status(409).json({
       success: false,
       error: {
         code: "DUPLICATE",
-        message: `This 1688 URL was submitted within the last ${DEDUP_WINDOW_MS / 60000} minutes. Skipping duplicate.`,
+        message: `This 1688 URL was submitted within the last ${TTL.DEDUP_LOCK / 60} minutes. Skipping duplicate.`,
         retryable: false,
       },
       correlationId: req.correlationId,
@@ -49,7 +34,25 @@ export async function idempotencyMiddleware(req: Request, res: Response, next: N
     return;
   }
 
-  recentHashes.set(hash, Date.now() + DEDUP_WINDOW_MS);
-  cache.set(`idem:${hash}`, String(Date.now() + DEDUP_WINDOW_MS), 300).catch(() => {});
+  // Store token in res.locals for release after processing
+  (res as Response & { locals: Record<string, unknown> }).locals = {
+    ...(res as Response & { locals: Record<string, unknown> }).locals,
+    dedupLockToken: token,
+    dedupLockUrl: url,
+  };
+
   next();
+}
+
+/** Release dedup lock after successful or failed processing */
+export async function releaseDedupLock(res: Response): Promise<void> {
+  const locals = (res as Response & { locals: Record<string, unknown> }).locals || {};
+  const token = locals.dedupLockToken as string | undefined;
+  const url = locals.dedupLockUrl as string | undefined;
+  if (token && url) {
+    // Match the key format used by lockDedupListing: url.trim().toLowerCase().slice(0, 64)
+    const { unlock } = await import("../services/redis-lock.js");
+    const scope = `dedup:listing:${url.trim().toLowerCase().slice(0, 64)}`;
+    await unlock(scope, token);
+  }
 }

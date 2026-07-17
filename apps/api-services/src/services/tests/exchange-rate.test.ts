@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // Capture mocked cache get/set to allow per-test overrides
 const mockCacheGet = vi.fn().mockResolvedValue(null);
@@ -11,6 +11,7 @@ vi.mock("@onzo/cache", () => ({
     set: (...args: unknown[]) => mockCacheSet(...args),
     del: (...args: unknown[]) => mockCacheDel(...args),
   },
+  TTL: { EXCHANGE_RATE: 3600 },
 }));
 vi.mock("../notification-events.js", () => ({
   emitEvent: vi.fn().mockResolvedValue(undefined),

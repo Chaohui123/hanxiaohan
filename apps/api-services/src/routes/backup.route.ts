@@ -160,7 +160,8 @@ async function encryptBackup(inputPath: string): Promise<string> {
   const tag = cipher.getAuthTag();
   await new Promise<void>((resolve, reject) => {
     const ws = createWriteStream(encPath, { flags: "a" });
-    ws.end(tag, (err) => (err ? reject(err) : resolve()));
+    ws.end(tag, () => resolve());
+    ws.on("error", reject);
   });
 
   // Remove unencrypted original

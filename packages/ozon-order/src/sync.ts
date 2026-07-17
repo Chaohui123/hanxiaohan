@@ -26,6 +26,8 @@ export interface SyncOptions {
   processPosting?: (posting: OzonPosting, ctx: { idempotencyKey: string; storeId: string }) => Promise<void>;
   /** Only sync orders newer than this ISO timestamp (incremental sync). */
   sinceTimestamp?: string;
+  /** Optional pre-configured OzonOrderClient (for testing). */
+  client?: OzonOrderClient;
 }
 
 export type ProcessPostingFn = NonNullable<SyncOptions["processPosting"]>;

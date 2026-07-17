@@ -163,12 +163,15 @@ export async function withTransactionRetry<T>(
   fn: (tx: Awaited<ReturnType<typeof getDrizzle>>) => Promise<T>,
   retryOptions?: RetryOptions
 ): Promise<TransactionResult<T>> {
-  return executeWithRetry(
-    () => withTransaction(fn),
+  const result = await executeWithRetry(
+    () => withTransaction(fn).then((r) => (r.success ? Promise.resolve(r.data as T) : Promise.reject(new Error(r.error)))),
     {
       // By default, don't retry validation/auth errors inside transactions
       skipRetryOn: ["ValidationError", "AuthError", "FatalError", ...(retryOptions?.skipRetryOn ?? [])],
       ...retryOptions,
     }
   );
+  // executeWithRetry wraps the callback result in TransactionResult; unwrap to avoid double-wrapping
+  if (result.success) return { success: true, data: result.data as T };
+  return { success: false, error: result.error };
 }

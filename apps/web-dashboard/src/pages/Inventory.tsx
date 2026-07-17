@@ -6,13 +6,13 @@ export default function Inventory() {
   const { data, isLoading } = useQuery({ queryKey: ["inventory"], queryFn: () => inventoryApi.items() });
   const { data: alerts } = useQuery({ queryKey: ["alerts"], queryFn: () => inventoryApi.alerts() });
 
-  const items = (Array.isArray((data as { data?: unknown[] })?.data) ? (data as { data: unknown[] }).data : []);
-  const alertList = (Array.isArray((alerts as { data?: unknown[] })?.data) ? (alerts as { data: unknown[] }).data : []);
+  const items = (Array.isArray((data as { data?: unknown[] })?.data) ? (data as { data: unknown[] }).data : []) as readonly Record<string, unknown>[];
+  const alertList = (Array.isArray((alerts as { data?: unknown[] })?.data) ? (alerts as { data: unknown[] }).data : []) as readonly Record<string, unknown>[];
 
   return (
     <div>
       <Card title="库存列表" style={{ marginBottom: 16 }}>
-        <Table dataSource={items} rowKey={(r: Record<string,unknown>) => `${r.offer_id}-${r.sku}`} loading={isLoading} size="small"
+        <Table dataSource={items} rowKey={(r: Record<string,unknown>) => `${String(r.offer_id)}-${String(r.sku)}`} loading={isLoading} size="small"
           columns={[
             { title: "SKU", dataIndex: "sku" }, { title: "Offer ID", dataIndex: "offer_id", ellipsis: true },
             { title: "可用", dataIndex: "stock_available", render: (v: number) => <Tag color={v < 5 ? "red" : "green"}>{v}</Tag> },

@@ -83,29 +83,30 @@ export class GlmClient {
           );
         }
 
-        const data = await response.json();
-        const content = data.choices?.[0]?.message?.content ?? "";
+        const data = await response.json() as Record<string, unknown>;
+        const content = (data.choices as Record<string, unknown>[] | undefined)?.[0]?.message as Record<string, string> | undefined;
+        const contentStr: string = content?.content ?? "";
 
         // Try to parse JSON from the content (all our prompts request JSON)
         let parsed: T | null = null;
         try {
           // Handle cases where JSON is wrapped in ```json blocks
-          const jsonMatch = content.match(/```json\s*([\s\S]*?)\s*```/) || content.match(/```\s*([\s\S]*?)\s*```/);
-          const jsonStr = jsonMatch ? jsonMatch[1] : content;
+          const jsonMatch = contentStr.match(/```json\s*([\s\S]*?)\s*```/) || contentStr.match(/```\s*([\s\S]*?)\s*```/);
+          const jsonStr = jsonMatch ? jsonMatch[1] : contentStr;
           parsed = JSON.parse(jsonStr.trim()) as T;
         } catch {
           // Content not valid JSON — caller should handle
         }
 
         const tokensUsed = {
-          prompt: data.usage?.prompt_tokens ?? 0,
-          completion: data.usage?.completion_tokens ?? 0,
-          total: data.usage?.total_tokens ?? 0,
+          prompt: (data.usage as Record<string, number> | undefined)?.prompt_tokens ?? 0,
+          completion: (data.usage as Record<string, number> | undefined)?.completion_tokens ?? 0,
+          total: (data.usage as Record<string, number> | undefined)?.total_tokens ?? 0,
         };
 
         // Track token usage for cost monitoring
         this.tokenTracker?.record({
-          model: data.model ?? options.model,
+          model: (data.model as string) ?? options.model,
           promptTokens: tokensUsed.prompt,
           completionTokens: tokensUsed.completion,
           totalTokens: tokensUsed.total,
@@ -113,10 +114,10 @@ export class GlmClient {
         });
 
         return {
-          content: content.trim(),
+          content: contentStr.trim(),
           parsed,
           tokensUsed,
-          model: data.model ?? options.model,
+          model: (data.model as string) ?? options.model,
         };
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));

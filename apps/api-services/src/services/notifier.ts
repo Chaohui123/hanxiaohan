@@ -108,6 +108,17 @@ export class Notifier {
     await this.notify({ level, event, message: `库存${level === "critical" ? "为零" : "不足"}: SKU ${sku} (${offerId})`, correlationId: `stock-${offerId}-${sku}`, metadata: { sku: String(sku), offerId } });
   }
 
+  /** Convenience: listing success */
+  async notifySuccess(correlationId: string, title: string, offerId: string, productId: number): Promise<void> {
+    await this.notify({
+      level: "info",
+      event: "LISTING_SUCCESS",
+      message: `上架成功: ${title} (offerId: ${offerId}, productId: ${productId})`,
+      correlationId,
+      metadata: { title, offerId, productId: String(productId) },
+    });
+  }
+
   /** Convenience: generic failure notification */
   async notifyFailure(correlationId: string, service: string, error: string, detail?: string): Promise<void> {
     await this.notify({

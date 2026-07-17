@@ -3,6 +3,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 // Mock cache to always return null (force API fetch path)
 vi.mock("@onzo/cache", () => ({
   cache: { get: vi.fn().mockResolvedValue(null), set: vi.fn().mockResolvedValue(undefined), del: vi.fn().mockResolvedValue(undefined) },
+  TTL: { EXCHANGE_RATE: 3600 },
 }));
 vi.mock("../../src/services/notification-events.js", () => ({
   emitEvent: vi.fn().mockResolvedValue(undefined),

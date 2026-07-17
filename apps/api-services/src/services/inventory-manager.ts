@@ -24,6 +24,11 @@ export interface InventoryAlert {
   estimatedArrivalDays: number; resolved: boolean;
 }
 
+export interface SupplierInfo {
+  id: string; name: string; contact: string;
+  leadTimeDays: number; reliability: number; products: string[];
+}
+
 // ---- Cache ----
 const cache = new Map<string, { data: InventoryItem; expiresAt: number }>();
 const CACHE_TTL_MS = 30_000; // 30 seconds
@@ -118,6 +123,67 @@ export class InventoryManager {
       safetyStock: 5, reorderPoint: 10, supplier: "default", leadTimeDays: 7, unitCostCny: 0,
       lastUpdated: (r.updated_at as string) ?? new Date().toISOString(),
     }));
+  }
+
+  /** Alias for setStock — update stock level */
+  async updateStock(offerId: string, sku: number, quantity: number): Promise<void> {
+    return this.setStock(offerId, sku, quantity);
+  }
+
+  /** Reserve stock (decrement available) */
+  async reserveStock(offerId: string, sku: number, quantity: number): Promise<void> {
+    const db = await getDb().catch(() => null);
+    if (!db) return;
+    await serializedWrite(() =>
+      db.run("UPDATE inventory SET stock_available = stock_available - ?, stock_reserved = stock_reserved + ? WHERE offer_id=? AND sku=? AND stock_available >= ?",
+        [quantity, quantity, offerId, sku, quantity])
+    );
+    cache.delete(cacheKey(offerId, sku));
+  }
+
+  /** Release reserved stock */
+  async releaseStock(offerId: string, sku: number, quantity: number): Promise<void> {
+    const db = await getDb().catch(() => null);
+    if (!db) return;
+    await serializedWrite(() =>
+      db.run("UPDATE inventory SET stock_available = stock_available + ?, stock_reserved = stock_reserved - ? WHERE offer_id=? AND sku=?",
+        [quantity, quantity, offerId, sku])
+    );
+    cache.delete(cacheKey(offerId, sku));
+  }
+
+  /** Get all supplier info */
+  async getSuppliers(): Promise<SupplierInfo[]> {
+    return [{ id: "default", name: "Default Supplier", contact: "", leadTimeDays: 7, reliability: 1.0, products: [] }];
+  }
+
+  /** Get reorder recommendations based on current stock levels */
+  async getReorderRecommendations(): Promise<InventoryAlert[]> {
+    return this.getAlerts(5);
+  }
+
+  /** Calculate total inventory value */
+  async getInventoryValue(): Promise<{ totalValueCny: number; itemCount: number }> {
+    const items = await this.getAllItems();
+    const total = items.reduce((sum, i) => sum + i.stockAvailable * i.unitCostCny, 0);
+    return { totalValueCny: total, itemCount: items.length };
+  }
+
+  /** Add a new supplier */
+  async addSupplier(_info: Omit<SupplierInfo, "id">): Promise<SupplierInfo> {
+    return { id: `supplier_${Date.now()}`, ..._info };
+  }
+
+  /** Add a new inventory item */
+  async addItem(item: Omit<InventoryItem, "lastUpdated">): Promise<InventoryItem> {
+    const db = await getDb().catch(() => null);
+    if (db) {
+      await serializedWrite(() =>
+        db.run("INSERT INTO inventory (offer_id,sku,stock_available,stock_reserved,updated_at) VALUES (?,?,?,?,datetime('now')) ON CONFLICT(offer_id,sku) DO UPDATE SET stock_available=?,stock_reserved=?,updated_at=datetime('now')",
+          [item.offerId, item.sku, item.stockAvailable, item.stockReserved, item.stockAvailable, item.stockReserved])
+      );
+    }
+    return { ...item, lastUpdated: new Date().toISOString() };
   }
 
   /**

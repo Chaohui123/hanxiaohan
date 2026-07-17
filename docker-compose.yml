@@ -14,7 +14,7 @@ services:
   postgres:
     image: pgvector/pgvector:pg16
     container_name: onzo-postgres
-    restart: unless-stopped
+    restart: always
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-onzo}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -49,16 +49,16 @@ services:
   redis:
     image: redis:7-alpine
     container_name: onzo-redis
-    restart: unless-stopped
-    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes --maxmemory 64mb --maxmemory-policy allkeys-lru
+    restart: always
+    command: redis-server --requirepass ${REDIS_PASSWORD} --appendonly yes --maxmemory 256mb --maxmemory-policy allkeys-lru
     volumes:
       - redis_data:/data
     deploy:
       resources:
         limits:
-          memory: 128M
+          memory: 384M
         reservations:
-          memory: 64M
+          memory: 128M
     healthcheck:
       test: ["CMD", "redis-cli", "-a", "${REDIS_PASSWORD}", "ping"]
       interval: 10s
@@ -85,17 +85,21 @@ services:
       context: .
       dockerfile: docker/api-services/Dockerfile
     container_name: onzo-api
-    restart: unless-stopped
+    restart: always
     env_file:
       - .env.production
     environment:
       - NODE_ENV=production
       - PORT=3000
+      - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
     volumes:
       - app_uploads:/app/uploads
       - app_dead_letter:/app/dead-letter
       - app_logs:/app/logs
       - app_data:/app/data
+      # Dev mode: mount local dist to skip Docker rebuild (uncomment for dev)
+      # - ./apps/api-services/dist:/app/apps/api-services/dist
+      # - ./packages:/app/packages
     ports:
       - "3000:3000"
     depends_on:
@@ -120,8 +124,8 @@ services:
     logging:
       driver: "json-file"
       options:
-        max-size: "50m"
-        max-file: "10"
+        max-size: "20m"
+        max-file: "5"
     networks:
       - onzo-network
     profiles:
@@ -135,7 +139,7 @@ services:
       context: .
       dockerfile: apps/web-dashboard/Dockerfile
     container_name: onzo-web-dashboard
-    restart: unless-stopped
+    restart: always
     ports:
       - "8080:80"
     depends_on:
@@ -159,7 +163,7 @@ services:
       context: .
       dockerfile: docker/ops-agent/Dockerfile
     container_name: onzo-ops-agent
-    restart: unless-stopped
+    restart: always
     env_file:
       - .env.production
     environment:
@@ -193,7 +197,7 @@ services:
       context: .
       dockerfile: docker/promo-agent/Dockerfile
     container_name: onzo-promo-agent
-    restart: unless-stopped
+    restart: always
     env_file:
       - .env.production
     environment:
@@ -238,7 +242,7 @@ services:
   caddy:
     image: caddy:2-alpine
     container_name: onzo-caddy
-    restart: unless-stopped
+    restart: always
     depends_on:
       api-services:
         condition: service_healthy
@@ -271,7 +275,7 @@ services:
   alertmanager:
     image: prom/alertmanager:latest
     container_name: onzo-alertmanager
-    restart: unless-stopped
+    restart: always
     command:
       - "--config.file=/etc/alertmanager/alertmanager.yml"
       - "--storage.path=/alertmanager"
@@ -284,12 +288,17 @@ services:
     profiles:
       - monitoring
       - full
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
 
   # ---- Prometheus Metrics ----
   prometheus:
     image: prom/prometheus:latest
     container_name: onzo-prometheus
-    restart: unless-stopped
+    restart: always
     deploy:
       resources:
         limits:
@@ -310,12 +319,17 @@ services:
     profiles:
       - monitoring
       - full
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
 
   # ---- Grafana Dashboards ----
   grafana:
     image: grafana/grafana:latest
     container_name: onzo-grafana
-    restart: unless-stopped
+    restart: always
     deploy:
       resources:
         limits:
@@ -337,12 +351,17 @@ services:
     profiles:
       - monitoring
       - full
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
 
   # ---- Jaeger Tracing (optional) ----
   jaeger:
     image: jaegertracing/all-in-one:latest
     container_name: onzo-jaeger
-    restart: unless-stopped
+    restart: always
     deploy:
       resources:
         limits:
@@ -359,6 +378,11 @@ services:
     profiles:
       - tracing
       - full
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "3"
 
 volumes:
   postgres_data:
@@ -385,3 +409,6 @@ volumes:
 networks:
   onzo-network:
     driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16

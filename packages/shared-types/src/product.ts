@@ -21,6 +21,15 @@ export interface ScrapedProduct {
     reviewCount?: number;
     rating?: number;
   };
+  supplier?: {
+    name: string;
+    /** 24h pickup rate, 0-1 (e.g. 0.92 = 92%) */
+    pickupRate: number;
+    /** Response rate, 0-1 */
+    responseRate: number;
+    /** Product quality score from 1688 */
+    qualityScore: number;
+  };
 }
 
 export interface ProcessedProduct {

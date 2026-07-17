@@ -55,6 +55,8 @@ export async function initSchema(db: DbAdapter): Promise<void> {
       total_price_rub REAL DEFAULT 0, commission_rub REAL DEFAULT 0,
       payout_rub REAL DEFAULT 0, product_count INTEGER DEFAULT 0,
       tracking_number TEXT, raw_json TEXT,
+      shipping_cost_rub REAL DEFAULT 0,
+      shipping_carrier TEXT DEFAULT '',
       synced_at TIMESTAMP DEFAULT NOW()
     );
     CREATE INDEX IF NOT EXISTS idx_orders_status ON local_orders(status);
@@ -307,16 +309,105 @@ export async function initSchema(db: DbAdapter): Promise<void> {
       updated_at TIMESTAMP DEFAULT NOW()
     );
 
+    -- Ozon Order Sync v2 — enriched orders with 1688 source matching
+    CREATE TABLE IF NOT EXISTS ozon_orders (
+      id TEXT PRIMARY KEY,
+      store_id TEXT NOT NULL DEFAULT 'store_1',
+      posting_number TEXT NOT NULL,
+      order_id INTEGER NOT NULL,
+      order_number TEXT,
+      status TEXT NOT NULL,
+      created_at_ozon TEXT,
+      shipment_deadline TEXT,
+      buyer_name TEXT,
+      buyer_phone TEXT,
+      products_json TEXT NOT NULL,
+      total_price_rub REAL DEFAULT 0,
+      total_cost_cny REAL DEFAULT 0,
+      total_profit_rub REAL DEFAULT 0,
+      margin_percent REAL DEFAULT 0,
+      has_1688_source INTEGER DEFAULT 1,
+      profit_ok INTEGER DEFAULT 1,
+      needs_review INTEGER DEFAULT 0,
+      tracking_number TEXT,
+      synced_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE(store_id, posting_number)
+    );
+    CREATE INDEX IF NOT EXISTS idx_ozon_orders_status ON ozon_orders(store_id, status);
+    CREATE INDEX IF NOT EXISTS idx_ozon_orders_deadline ON ozon_orders(shipment_deadline);
+
+    -- 1688 Purchase Orders — auto-payment tracking
+    CREATE TABLE IF NOT EXISTS purchase_1688 (
+      id TEXT PRIMARY KEY,
+      store_id TEXT NOT NULL DEFAULT 'store_1',
+      ozon_posting_number TEXT NOT NULL,
+      ozon_order_id INTEGER NOT NULL,
+      source_1688_url TEXT,
+      offer_id TEXT,
+      sku_list_json TEXT NOT NULL DEFAULT '[]',
+      total_amount_cny REAL NOT NULL DEFAULT 0,
+      payment_status TEXT NOT NULL DEFAULT 'pending',
+      pay_serial TEXT,
+      pay_time TEXT,
+      pay_channel TEXT DEFAULT 'alipay_deduct',
+      pay_error TEXT,
+      risk_check_json TEXT,
+      logistics_status TEXT DEFAULT 'idle',
+      logistics_tracking TEXT,
+      logistics_carrier TEXT DEFAULT '',
+      logistics_cost_rub REAL DEFAULT 0,
+      logistics_label_url TEXT DEFAULT '',
+      logistics_created_at TIMESTAMP,
+      logistics_updated_at TIMESTAMP,
+      logistics_last_event TEXT DEFAULT '',
+      logistics_last_event_at TIMESTAMP,
+      freight_address TEXT DEFAULT '',
+      alibaba_order_id TEXT DEFAULT '',
+      retry_count INTEGER DEFAULT 0,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE(store_id, ozon_posting_number)
+    );
+    CREATE INDEX IF NOT EXISTS idx_purchase_pay_status ON purchase_1688(payment_status);
+    CREATE INDEX IF NOT EXISTS idx_purchase_ozon_order ON purchase_1688(ozon_posting_number);
+    CREATE INDEX IF NOT EXISTS idx_purchase_logistics_status ON purchase_1688(logistics_status);
+    CREATE INDEX IF NOT EXISTS idx_purchase_logistics_tracking ON purchase_1688(logistics_tracking);
+
+    -- SKU-1688 Source Mapping — binds Ozon SKU to 1688 product for auto-purchase
+    CREATE TABLE IF NOT EXISTS sku_1688_mapping (
+      id TEXT PRIMARY KEY,
+      store_id TEXT NOT NULL DEFAULT 'store_1',
+      ozon_offer_id TEXT NOT NULL,
+      ozon_sku INTEGER NOT NULL,
+      source_1688_url TEXT NOT NULL,
+      offer_1688_id TEXT,
+      sku_1688_id TEXT,
+      purchase_price_cny REAL NOT NULL DEFAULT 0,
+      freight_address TEXT NOT NULL DEFAULT '',
+      weight_kg REAL DEFAULT 0.3,
+      profit_threshold REAL DEFAULT 0.10,
+      supplier_name TEXT DEFAULT '',
+      supplier_pickup_rate REAL DEFAULT 0,
+      rag_image_vector_json TEXT,
+      last_verified TEXT,
+      created_at TIMESTAMP DEFAULT NOW(),
+      updated_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE(store_id, ozon_offer_id, ozon_sku)
+    );
+    CREATE INDEX IF NOT EXISTS idx_sku_mapping_offer ON sku_1688_mapping(ozon_offer_id, ozon_sku);
+    CREATE INDEX IF NOT EXISTS idx_sku_mapping_1688 ON sku_1688_mapping(offer_1688_id);
+
   `);
 
   // Create IVFFlat indexes for RAG tables (PG only, silently skip if insufficient data)
   if (getAdapterType() === "pg") {
     const indexes = [
-      `CREATE INDEX IF NOT EXISTS idx_rag_scripts_embedding ON rag_aftersales_scripts USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50)`,
-      `CREATE INDEX IF NOT EXISTS idx_rag_competitor_embedding ON rag_competitor_reports USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50)`,
-      `CREATE INDEX IF NOT EXISTS idx_rag_product_embedding ON rag_product_knowledge USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50)`,
-      `CREATE INDEX IF NOT EXISTS idx_rag_copy_embedding ON rag_copy_templates USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50)`,
-      `CREATE INDEX IF NOT EXISTS idx_rag_playbook_embedding ON rag_operations_playbook USING ivfflat (embedding vector_cosine_ops) WITH (lists = 50)`,
+      `CREATE INDEX IF NOT EXISTS idx_rag_scripts_embedding ON rag_aftersales_scripts USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)`,
+      `CREATE INDEX IF NOT EXISTS idx_rag_competitor_embedding ON rag_competitor_reports USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)`,
+      `CREATE INDEX IF NOT EXISTS idx_rag_product_embedding ON rag_product_knowledge USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)`,
+      `CREATE INDEX IF NOT EXISTS idx_rag_copy_embedding ON rag_copy_templates USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)`,
+      `CREATE INDEX IF NOT EXISTS idx_rag_playbook_embedding ON rag_operations_playbook USING ivfflat (embedding vector_cosine_ops) WITH (lists = 100)`,
     ];
     for (const idx of indexes) {
       try { await db.run(idx); } catch { /* insufficient data, will retry later */ }

@@ -61,6 +61,52 @@ export interface OzonPostingFilter {
   offset?: number;
 }
 
+// ---- Ozon Order Sync v2 ----
+
+export interface OzonOrderProduct {
+  sku: number;
+  name: string;
+  quantity: number;
+  price: number;               // RUB per unit
+  offerId: string;
+  source1688Url?: string;      // matched from listing_records
+  costCny?: number;            // from price_history
+  profitMargin?: number;       // calculated per product
+}
+
+export interface OzonOrder {
+  id: string;
+  storeId: string;
+  postingNumber: string;
+  orderId: number;
+  orderNumber?: string;
+  status: string;
+  createdAtOzon: string;
+  shipmentDeadline?: string;
+  buyerName: string;
+  buyerPhone: string;
+  products: OzonOrderProduct[];
+  totalPriceRub: number;
+  totalCostCny: number;
+  totalProfitRub: number;
+  marginPercent: number;
+  has1688Source: boolean;
+  profitOk: boolean;
+  needsReview: boolean;
+  trackingNumber?: string;
+  syncedAt: string;
+  updatedAt: string;
+}
+
+export interface SyncSummary {
+  storesScanned: number;
+  totalOrders: number;
+  newOrders: number;
+  flaggedOrders: number;
+  skippedOrders: number;
+  errors: string[];
+}
+
 /** Locally stored order record (decoupled from Ozon raw shape) */
 export interface LocalOrder {
   id: string;

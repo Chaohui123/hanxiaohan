@@ -16,6 +16,12 @@ export interface ExtractedPageData {
   initialState: SkuState | null;
   images: string[];
   metaKeywords: string;
+  supplier?: {
+    name: string;
+    pickupRate: number;
+    responseRate: number;
+    qualityScore: number;
+  };
 }
 
 /** Inferred shape of 1688's window.__INITIAL_STATE__ or embedded JSON. */
@@ -107,6 +113,12 @@ export function parseProductPage(
     descriptionText: descriptionText.trim(),
     categoryPath,
     salesInfo,
+    supplier: pageContent.supplier ? {
+      name: pageContent.supplier.name || "",
+      pickupRate: pageContent.supplier.pickupRate || 0,
+      responseRate: pageContent.supplier.responseRate || 0,
+      qualityScore: pageContent.supplier.qualityScore || 0,
+    } : undefined,
   };
 }
 

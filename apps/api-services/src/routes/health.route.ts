@@ -19,9 +19,31 @@ type HealthChecks = Record<string, HealthDetail | Record<string, HealthDetail>>;
 export function createHealthRouter(ozonClient?: OzonClient): Router {
   const router = Router();
 
-  // GET /health — basic liveness (fast, no external deps)
-  router.get("/health", (_req, res) => {
-    res.json({ status: "ok", uptime: process.uptime(), timestamp: new Date().toISOString() });
+  // GET /health — liveness (lightweight: process + fast DB ping, for Docker healthcheck)
+  router.get("/health", async (_req, res) => {
+    // Fast DB ping — fail open (2s timeout) to avoid cascading restarts
+    let dbOk = true;
+    try {
+      const db = await Promise.race([
+        getDb(),
+        new Promise<null>((_, reject) => setTimeout(() => reject(new Error("timeout")), 2_000)),
+      ]);
+      if (db) {
+        await Promise.race([
+          db.all("SELECT 1"),
+          new Promise<[]>((_, reject) => setTimeout(() => reject(new Error("timeout")), 1_000)),
+        ]);
+      }
+    } catch {
+      dbOk = false; // degraded but not dead — don't restart container for DB issues
+    }
+
+    res.json({
+      status: "ok",
+      uptime: process.uptime(),
+      timestamp: new Date().toISOString(),
+      dbConnected: dbOk,
+    });
   });
 
   // GET /ready/pipeline — deep pipeline health (all external deps)

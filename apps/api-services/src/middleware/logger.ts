@@ -74,7 +74,7 @@ function rotateLogIfNeeded(): void {
 function createRotatingStream() {
   rotateLogIfNeeded();
 
-  return new pino.destination({
+  return pino.destination({
     write(chunk: string) {
       rotateLogIfNeeded();
       if (logStream) {

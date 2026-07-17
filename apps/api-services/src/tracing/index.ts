@@ -9,7 +9,6 @@ import { ConsoleSpanExporter } from "@opentelemetry/sdk-trace-base";
 import { OTLPTraceExporter } from "@opentelemetry/exporter-trace-otlp-http";
 import { ExpressInstrumentation } from "@opentelemetry/instrumentation-express";
 import { HttpInstrumentation } from "@opentelemetry/instrumentation-http";
-import { Resource } from "@opentelemetry/resources";
 import { SemanticResourceAttributes } from "@opentelemetry/semantic-conventions";
 import { trace, Span, SpanStatusCode } from "@opentelemetry/api";
 
@@ -28,8 +27,11 @@ export async function initTracing(serviceName = "onzo-api-services"): Promise<vo
       ? new OTLPTraceExporter({ url: `${process.env.OTEL_EXPORTER_OTLP_ENDPOINT}/v1/traces` })
       : new ConsoleSpanExporter();
 
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const otelResources = await import("@opentelemetry/resources") as any;
+    const resource = new otelResources.Resource({ [SemanticResourceAttributes.SERVICE_NAME]: serviceName });
     sdk = new NodeSDK({
-      resource: new Resource({ [SemanticResourceAttributes.SERVICE_NAME]: serviceName }),
+      resource,
       traceExporter: exporter,
       instrumentations: [new HttpInstrumentation(), new ExpressInstrumentation()],
     });

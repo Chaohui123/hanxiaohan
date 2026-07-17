@@ -8,7 +8,7 @@ import { validateBody } from "../middleware/validate.js";
 import { getDb } from "../db/connection.js";
 import { resolveApiKey } from "./store.route.js";
 import type { LocalOrder, OzonPosting, OzonOrderStatus } from "@onzo/shared-types";
-import type { OzonClient } from "@onzo/ozon-api-wrapper";
+import { OzonClient } from "@onzo/ozon-api-wrapper";
 import { AuthManager } from "@onzo/ozon-api-wrapper";
 import { batchShipOrders } from "../services/auto-ship.js";
 import { syncReviewStatuses } from "../services/review-sync.js";

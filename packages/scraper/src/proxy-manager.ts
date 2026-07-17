@@ -179,16 +179,17 @@ export class ProxyManager {
       const res = await fetch(apiUrl, { signal: AbortSignal.timeout(10_000) });
       if (!res.ok) throw new Error(`HTTP ${res.status}`);
 
-      const data = await res.json();
-      const fetched: string[] = Array.isArray(data) ? data : (data.data || data.proxies || []);
+      const data = await res.json() as Record<string, unknown>;
+      const fetched: string[] = Array.isArray(data) ? data as unknown as string[] : ((data.data || data.proxies) as string[]) || [];
 
       for (const entry of fetched) {
         if (typeof entry === "string") {
           const [host, port] = entry.split(":");
           this.proxies.push({ server: `http://${host}:${port || "80"}` });
-        } else if (entry.server || entry.ip) {
-          const server = entry.server || `http://${entry.ip}:${entry.port || "80"}`;
-          this.proxies.push({ server, username: entry.username || entry.user, password: entry.password || entry.pass });
+        } else if ((entry as Record<string, unknown>).server || (entry as Record<string, unknown>).ip) {
+          const e = entry as Record<string, string>;
+          const server = e.server || `http://${e.ip}:${e.port || "80"}`;
+          this.proxies.push({ server, username: e.username || e.user, password: e.password || e.pass });
         }
       }
 

@@ -30,6 +30,8 @@ const HELP_TEXT = [
   "backup / 备份 — 手动触发备份",
   "sync / 同步 — 手动触发订单同步",
   "reconcile / 对账 — 手动触发财务对账",
+  "logistics / 物流 — 采购物流状态",
+  "cleanup / 清理 — 清理过期临时文件",
   "",
   "help / 帮助 — 显示此消息",
 ].join("\n");
@@ -164,6 +166,43 @@ export function registerCommands(bot: FeishuBot, config: ApiConfig): void {
         return;
       }
 
+      case "logistics":
+      case "物流":
+        try {
+          const data = await apiClient.healthPanel(config);
+          const listResp = await fetch(`${config.apiBase}/api/purchase/list?status=paid&limit=10`, {
+            headers: { "X-API-Key": config.apiKey },
+            signal: AbortSignal.timeout(15_000),
+          });
+          const list = (await listResp.json().catch(() => ({}))) as { data?: Array<{ ozon_posting_number: string; logistics_status: string; logistics_tracking: string | null }> };
+          const items = list.data || [];
+          if (items.length === 0) {
+            await bot.sendMessage(ctx.chatId, "📦 无待追踪采购单");
+            return;
+          }
+          const lines = items.map((p) => {
+            const s = p.logistics_status === "shipped" ? "✅" : p.logistics_tracking ? "📮" : "⏳";
+            return `${s} ${p.ozon_posting_number}: ${p.logistics_status || "idle"}${p.logistics_tracking ? ` (${p.logistics_tracking})` : ""}`;
+          });
+          await bot.sendMessage(ctx.chatId, `📦 采购物流状态 (最近10笔)\n\n${lines.join("\n")}`);
+        } catch (err) {
+          await bot.sendMessage(ctx.chatId, `❌ 查询失败: ${(err as Error).message}`);
+        }
+        return;
+
+      case "cleanup":
+      case "清理":
+        pending.set(`cleanup_${ctx.chatId}`, {
+          action: "临时文件清理",
+          handler: async () => {
+            const r = await apiClient.cleanup(config);
+            const d = (r as { data?: { tmpImages?: { deleted: number; freedKB: number }; deadLetter?: { deleted: number }; failedTasks?: { deleted: number } } }).data || {};
+            return `✅ 清理完成\n📷 临时图片: ${d.tmpImages?.deleted || 0} 个 (${d.tmpImages?.freedKB || 0}KB)\n📁 死信: ${d.deadLetter?.deleted || 0} 个\n🗃️ 失败任务: ${d.failedTasks?.deleted || 0} 条`;
+          },
+        });
+        await bot.sendConfirmCard(ctx.chatId, "⚠️ 确认清理临时文件", "将删除过期临时图片、死信和失败任务记录", "cleanup");
+        return;
+
       default:
         // Unknown command — show help
         await bot.sendMessage(ctx.chatId, `未知命令: "${ctx.text}"\n\n${HELP_TEXT}`);
@@ -208,14 +247,12 @@ async function handleStatus(
 ): Promise<void> {
   try {
     const data = await apiClient.ready(config);
-    const checks =
-      (data.checks as Record<string, { status: string; latencyMs?: number }>) || {};
-    const lines = Object.entries(checks).map(
-      ([name, c]) =>
-        `${statusEmoji(c.status === "ok")} ${name}: ${c.status}${
-          c.latencyMs ? ` (${c.latencyMs}ms)` : ""
-        }`,
-    );
+    const checks = (data.checks as Record<string, unknown>) || {};
+    const lines = Object.entries(checks).map(([name, c]) => {
+      const st = typeof c === "string" ? c : (c as { status?: string }).status || "unknown";
+      const lat = typeof c === "object" ? (c as { latencyMs?: number }).latencyMs : undefined;
+      return `${statusEmoji(st === "ok")} ${name}: ${st}${lat ? ` (${lat}ms)` : ""}`;
+    });
     await bot.sendMessage(
       chatId,
       `📊 系统状态 — ${data.status}\n\n${lines.join("\n")}` +
@@ -327,14 +364,12 @@ async function handlePipeline(
 ): Promise<void> {
   try {
     const data = await apiClient.pipelineHealth(config);
-    const checks =
-      (data.checks as Record<string, { status: string; latencyMs?: number }>) || {};
-    const lines = Object.entries(checks).map(
-      ([name, c]) =>
-        `${statusEmoji(c.status === "ok")} ${name}: ${c.status}${
-          c.latencyMs ? ` (${c.latencyMs}ms)` : ""
-        }`,
-    );
+    const checks = (data.checks as Record<string, unknown>) || {};
+    const lines = Object.entries(checks).map(([name, c]) => {
+      const st = typeof c === "string" ? c : (c as { status?: string }).status || "unknown";
+      const lat = typeof c === "object" ? (c as { latencyMs?: number }).latencyMs : undefined;
+      return `${statusEmoji(st === "ok")} ${name}: ${st}${lat ? ` (${lat}ms)` : ""}`;
+    });
     await bot.sendMessage(chatId, `🔗 管线检查\n\n${lines.join("\n")}`);
   } catch (err) {
     await bot.sendMessage(chatId, `❌ 检查失败: ${(err as Error).message}`);

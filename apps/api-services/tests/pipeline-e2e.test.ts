@@ -78,7 +78,29 @@ vi.mock("@onzo/ozon-order", () => ({ OzonOrderClient: vi.fn(), syncOrders: vi.fn
 vi.mock("@onzo/ozon-order/webhook", () => ({ parseWebhookPayload: vi.fn(), handleWebhookEvent: vi.fn() }));
 vi.mock("@onzo/validation-layer", () => ({ ProductValidator: vi.fn().mockImplementation(() => ({ validate: vi.fn().mockReturnValue({ valid: true, errors: [], warnings: [], stats: { totalChecks: 16, passed: 16, failed: 0, warned: 0 } }) })) }));
 vi.mock("@onzo/logistics", () => ({ getLogisticsProvider: vi.fn().mockResolvedValue(null), selectBestProvider: vi.fn().mockResolvedValue(null) }));
-vi.mock("@onzo/cache", () => ({ cache: { get: vi.fn().mockResolvedValue(null), set: vi.fn().mockResolvedValue(undefined), del: vi.fn().mockResolvedValue(undefined), mget: vi.fn().mockResolvedValue([]), mset: vi.fn().mockResolvedValue(undefined), incr: vi.fn().mockResolvedValue(1), expire: vi.fn().mockResolvedValue(undefined), ping: vi.fn().mockResolvedValue(true), healthCheck: vi.fn().mockResolvedValue({ available: true, latencyMs: 1 }) } }));
+const _cacheMocks = {
+  setnx: vi.fn().mockResolvedValue(true),
+  cachedGetOrSet: vi.fn().mockImplementation((_ns: string, _key: string, _ttl: number, factory: () => Promise<unknown>) => factory()),
+};
+
+vi.mock("@onzo/cache", () => ({
+  cache: {
+    get: vi.fn().mockResolvedValue(null),
+    set: vi.fn().mockResolvedValue(undefined),
+    del: vi.fn().mockResolvedValue(undefined),
+    mget: vi.fn().mockResolvedValue([]),
+    mset: vi.fn().mockResolvedValue(undefined),
+    incr: vi.fn().mockResolvedValue(1),
+    expire: vi.fn().mockResolvedValue(undefined),
+    setnx: (...args: unknown[]) => _cacheMocks.setnx(...args),
+    ping: vi.fn().mockResolvedValue(true),
+    healthCheck: vi.fn().mockResolvedValue({ available: true, latencyMs: 1 }),
+    cachedGetOrSet: (...args: unknown[]) => (_cacheMocks.cachedGetOrSet as (...a: unknown[]) => unknown)(...args),
+    cachedGet: vi.fn().mockResolvedValue(null),
+    cachedSet: vi.fn().mockResolvedValue(undefined),
+  },
+  TTL: { DEDUP_LOCK: 300, DIST_LOCK: 120, DASHBOARD_STATS: 60, STORE_CONFIG: 3600, CATEGORY_MATCH: 1800, LLM_TRANSLATION: 900, EXCHANGE_RATE: 3600, RATE_LIMIT: 60, SESSION: 86400 },
+}));
 
 process.env.OZON_CLIENT_IDS = "test";
 process.env.OZON_API_KEYS = "test";
@@ -117,7 +139,11 @@ describe("Pipeline E2E", () => {
   // Idempotency: duplicate URL
   it("POST /api/process — 409 on duplicate URL within 5 min", async () => {
     const dupUrl = "https://detail.1688.com/offer/dup-check.html";
+    // First request: lock acquired
+    _cacheMocks.setnx.mockResolvedValueOnce(true);
     await request(app).post("/api/process").send({ url: dupUrl });
+    // Second request: lock already held
+    _cacheMocks.setnx.mockResolvedValueOnce(false);
     const res = await request(app).post("/api/process").send({ url: dupUrl });
     expect(res.status).toBe(409);
     expect(res.body.error.code).toBe("DUPLICATE");

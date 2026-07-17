@@ -40,7 +40,14 @@
 	}
 
 	# ---- Web Dashboard (React SPA) ----
+	# Static assets (JS/CSS/images) have content-hash filenames → immutable cache
+	handle /assets/* {
+		header Cache-Control "public, max-age=31536000, immutable"
+		reverse_proxy web-dashboard:80
+	}
+	# HTML entry point + all other SPA routes → no-cache
 	handle {
+		header Cache-Control "no-cache"
 		reverse_proxy web-dashboard:80
 	}
 

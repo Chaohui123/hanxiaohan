@@ -38,7 +38,10 @@ jobs:
             git pull origin main
 
             echo "=== Running tests ==="
-            pnpm test || echo "Tests failed — continuing with deploy"
+            pnpm test
+
+            echo "=== Pre-deploy database backup ==="
+            bash scripts/backup-db.sh
 
             echo "=== Running database migrations ==="
             bash scripts/migrate.sh up
@@ -59,7 +62,7 @@ jobs:
             docker exec onzo-api npx tsx scripts/seed-rag-playbook.ts || echo "RAG seed skipped (non-critical)"
 
             echo "=== Verifying RAG Stats ==="
-            curl -s http://localhost:3000/api/rag/stats || echo "RAG stats check skipped"
+            curl -s http://localhost:3000/api/v1/rag/stats || echo "RAG stats check skipped"
 
             echo "Deploy complete"
             exit 0

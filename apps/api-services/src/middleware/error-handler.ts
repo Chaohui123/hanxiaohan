@@ -48,12 +48,13 @@ export function errorHandler(
     }).catch(() => {});
   }
 
-  const isProduction = (process.env.ENV || process.env.NODE_ENV) === "production";
+  // Always use sanitized message in all deployed environments.
+  // Raw error details go to logs only — never exposed to API consumers.
   const response: ApiErrorResponse = {
     success: false,
     error: {
       code: "INTERNAL_ERROR",
-      message: isProduction ? "An unexpected error occurred" : (err.message || "An unexpected error occurred"),
+      message: "An unexpected error occurred",
       retryable: determineRetryable(err),
     },
     correlationId,

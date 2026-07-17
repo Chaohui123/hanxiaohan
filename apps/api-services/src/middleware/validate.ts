@@ -101,3 +101,13 @@ export const BulkUploadSchema = z.object({
   storeId: z.string().optional().default("store_1"),
   skipOcr: z.boolean().optional().default(false),
 });
+
+export const CosUploadSchema = z.object({
+  filePath: z.string().min(1, "filePath is required"),
+  productId: z.string().min(1, "productId is required"),
+  key: z.string().optional(),
+});
+
+export const CosBatchUploadSchema = z.object({
+  files: z.array(CosUploadSchema).min(1, "at least one file is required").max(100),
+});

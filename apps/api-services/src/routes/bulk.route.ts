@@ -8,8 +8,8 @@ import type { TaskQueue } from "../db/task-queue.js";
 interface ProductRow {
   title: string;
   priceCny: number;
-  specImages: string;
-  specifications?: string;
+  specImages: string | string[];
+  specifications?: string | Array<{ name: string; value: string }>;
   descriptionText?: string;
 }
 

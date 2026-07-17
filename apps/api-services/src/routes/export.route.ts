@@ -1,10 +1,11 @@
 // ============================================================
 // Export routes — CSV/XLSX data export for orders, inventory, sales, finance
-// Streaming CSV output to avoid memory overflow on large datasets
+// + Transition logistics order export for 跨境巴士 template
 // ============================================================
 
 import { Router } from "express";
 import { getDb } from "../db/connection.js";
+import { TransitionLogisticsService } from "../services/transition-logistics.js";
 
 export function createExportRouter(): Router {
   const router = Router();
@@ -21,6 +22,55 @@ export function createExportRouter(): Router {
     ) as Array<Record<string, unknown>>;
 
     sendResponse(res, rows, `orders-${from || "all"}-${to || "all"}`, format as string);
+  });
+
+  // GET /api/order/export — transition logistics order export (跨境巴士 template)
+  router.get("/order/export", async (req, res) => {
+    const db = await getDb().catch(() => null);
+    if (!db) { res.status(503).json({ success: false, error: { code: "DB_UNAVAILABLE" } }); return; }
+
+    const service = new TransitionLogisticsService(db);
+    if (!service.enabled) {
+      res.status(404).json({ success: false, error: { code: "DISABLED", message: "Set TRANSITION_LOGISTICS=kuajingbus to enable" } });
+      return;
+    }
+
+    try {
+      const exportData = await service.generateExport();
+
+      if (exportData.rows.length === 0) {
+        res.json({ success: true, data: { count: 0, message: "没有待导出的订单" }, correlationId: req.correlationId });
+        return;
+      }
+
+      const format = (req.query.format as string) || "xlsx";
+
+      if (format === "csv") {
+        sendCsvWithHeaders(res, exportData.headers, exportData.rows, exportData.filename.replace(".xlsx", ".csv"));
+      } else {
+        // xlsx export
+        try {
+          const XLSX = await import("xlsx");
+          const data = exportData.rows.map((r) => {
+            const obj: Record<string, string> = {};
+            for (const h of exportData.headers) obj[h] = r[h] ?? "";
+            return obj;
+          });
+          const ws = XLSX.utils.json_to_sheet(data);
+          const wb = XLSX.utils.book_new();
+          XLSX.utils.book_append_sheet(wb, ws, "待预报订单");
+          const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" });
+
+          res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+          res.setHeader("Content-Disposition", `attachment; filename=${encodeURIComponent(exportData.filename)}`);
+          res.send(buf);
+        } catch {
+          sendCsvWithHeaders(res, exportData.headers, exportData.rows, exportData.filename.replace(".xlsx", ".csv"));
+        }
+      }
+    } catch (err) {
+      res.status(500).json({ success: false, error: { code: "EXPORT_ERROR", message: (err as Error).message }, correlationId: req.correlationId });
+    }
   });
 
   // GET /api/export/inventory
@@ -64,7 +114,24 @@ export function createExportRouter(): Router {
   return router;
 }
 
-// ---- Helper ----
+// ---- Helpers ----
+
+function sendCsvWithHeaders(
+  res: import("express").Response,
+  headers: string[],
+  rows: Record<string, string>[],
+  filename: string,
+): void {
+  res.setHeader("Content-Type", "text/csv; charset=utf-8");
+  res.setHeader("Content-Disposition", `attachment; filename=${filename}`);
+  res.write("﻿"); // BOM for Excel UTF-8
+
+  res.write(headers.map((h) => csvEscape(h)).join(",") + "\n");
+  for (const row of rows) {
+    res.write(headers.map((h) => csvEscape(row[h] ?? "")).join(",") + "\n");
+  }
+  res.end();
+}
 
 function sendResponse(
   res: import("express").Response,
@@ -80,23 +147,8 @@ function sendResponse(
 }
 
 function sendCsv(res: import("express").Response, rows: Array<Record<string, unknown>>, filename: string): void {
-  res.setHeader("Content-Type", "text/csv; charset=utf-8");
-  res.setHeader("Content-Disposition", `attachment; filename=${filename}.csv`);
-  res.write("﻿"); // BOM for Excel UTF-8
-
-  if (rows.length === 0) {
-    res.end();
-    return;
-  }
-
-  const headers = Object.keys(rows[0]);
-  res.write(headers.map((h) => csvEscape(h)).join(",") + "\n");
-
-  for (const row of rows) {
-    res.write(headers.map((h) => csvEscape(String(row[h] ?? ""))).join(",") + "\n");
-  }
-
-  res.end();
+  const headers = rows.length > 0 ? Object.keys(rows[0]) : [];
+  sendCsvWithHeaders(res, headers, rows as Record<string, string>[], `${filename}.csv`);
 }
 
 async function sendXlsx(res: import("express").Response, rows: Array<Record<string, unknown>>, filename: string): Promise<void> {

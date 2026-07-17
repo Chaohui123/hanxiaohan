@@ -107,10 +107,9 @@ export class ProductAnalyzer {
     if (opts.checkCompliance || opts.checkLogistics || opts.checkMarketDemand) {
       russiaMarket = analyzeProductForRussia(
         scraped.title,
-        scraped.description || '',
+        (scraped as unknown as Record<string, string>).description || '',
         scraped.categoryPath,
-        opts.weightKg,
-        scraped.specifications
+        opts.weightKg
       );
     } else {
       russiaMarket = {

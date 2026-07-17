@@ -66,7 +66,8 @@ export interface LogisticsProvider {
 
 // ---- Provider Factory ----
 
-export type LogisticsProviderName = "cdek" | "russian_post" | "auto";
+export type LogisticsProviderName = "cdek" | "russian_post" | "boxberry" | "auto";
+export type LogisticsProviderWeight = { provider: LogisticsProviderName; weight: number };
 
 let defaultProvider: LogisticsProvider | null = null;
 
@@ -95,27 +96,64 @@ export async function getLogisticsProvider(): Promise<LogisticsProvider | null> 
     logger.warn("Russian Post provider not available — check RUSSIAN_POST_API_KEY");
   }
 
-  // "auto" or explicit provider failed → try CDEK first, then Russian Post
+  if (providerName === "boxberry") {
+    const { BoxberryProvider } = await import("./boxberry.js");
+    const p = new BoxberryProvider();
+    if (p.isAvailable()) { defaultProvider = p; return p; }
+    logger.warn("Boxberry provider not available — check BOXBERRY_API_TOKEN");
+  }
+
+  // "auto" or explicit provider failed → try CDEK first, then Boxberry, then Russian Post
   if (providerName === "auto") {
+    // Try providers in priority order based on weights if configured
+    const weights = parseLogisticsWeights();
+    const available: Array<{ provider: LogisticsProvider; weight: number }> = [];
+
     const { CdekProvider } = await import("./cdek.js");
     const cdek = new CdekProvider();
-    if (cdek.isAvailable()) {
-      defaultProvider = cdek;
-      logger.info("Auto-selected CDEK as logistics provider");
-      return cdek;
-    }
+    if (cdek.isAvailable()) available.push({ provider: cdek, weight: weights["cdek"] ?? 5 });
+
+    const { BoxberryProvider } = await import("./boxberry.js");
+    const boxberry = new BoxberryProvider();
+    if (boxberry.isAvailable()) available.push({ provider: boxberry, weight: weights["boxberry"] ?? 3 });
 
     const { RussianPostProvider } = await import("./russian-post.js");
     const rp = new RussianPostProvider();
-    if (rp.isAvailable()) {
-      defaultProvider = rp;
-      logger.info("Auto-selected Russian Post as logistics provider");
-      return rp;
+    if (rp.isAvailable()) available.push({ provider: rp, weight: weights["russian_post"] ?? 2 });
+
+    if (available.length > 0) {
+      // Weight-based random selection for multi-carrier load balancing
+      const totalWeight = available.reduce((sum, a) => sum + a.weight, 0);
+      let roll = Math.random() * totalWeight;
+      for (const a of available) {
+        roll -= a.weight;
+        if (roll <= 0) {
+          defaultProvider = a.provider;
+          logger.info({ provider: a.provider.name }, "Auto-selected logistics provider (weighted)");
+          return a.provider;
+        }
+      }
+      // Fallback to first available
+      defaultProvider = available[0]!.provider;
+      return available[0]!.provider;
     }
   }
 
   logger.error("No logistics provider configured. Set LOGISTICS_PROVIDER + API keys in .env");
   return null;
+}
+
+/** Parse LOGISTICS_WEIGHTS env var: "70,30" → { cdek: 70, boxberry: 30 } */
+function parseLogisticsWeights(): Record<string, number> {
+  const raw = process.env.LOGISTICS_WEIGHTS || "";
+  if (!raw) return {};
+  const weights = raw.split(",").map(Number);
+  const names: string[] = ["cdek", "boxberry", "russian_post"];
+  const result: Record<string, number> = {};
+  for (let i = 0; i < Math.min(weights.length, names.length); i++) {
+    if (!isNaN(weights[i]!)) result[names[i]!] = weights[i]!;
+  }
+  return result;
 }
 
 /**

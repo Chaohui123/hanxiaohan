@@ -108,6 +108,30 @@ export async function stepMatchCategory(
   scraped: ScrapedProduct,
   categoryTree: OzonCategoryNode[]
 ): Promise<CategoryMatchResult> {
+  // Inject RAG v2 Top5 similar products for better category matching
+  let ragContext: string | undefined;
+  const isTest = (process.env.ENV || process.env.NODE_ENV) === "test" || process.env.VITEST === "true";
+  const ragEnabled = process.env.RAG_ENABLE !== "false" && process.env.RAG_ENABLE !== "0";
+  if (!isTest && ragEnabled) {
+    try {
+      const { RagV2Service } = await import("../services/rag-v2/service.js");
+      const { getDb } = await import("../db/connection.js");
+      const db = await getDb().catch(() => null);
+      if (db) {
+        const ragService = new RagV2Service(db);
+        await ragService.init();
+        ragContext = await ragService.searchForPrompt({
+          collection: "success_copy",
+          query: `${scraped.title} ${scraped.categoryPath?.join(" ") || ""}`,
+          topK: 5,
+        });
+        if (ragContext) {
+          logger.info({ taskId: ctx.taskId }, "RAG v2: injected Top5 context into category matching");
+        }
+      }
+    } catch { /* RAG unavailable — continue without enrichment */ }
+  }
+
   try {
     const match = await textClient.matchCategory(
       {
@@ -115,7 +139,8 @@ export async function stepMatchCategory(
         categoryPath: scraped.categoryPath,
         specifications: scraped.specifications,
       },
-      categoryTree
+      categoryTree,
+      ragContext
     );
     const attributeCategoryId = findAttributeCategoryId(categoryTree, match.categoryId);
 
@@ -126,7 +151,7 @@ export async function stepMatchCategory(
       throw new Error(msg);
     }
 
-    ctx.category = { ...match, attributeCategoryId };
+    ctx.category = { ...match!, attributeCategoryId: attributeCategoryId ?? undefined };
     return ctx.category;
   } catch (err) {
     const msg = `Category matching failed: ${(err as Error).message}`;
@@ -341,7 +366,7 @@ export async function stepCreateDraft(
       name: processed.titleRu,
       description: processed.descriptionRu,
       categoryId: processed.categoryId,
-      typeId: resolvedTypeId,
+      typeId: resolvedTypeId ?? undefined,
       price: processed.priceRub,
       vat: "0" as const,
       images: ctx.imageIds ?? processed.specImageUrls, // Ozon image IDs (primary) or raw URLs (fallback)
@@ -513,4 +538,52 @@ export async function recordPipelineSuccess(ctx: PipelineContext): Promise<void>
       imageCount: ctx.imageIds?.length ?? 0,
     }),
   });
+
+  // RAG v2 auto-index: successful listing → vector store for future matching
+  const isTest = (process.env.ENV || process.env.NODE_ENV) === "test" || process.env.VITEST === "true";
+  if (!isTest && process.env.RAG_ENABLE !== "false" && process.env.RAG_ENABLE !== "0") {
+    try {
+      const { RagV2Service } = await import("../services/rag-v2/service.js");
+      const { getDb } = await import("../db/connection.js");
+      const db = await getDb().catch(() => null);
+      if (db) {
+        const ragService = new RagV2Service(db);
+        await ragService.init();
+        await ragService.onListingSuccess(
+          ctx.taskId,
+          ctx.translated?.titleRu || "",
+          ctx.translated?.descriptionRu || "",
+          ctx.sourceUrl,
+          ctx.category?.categoryId
+        );
+      }
+    } catch { /* RAG unavailable — non-blocking */ }
+  }
+
+  // SKU-1688 mapping: auto-bind after successful listing
+  if (ctx.translated && ctx.processed) {
+    try {
+      const { getDb } = await import("../db/connection.js");
+      const { SkuMappingService } = await import("../services/sku-mapping.js");
+      const db = await getDb().catch(() => null);
+      if (db) {
+        const skuService = new SkuMappingService(db);
+        // Use the first product SKU from the listing
+        const ozonSku = ctx.ozonProductId || 0;
+        await skuService.bind({
+          storeId: ctx.storeId || "store_1",
+          ozonOfferId: ctx.draftId || `draft_${ctx.taskId}`,
+          ozonSku,
+          source1688Url: ctx.sourceUrl,
+          purchasePriceCny: ctx.processed?.priceRub
+            ? (await (await import("../services/exchange-rate.js")).getExchangeRate().then(r => ctx.processed!.priceRub / r.rate, () => ctx.processed!.priceRub / 11.5))
+            : 0,
+          weightKg: ctx.processed?.weightKg,
+          supplierName: ctx.scraped?.supplier?.name || "",
+          supplierPickupRate: ctx.scraped?.supplier?.pickupRate || 0,
+        });
+        logger.info({ taskId: ctx.taskId, offerId: ctx.draftId }, "SKU mapping: auto-bound after listing");
+      }
+    } catch { /* SKU mapping unavailable — non-blocking */ }
+  }
 }

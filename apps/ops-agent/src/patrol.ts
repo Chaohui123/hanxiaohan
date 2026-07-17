@@ -42,22 +42,32 @@ export async function runPatrolCheck(
       lastAlertAt = now;
       result.alerted = true;
 
-      logger.warn({ status: currentStatus }, "Patrol detected status change");
+      const checks = (data.checks as Record<string, unknown>) || {};
+      const failedEntries = Object.entries(checks).filter(([, c]) => {
+        const st = typeof c === "string" ? c : (c as { status?: string }).status || "unknown";
+        return st !== "ok";
+      });
 
-      const checks =
-        (data.checks as Record<string, { status: string; latencyMs?: number }>) || {};
-      const failedChecks = Object.entries(checks)
-        .filter(([, c]) => c.status !== "ok")
-        .map(([name, c]) => `❌ ${name}: ${c.status}`)
+      // Severity: DB/error → critical, degraded/warn → warn
+      const isCritical = currentStatus === "error" || currentStatus === "unhealthy" ||
+        failedEntries.some(([name]) => name === "db");
+      const severity = isCritical ? "critical" : "warn";
+      const prefix = isCritical ? "🔴🔴 严重告警" : "🟡 系统提醒";
+
+      logger.warn({ status: currentStatus, severity }, "Patrol detected status change");
+
+      const failedChecks = failedEntries
+        .map(([name, c]) => {
+          const st = typeof c === "string" ? c : (c as { status?: string }).status || "unknown";
+          return `❌ ${name}: ${st}`;
+        })
         .join("\n");
 
-      let alertMsg = `🚨 系统状态变更: ${lastStatus} → ${currentStatus}\n\n${failedChecks}`;
+      let alertMsg = `${prefix}\n状态: ${lastStatus} → ${currentStatus}\n\n${failedChecks}`;
+      if (isCritical) alertMsg += "\n\n⚡ @所有人 请立即处理";
 
       // RAG 知识库查询：运维异常处理经验
-      const failedNames = Object.entries(checks)
-        .filter(([, c]) => c.status !== "ok")
-        .map(([name]) => name)
-        .join(",");
+      const failedNames = failedEntries.map(([name]) => name).join(",");
       const isOrderRelated = failedNames.includes("order") || failedNames.includes("aftersales");
 
       const playbookResults = await queryRag(config, "playbook", `运维异常 ${failedNames}`, { scenario: "ops" });
@@ -72,7 +82,15 @@ export async function runPatrolCheck(
         }
       }
 
-      await bot.sendMessage(config.chatId, alertMsg);
+      // Quiet hours: non-critical alerts suppressed during 22:00-07:00 UTC
+      const quietRange = (process.env.OPS_AGENT_QUIET_HOURS || "22:00-07:00").split("-");
+      const hour = new Date().getUTCHours();
+      const inQuiet = hour >= parseInt(quietRange[0]) || hour < parseInt(quietRange[1]);
+      if (!inQuiet || isCritical) {
+        await bot.sendMessage(config.chatId, alertMsg);
+      } else {
+        logger.info({ severity, inQuiet: true }, "Patrol alert suppressed by quiet hours");
+      }
 
       writeRag(config, "playbook", {
         title: `巡检异常: ${failedNames}`, scenario: "ops",

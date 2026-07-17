@@ -189,11 +189,11 @@ export function createWebhookRouter(): Router {
           orderId: payload.orderId,
           status: payload.status,
           createdAt: payload.timestamp,
-          products: [],
+          products: [] as Array<{ sku: number; quantity: number; price: number }>,
           price: 0,
           commission: 0,
           payout: 0,
-        } as Parameters<typeof processNewOrder>[0];
+        } as unknown as Parameters<typeof processNewOrder>[0];
         await processNewOrder(order, "store_1");
       }
 

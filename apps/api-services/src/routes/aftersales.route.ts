@@ -17,9 +17,12 @@ export function createAftersalesRouter(): Router {
         buyerName: string;
         buyerMessage: string;
         refundAmountRub?: number;
+        status?: AftersalesCase['status'];
+        attachments?: string[];
       };
+      const payload = { ...data, status: data.status || "pending", attachments: data.attachments || [] };
 
-      const caseItem = aftersalesManager.createCase(data);
+      const caseItem = await aftersalesManager.createCase(payload);
 
       res.status(201).json({
         success: true,
@@ -38,7 +41,7 @@ export function createAftersalesRouter(): Router {
   router.get("/cases", async (req, res) => {
     try {
       const { status } = req.query as { status?: AftersalesCase['status'] };
-      const cases = aftersalesManager.getCasesByStatus(status);
+      const cases = await aftersalesManager.getCasesByStatus(status || "pending");
 
       res.json({
         success: true,
@@ -58,7 +61,7 @@ export function createAftersalesRouter(): Router {
   router.get("/cases/:id", async (req, res) => {
     try {
       const { id } = req.params;
-      const caseItem = aftersalesManager.getCase(id);
+      const caseItem = await aftersalesManager.getCase(id);
 
       if (!caseItem) {
         return res.status(404).json({
@@ -116,16 +119,17 @@ export function createAftersalesRouter(): Router {
       const { id } = req.params;
       const { resolutionNote, refundAmountRub } = req.body as { resolutionNote: string; refundAmountRub?: number };
 
-      const success = aftersalesManager.resolveCase(id, resolutionNote, refundAmountRub);
-
-      if (!success) {
+      // Verify case exists before resolving
+      const existing = await aftersalesManager.getCase(id);
+      if (!existing) {
         return res.status(404).json({
           success: false,
           error: { code: "NOT_FOUND", message: "售后工单不存在", retryable: false },
-          correlationId: req.correlationId
+          correlationId: req.correlationId,
         });
       }
 
+      await aftersalesManager.resolveCase(id, resolutionNote);
       res.json({
         success: true,
         message: "售后工单已解决",
@@ -227,7 +231,7 @@ export function createAftersalesRouter(): Router {
   router.get("/cases/:id/flag", async (req, res) => {
     try {
       const { id } = req.params;
-      const caseItem = aftersalesManager.getCase(id);
+      const caseItem = await aftersalesManager.getCase(id);
 
       if (!caseItem) {
         return res.status(404).json({
@@ -237,11 +241,11 @@ export function createAftersalesRouter(): Router {
         });
       }
 
-      const flagResult = aftersalesManager.flagPotentialBadReview(caseItem);
+      await aftersalesManager.flagPotentialBadReview(id);
 
       res.json({
         success: true,
-        data: flagResult,
+        data: { flagged: true },
         correlationId: req.correlationId
       });
     } catch (err) {

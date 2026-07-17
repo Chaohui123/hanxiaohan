@@ -313,6 +313,33 @@ export function createRagRouter(): Router {
   });
 
   // ============================================================
+  // 诊断 — 性能调优用
+  // ============================================================
+
+  router.get("/rag/diagnose", async (_req, res) => {
+    try {
+      const db = await dbOrFail();
+      const tables = ["rag_aftersales_scripts", "rag_competitor_reports", "rag_product_knowledge", "rag_copy_templates", "rag_operations_playbook"];
+      const kb: Record<string, { count: number; avgVectorDim: number; indexType: string }> = {};
+      for (const t of tables) {
+        const rows = await db.all<{ cnt: number }>(`SELECT COUNT(*) as cnt FROM ${t}`);
+        kb[t] = { count: rows[0]?.cnt || 0, avgVectorDim: 2048, indexType: "ivfflat" };
+      }
+      const embeddingCfg = {
+        provider: process.env.EMBEDDING_PROVIDER || "zhipu",
+        model: process.env.EMBEDDING_MODEL || "embedding-3",
+        dimensions: parseInt(process.env.EMBEDDING_DIMENSIONS || "2048", 10),
+        timeout: parseInt(process.env.EMBEDDING_TIMEOUT_MS || "30000", 10),
+        batchSize: parseInt(process.env.EMBEDDING_BATCH_SIZE || "16", 10),
+      };
+      res.json({
+        knowledgeBases: kb, embeddingConfig: embeddingCfg,
+        similarityThreshold: parseFloat(process.env.RAG_SIMILARITY_THRESHOLD || "0.7"),
+      });
+    } catch (err) { handleError(err); }
+  });
+
+  // ============================================================
   // 统计
   // ============================================================
 
@@ -326,6 +353,60 @@ export function createRagRouter(): Router {
         stats[t] = rows[0]?.cnt || 0;
       }
       res.json(stats);
+    } catch (err) { handleError(err); }
+  });
+
+  // ============================================================
+  // RAG v2 — enhanced stats, search, batch import
+  // ============================================================
+
+  /** GET /api/rag/stats — detailed stats (capacity, chunks, latency) */
+  router.get("/rag/v2/stats", async (_req, res) => {
+    try {
+      const { RagV2Service } = await import("../services/rag-v2/service.js");
+      const db = await dbOrFail();
+      const service = new RagV2Service(db);
+      await service.init();
+      const stats = await service.refreshStats();
+      res.json(stats);
+    } catch (err) { handleError(err); }
+  });
+
+  /** POST /api/rag/v2/search — unified search across new collections */
+  router.post("/rag/v2/search", validate(SearchSchema), async (req, res) => {
+    try {
+      const { query, topK } = (req as unknown as Record<string, unknown>).validatedBody as z.infer<typeof SearchSchema>;
+      const collection = ((req as unknown as Record<string, unknown>).validatedBody as Record<string, string>).collection || "success_copy";
+      const db = await dbOrFail();
+      const { RagV2Service } = await import("../services/rag-v2/service.js");
+      const service = new RagV2Service(db);
+      await service.init();
+      const results = await service.search({ collection, query, topK });
+      res.json({ results, query, collection });
+    } catch (err) { handleError(err); }
+  });
+
+  /** POST /api/rag/v2/import — bulk import existing data */
+  router.post("/rag/v2/import", async (req, res) => {
+    try {
+      const { collection } = (req.body || {}) as { collection?: string };
+      const db = await dbOrFail();
+      const { RagV2Service } = await import("../services/rag-v2/service.js");
+      const service = new RagV2Service(db);
+      await service.init();
+
+      let imported = 0;
+      if (!collection || collection === "success_copy") {
+        imported += await service.importSuccessfulListings();
+      }
+      if (!collection || collection === "ozon_categories") {
+        const catRows = await db.all<{ tree_json: string }>("SELECT tree_json FROM category_cache WHERE id = 1");
+        if (catRows.length > 0) {
+          imported += await service.importCategoryTree(catRows[0].tree_json);
+        }
+      }
+
+      res.json({ imported, collection: collection || "all" });
     } catch (err) { handleError(err); }
   });
 

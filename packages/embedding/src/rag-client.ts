@@ -41,16 +41,42 @@ export async function queryRag(
       method: "POST",
       headers: { "Content-Type": "application/json", "X-API-Key": config.apiKey },
       body: JSON.stringify({ query, topK: options?.topK || 3, ...extra }),
-      signal: AbortSignal.timeout(options?.timeout || 5_000),
+      signal: AbortSignal.timeout(options?.timeout || 10_000),
     });
     if (!resp.ok) return [];
     const data = await resp.json() as { results?: RagSearchResult[] };
-    const minScore = options?.minScore ?? 0.7;
+    const minScore = options?.minScore ?? parseFloat(process.env.RAG_SIMILARITY_THRESHOLD || "0.7");
     return (data.results || []).filter((r) => (r.score || 0) >= minScore);
   } catch (err) {
     logger.warn({ kb, query: query.slice(0, 50), err: (err as Error).message }, `RAG ${kb} query degraded`);
     return [];
   }
+}
+
+/**
+ * Split long text into overlapping chunks at sentence boundaries.
+ * Default chunkSize=10KB (~2500 tokens), overlap=10% for context continuity.
+ */
+export function chunkText(
+  text: string,
+  chunkSize = 10_000,
+  overlap = 1_000,
+): Array<{ text: string; index: number }> {
+  if (text.length <= chunkSize) return [{ text, index: 0 }];
+  const sentences = text.split(/(?<=[。！？.!?\n])/);
+  const chunks: Array<{ text: string; index: number }> = [];
+  let current = "";
+  let idx = 0;
+  for (const sentence of sentences) {
+    if ((current + sentence).length > chunkSize && current.length > 0) {
+      chunks.push({ text: current.trim(), index: idx++ });
+      current = current.slice(-overlap).trimStart() + sentence;
+    } else {
+      current += sentence;
+    }
+  }
+  if (current.trim()) chunks.push({ text: current.trim(), index: idx });
+  return chunks;
 }
 
 /**

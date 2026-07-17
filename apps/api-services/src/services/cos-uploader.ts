@@ -240,10 +240,10 @@ export class CosUploader {
     });
 
     const succeeded = mapped.filter((r) => r.success).length;
-    const failed = mapped.filter((r) => !r.success).length;
+    const failedCount = mapped.filter((r) => !r.success).length;
 
     logger.info(
-      { succeeded, failed, total: files.length, elapsedMs: elapsed, ...finalStats },
+      { succeeded, total: files.length, elapsedMs: elapsed, ...finalStats },
       "[COS] Batch upload complete"
     );
 
@@ -261,7 +261,7 @@ export class CosUploader {
       await this.cosDelete(cosKey);
       return true;
     } catch (error) {
-      logger.error(`[COS] Delete failed: ${cosKey}`, error);
+      logger.error({ cosKey, err: (error as Error).message }, `[COS] Delete failed: ${cosKey}`);
       return false;
     }
   }
@@ -340,7 +340,7 @@ export class CosUploader {
         localPath, error, createdAt: new Date().toISOString(), updatedAt: new Date().toISOString(),
       });
     } catch (dlError) {
-      logger.error("[COS] Dead letter save also failed:", dlError);
+      logger.error({ err: (dlError as Error).message }, "[COS] Dead letter save also failed");
     }
     // Also write to global dead letter for centralized retry
     await writeToDeadLetter({
@@ -392,7 +392,7 @@ export class CosUploader {
          record.retryCount, record.deadLetter ? 1 : 0, record.localPath || null, record.error || null]
       );
     } catch (error) {
-      logger.error("[COS] DB record failed:", error);
+      logger.error({ err: (error as Error).message }, "[COS] DB record failed");
     }
   }
 }

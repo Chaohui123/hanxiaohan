@@ -87,11 +87,12 @@ export class DeepSeekClient {
           continue;
         }
 
-        const data = await response.json();
+        const data = await response.json() as Record<string, unknown>;
         // DeepSeek-V4 reasoning models put final answer in content;
         // reasoning_content (if present) contains chain-of-thought.
-        const msg = data.choices?.[0]?.message;
-        const content: string = msg?.content || msg?.reasoning_content || "";
+        const msg = data.choices as Record<string, unknown>[] | undefined;
+        const choice = msg?.[0]?.message as Record<string, string> | undefined;
+        const content: string = choice?.content || choice?.reasoning_content || "";
 
         let parsed: T | null = null;
         try {
@@ -101,14 +102,14 @@ export class DeepSeekClient {
         } catch { /* non-JSON content — caller handles */ }
 
         const tokensUsed = {
-          prompt: data.usage?.prompt_tokens ?? 0,
-          completion: data.usage?.completion_tokens ?? 0,
-          total: data.usage?.total_tokens ?? 0,
+          prompt: (data.usage as Record<string, number> | undefined)?.prompt_tokens ?? 0,
+          completion: (data.usage as Record<string, number> | undefined)?.completion_tokens ?? 0,
+          total: (data.usage as Record<string, number> | undefined)?.total_tokens ?? 0,
         };
 
         // Track token usage for cost monitoring
         this.tokenTracker?.record({
-          model: data.model ?? modelName,
+          model: (data.model as string) ?? modelName,
           promptTokens: tokensUsed.prompt,
           completionTokens: tokensUsed.completion,
           totalTokens: tokensUsed.total,
@@ -119,7 +120,7 @@ export class DeepSeekClient {
           content: content.trim(),
           parsed,
           tokensUsed,
-          model: data.model ?? modelName,
+          model: (data.model as string) ?? modelName,
         };
       } catch (error) {
         lastError = error instanceof Error ? error : new Error(String(error));
@@ -144,7 +145,8 @@ export class DeepSeekApiError extends Error {
   }
 }
 
-type DeepSeekClientResolved = Required<Omit<DeepSeekConfig, "flashModel" | "proModel">> & {
+type DeepSeekClientResolved = Required<Omit<DeepSeekConfig, "flashModel" | "proModel" | "tokenTracker">> & {
   flashModel: string;
   proModel: string;
+  tokenTracker?: TokenTracker;
 };

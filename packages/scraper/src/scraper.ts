@@ -3,6 +3,35 @@
 // ============================================================
 
 import type { ScrapedProduct } from "@onzo/shared-types";
+
+// Shape of data returned by the browser-side extract-page-data.js script
+interface BrowserExtractedData {
+  title: string;
+  priceCny: number;
+  descriptionText: string;
+  specImages: string[];
+  detailImages: string[];
+  specifications: Array<{ name: string; value: string }>;
+  categoryPath: string[];
+  mainImage: string;
+  url: string;
+  html: string;
+  ogTitle: string;
+  ogDescription: string;
+  ogImage: string;
+  ldJson: string | null;
+  initialState: unknown;
+  images: string[];
+  metaKeywords: string;
+  variants: Array<{ name: string; price?: number; image?: string }>;
+  supplier?: {
+    name: string;
+    pickupRate: number;
+    responseRate: number;
+    qualityScore: number;
+    ratings?: Record<string, unknown>;
+  };
+}
 import { parseProductPage, sanitizeUrl } from "./parser.js";
 import { createStealthConfig, randomDelay, sleep } from "./anti-detect.js";
 import { ProxyManager } from "./proxy-manager.js";
@@ -203,7 +232,16 @@ export class ProductScraper {
           const pageData = await this.extractPageData(page, url);
           const detailImages = await this.extractDetailImages(page);
 
-          const product = parseProductPage(pageData, url);
+          // eslint-disable-next-line @typescript-eslint/no-explicit-any
+          const parsedPageData: import("./parser.js").ExtractedPageData = {
+            title: pageData.title, html: "", url: pageData.url,
+            ogTitle: pageData.ogTitle, ogDescription: pageData.ogDescription,
+            ogImage: pageData.ogImage, ldJson: pageData.ldJson,
+            initialState: pageData.initialState as any,
+            images: pageData.images, metaKeywords: pageData.metaKeywords,
+            supplier: pageData.supplier,
+          };
+          const product = parseProductPage(parsedPageData, url);
           product.detailImages = detailImages;
 
           await this.saveCookies().catch(() => {});
@@ -484,9 +522,9 @@ export class ProductScraper {
     await sleep(1000);
   }
 
-  private async extractPageData(page: Page, _url: string): Promise<ExtractedPageData> {
+  private async extractPageData(page: Page, _url: string): Promise<BrowserExtractedData> {
     await page.addScriptTag({ content: "window.__extractPageData = " + EXTRACT_PAGE_DATA_SCRIPT + ";" });
-    return page.evaluate("window.__extractPageData()") as Promise<ExtractedPageData>;
+    return page.evaluate("window.__extractPageData()") as Promise<BrowserExtractedData>;
   }
 
   private async extractDetailImages(page: Page): Promise<string[]> {

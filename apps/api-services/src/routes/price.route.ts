@@ -119,7 +119,7 @@ export function createPriceRouter(): Router {
       const fx = exchangeRate ?? (await getExchangeRate()).rate;
 
       const { calculateProfit } = await import("../services/profit-calc.js");
-      const result = calculateProfit({ costCny, sellingPriceRub, exchangeRate: fx, category, weightKg });
+      const result = calculateProfit({ costCny, sellingPriceRub, exchangeRate: fx, weightKg: weightKg ?? 0.5 });
 
       res.json({ success: true, data: result, correlationId: req.correlationId });
     }

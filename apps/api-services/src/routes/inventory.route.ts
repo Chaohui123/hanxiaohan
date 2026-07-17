@@ -330,8 +330,8 @@ export function createInventoryRouter(): Router {
 
   router.get("/alerts", async (req, res) => {
     try {
-      const alerts = inventoryManager.getAlerts();
-      
+      const alerts = await inventoryManager.getAlerts();
+
       res.json({
         success: true,
         data: alerts,
@@ -349,7 +349,7 @@ export function createInventoryRouter(): Router {
 
   router.get("/recommendations", async (req, res) => {
     try {
-      const recommendations = inventoryManager.getReorderRecommendations();
+      const recommendations = await inventoryManager.getReorderRecommendations();
       
       res.json({
         success: true,

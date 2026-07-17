@@ -3,6 +3,10 @@ dist
 .vite
 *.log
 *.tsbuildinfo
+packages/*/dist/
+apps/*/dist/
+packages/*/node_modules/
+apps/*/node_modules/
 
 # Secrets (must not leak into Docker image)
 .env
@@ -23,6 +27,11 @@ uploads/
 *.db
 *.db-journal
 
+# Test files — never ship to production
+**/*.test.ts
+**/*.spec.ts
+**/tests/
+
 # Test & coverage
 coverage/
 .nyc_output/
@@ -40,7 +49,12 @@ Thumbs.db
 # Docs (not needed in image)
 docs/
 *.md
+# Note: scripts/ is NOT excluded — fix-symlinks.sh needed in Docker build
 
 # Temp
 tmp/
 temp/
+
+# Build artifacts
+.nyc_output/
+coverage/

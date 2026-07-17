@@ -36,9 +36,18 @@ export async function getDb(): Promise<DbAdapter | null> {
   // Try PostgreSQL first
   try {
     const url = getDatabaseUrl();
+
+    // Dynamic pool sizing: assume up to N instances share the DB.
+    // Default PG max_connections is 100; reserve 20 for admin/superuser.
+    // If INSTANCE_COUNT is set, divide pool equally; otherwise default to 20.
+    const instanceCount = Math.max(1, parseInt(process.env.INSTANCE_COUNT || "1", 10));
+    const maxPoolSize = Math.max(5, Math.floor(
+      parseInt(process.env.PG_POOL_MAX || String(Math.min(20, Math.floor(80 / instanceCount))), 10)
+    ));
+
     pool = new pg.Pool({
       connectionString: url,
-      max: 20,
+      max: maxPoolSize,
       idleTimeoutMillis: 30_000,
       connectionTimeoutMillis: 5_000,
     });
@@ -192,6 +201,68 @@ function initSqliteSchema(db: unknown): void {
       total_tokens INTEGER DEFAULT 0, provider TEXT NOT NULL,
       cost_estimate REAL DEFAULT 0.0, timestamp TEXT DEFAULT (datetime('now'))
     );
+    CREATE TABLE IF NOT EXISTS ozon_orders (
+      id TEXT PRIMARY KEY, store_id TEXT NOT NULL DEFAULT 'store_1',
+      posting_number TEXT NOT NULL, order_id INTEGER NOT NULL,
+      order_number TEXT, status TEXT NOT NULL,
+      created_at_ozon TEXT, shipment_deadline TEXT,
+      buyer_name TEXT, buyer_phone TEXT,
+      products_json TEXT NOT NULL,
+      total_price_rub REAL DEFAULT 0, total_cost_cny REAL DEFAULT 0,
+      total_profit_rub REAL DEFAULT 0, margin_percent REAL DEFAULT 0,
+      has_1688_source INTEGER DEFAULT 1, profit_ok INTEGER DEFAULT 1,
+      needs_review INTEGER DEFAULT 0, tracking_number TEXT,
+      synced_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(store_id, posting_number)
+    );
+    CREATE INDEX IF NOT EXISTS idx_ozon_orders_status ON ozon_orders(store_id, status);
+    CREATE INDEX IF NOT EXISTS idx_ozon_orders_deadline ON ozon_orders(shipment_deadline);
+    CREATE TABLE IF NOT EXISTS purchase_1688 (
+      id TEXT PRIMARY KEY, store_id TEXT NOT NULL DEFAULT 'store_1',
+      ozon_posting_number TEXT NOT NULL, ozon_order_id INTEGER NOT NULL,
+      source_1688_url TEXT, offer_id TEXT,
+      sku_list_json TEXT NOT NULL DEFAULT '[]',
+      total_amount_cny REAL NOT NULL DEFAULT 0,
+      payment_status TEXT NOT NULL DEFAULT 'pending',
+      pay_serial TEXT, pay_time TEXT,
+      pay_channel TEXT DEFAULT 'alipay_deduct', pay_error TEXT,
+      risk_check_json TEXT,
+      logistics_status TEXT DEFAULT 'idle', logistics_tracking TEXT,
+      logistics_carrier TEXT DEFAULT '',
+      logistics_cost_rub REAL DEFAULT 0,
+      logistics_label_url TEXT DEFAULT '',
+      logistics_created_at TEXT,
+      logistics_updated_at TEXT,
+      logistics_last_event TEXT DEFAULT '',
+      logistics_last_event_at TEXT,
+      freight_address TEXT DEFAULT '',
+      alibaba_order_id TEXT DEFAULT '',
+      retry_count INTEGER DEFAULT 0,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(store_id, ozon_posting_number)
+    );
+    CREATE INDEX IF NOT EXISTS idx_purchase_pay_status ON purchase_1688(payment_status);
+    CREATE INDEX IF NOT EXISTS idx_purchase_ozon_order ON purchase_1688(ozon_posting_number);
+    CREATE INDEX IF NOT EXISTS idx_purchase_logistics_status ON purchase_1688(logistics_status);
+    CREATE INDEX IF NOT EXISTS idx_purchase_logistics_tracking ON purchase_1688(logistics_tracking);
+    CREATE TABLE IF NOT EXISTS sku_1688_mapping (
+      id TEXT PRIMARY KEY, store_id TEXT NOT NULL DEFAULT 'store_1',
+      ozon_offer_id TEXT NOT NULL, ozon_sku INTEGER NOT NULL,
+      source_1688_url TEXT NOT NULL, offer_1688_id TEXT,
+      sku_1688_id TEXT, purchase_price_cny REAL NOT NULL DEFAULT 0,
+      freight_address TEXT NOT NULL DEFAULT '',
+      weight_kg REAL DEFAULT 0.3, profit_threshold REAL DEFAULT 0.10,
+      supplier_name TEXT DEFAULT '',
+      supplier_pickup_rate REAL DEFAULT 0,
+      rag_image_vector_json TEXT, last_verified TEXT,
+      created_at TEXT DEFAULT (datetime('now')),
+      updated_at TEXT DEFAULT (datetime('now')),
+      UNIQUE(store_id, ozon_offer_id, ozon_sku)
+    );
+    CREATE INDEX IF NOT EXISTS idx_sku_mapping_offer ON sku_1688_mapping(ozon_offer_id, ozon_sku);
+    CREATE INDEX IF NOT EXISTS idx_sku_mapping_1688 ON sku_1688_mapping(offer_1688_id);
   `);
 }
 
@@ -230,6 +301,13 @@ function createPgAdapter(p: pg.Pool): DbAdapter {
 
 // ---- SQLite Adapter ----
 
+function sqliteCompat(sql: string): string {
+  // Translate PG functions/placeholders to SQLite equivalents
+  return sql
+    .replace(/\bNOW\(\)/g, "datetime('now')")
+    .replace(/\$\d+/g, "?");
+}
+
 function createSqliteAdapter(db: unknown): DbAdapter {
   const d = db as {
     exec: (sql: string) => void;
@@ -239,24 +317,60 @@ function createSqliteAdapter(db: unknown): DbAdapter {
     };
   };
 
+  /** Retry a write operation on SQLITE_BUSY / "database is locked" with exponential backoff */
+  async function retryWrite<T>(fn: () => T, maxRetries = 3): Promise<T> {
+    for (let attempt = 0; attempt <= maxRetries; attempt++) {
+      try {
+        return fn();
+      } catch (err) {
+        const msg = (err as Error).message || "";
+        const isLocked = msg.includes("SQLITE_BUSY") || msg.includes("database is locked") || msg.includes("database table is locked");
+        if (!isLocked || attempt >= maxRetries) throw err;
+        const delay = Math.min(100 * Math.pow(2, attempt) + Math.random() * 50, 2000);
+        logger.warn({ attempt, delay, err: msg }, "SQLite write conflict — retrying");
+        await new Promise((r) => setTimeout(r, delay));
+      }
+    }
+    throw new Error("unreachable");
+  }
+
   return {
     async exec(sql: string): Promise<void> {
-      d.exec(sql);
+      await retryWrite(() => d.exec(sqliteCompat(sql)));
     },
     async run(sql: string, params?: unknown[]): Promise<{ changes: number; lastInsertRowid?: number | bigint }> {
-      const stmt = d.prepare(sql);
-      const result = stmt.run(...(params || []));
-      return { changes: result.changes, lastInsertRowid: result.lastInsertRowid };
+      return retryWrite(() => {
+        const stmt = d.prepare(sqliteCompat(sql));
+        const result = stmt.run(...(params || []));
+        return { changes: result.changes, lastInsertRowid: result.lastInsertRowid };
+      });
     },
     async all<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]> {
-      const stmt = d.prepare(sql);
+      const stmt = d.prepare(sqliteCompat(sql));
       return stmt.all(...(params || [])) as T[];
     },
   };
 }
 
+// ---- Serialized Write Queue (prevents SQLite concurrent write conflicts) ----
+
+let writeQueue: Promise<void> = Promise.resolve();
+
 export async function serializedWrite<T>(fn: () => Promise<T>): Promise<T> {
-  return fn();
+  const prev = writeQueue;
+  let resolve: (value: T) => void;
+  let reject: (err: unknown) => void;
+  const next = new Promise<T>((res, rej) => { resolve = res; reject = rej; });
+
+  writeQueue = prev
+    .then(() => fn())
+    .then(
+      (val) => { resolve!(val); },
+      (err) => { reject!(err); }
+    )
+    .catch(() => {}); // prevent unhandled rejection from queue chain
+
+  return next;
 }
 
 export async function closeDb(): Promise<void> {

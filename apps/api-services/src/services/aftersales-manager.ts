@@ -5,6 +5,7 @@
 
 import { getDb } from "../db/connection.js";
 import { EmbeddingClient } from "@onzo/embedding";
+import { logger } from "@onzo/logger";
 
 export type AftersalesType = "refund" | "return" | "exchange" | "complaint" | "question";
 export type AftersalesStatus = "pending" | "processing" | "resolved" | "rejected";
@@ -115,6 +116,36 @@ export class AftersalesManager {
     if (!db) return null;
     const rows = await db.all("SELECT * FROM aftersales_cases WHERE id = ? LIMIT 1", [id]) as AftersalesCase[];
     return rows[0] || null;
+  }
+
+  /** Alias for getSummary */
+  async getCaseSummary(): Promise<CaseSummary> { return this.getSummary(); }
+
+  /** Resolve a case */
+  async resolveCase(id: string, note?: string): Promise<void> {
+    await this.updateCase(id, { status: "resolved", resolutionNote: note });
+  }
+
+  /** Reject a case */
+  async rejectCase(id: string, note?: string): Promise<void> {
+    await this.updateCase(id, { status: "rejected", resolutionNote: note });
+  }
+
+  /** Get cases filtered by status */
+  async getCasesByStatus(status: AftersalesStatus): Promise<AftersalesCase[]> {
+    return this.getCases({ status });
+  }
+
+  /** Flag a case as potential bad review risk */
+  async flagPotentialBadReview(id: string): Promise<void> {
+    logger.warn({ caseId: id }, "Case flagged as potential bad review risk");
+  }
+
+  /** Add a new auto-reply template */
+  async addAutoReplyTemplate(template: Omit<AutoReplyTemplate, "id">): Promise<AutoReplyTemplate> {
+    const t: AutoReplyTemplate = { id: crypto.randomUUID(), ...template };
+    templates.push(t);
+    return t;
   }
 
   /** Get auto-reply templates (static, in-memory) */

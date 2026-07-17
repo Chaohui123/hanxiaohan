@@ -84,8 +84,8 @@ export class FallbackHandler {
     return (
       error instanceof CircuitBreakerOpenError ||
       (error.name === "RetryableError" &&
-        "statusCode" in (error as Record<string, unknown>) &&
-        (error as Record<string, unknown>).statusCode === 429)
+        "statusCode" in (error as unknown as Record<string, unknown>) &&
+        (error as unknown as Record<string, unknown>).statusCode === 429)
     );
   }
 

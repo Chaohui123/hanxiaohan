@@ -160,10 +160,11 @@ export async function getPriceHistory(productSku: string, platform?: string, lim
   const platformFilter = platform ? "AND platform = ?" : "";
   const params = platform ? [productSku, platform, limit] : [productSku, limit];
 
-  return db.all(
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  return (db.all(
     `SELECT * FROM price_history WHERE product_sku = ? ${platformFilter} ORDER BY captured_at DESC LIMIT ?`,
-    ...params
-  ) as Promise<PriceRecord[]>;
+    params
+  ) as Promise<PriceRecord[]>);
 }
 
 // ---- Store Configs ----
@@ -174,6 +175,9 @@ export async function getStoreConfigs(): Promise<StoreConfig[]> {
 
   return db.all("SELECT * FROM store_configs WHERE active = 1") as Promise<StoreConfig[]>;
 }
+
+/** Alias for getStoreConfigs — explicit name for multi-store sync usage. */
+export const getActiveStoreConfigs = getStoreConfigs;
 
 export async function upsertStoreConfig(config: Omit<StoreConfig, "active">): Promise<void> {
   const db = await getDb();

@@ -6,7 +6,7 @@ import { Router } from "express";
 import { validateBody } from "../middleware/validate.js";
 import { getDb } from "../db/connection.js";
 import { encrypt, decrypt, isEncrypted } from "../services/crypto.js";
-import type { OzonCredentials, OzonClientConfig } from "@onzo/shared-types";
+import type { OzonCredentials } from "@onzo/shared-types";
 
 interface StoreRecord {
   storeId: string;
@@ -138,7 +138,7 @@ export function createStoreRouter(): Router {
 
     const taskResults: Array<{ storeId: string; taskId: string }> = [];
     for (const store of validStores) {
-      const sid = (store as Record<string, string>).store_id || "";
+      const sid = (store as unknown as Record<string, string>).store_id || "";
       taskResults.push({ storeId: sid, taskId: `batch-${sid}-${Date.now()}` });
     }
 

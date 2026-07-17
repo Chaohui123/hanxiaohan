@@ -161,6 +161,7 @@ export async function applyOverlay(
 
   // Fallback: try Jimp
   try {
+    // @ts-expect-error — jimp is optional, not installed by default
     const Jimp = (await import("jimp")).default;
     const image = await Jimp.read(inputPath);
     const font = await Jimp.loadFont(Jimp.FONT_SANS_32_WHITE);

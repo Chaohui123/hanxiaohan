@@ -31,6 +31,8 @@ import { createRagRouter } from "./routes/rag.route.js";
 import { ragRateLimit } from "./middleware/rag-rate-limit.js";
 import { RagIndexer } from "./services/rag-indexer.js";
 import { createDiagnoseRouter } from "./routes/diagnose.route.js";
+import { createOpsRouter } from "./routes/ops.route.js";
+import { startLogisticsPolling, stopLogisticsPolling } from "./services/logistics-polling.js";
 import { runSmokeTests } from "./startup-smoke-test.js";
 import { timeoutMiddleware } from "./middleware/timeout.js";
 import { idempotencyMiddleware } from "./middleware/idempotency.js";
@@ -54,9 +56,9 @@ async function loadTracing() {
 }
 import { collectMetrics, requestCounter, requestDuration, refreshPoolMetrics } from "./metrics/index.js";
 
-let swaggerUi: { serve: unknown; setup: (spec: unknown) => unknown } | null = null;
+let swaggerUi: { serve: express.RequestHandler; setup: (spec: unknown) => express.RequestHandler } | null = null;
 async function loadSwagger() {
-  try { swaggerUi = (await import("swagger-ui-express")).default as typeof swaggerUi; } catch { }
+  try { swaggerUi = (await import("swagger-ui-express")).default as unknown as typeof swaggerUi; } catch { }
 }
 
 const config = loadConfig();
@@ -67,7 +69,7 @@ const logger = createLogger(config);
 await loadTracing();
 initTracing("onzo-api-services").catch(() => {});
 
-const app = express();
+const app: express.Express = express();
 
 const isProduction = (process.env.ENV || process.env.NODE_ENV) === "production";
 const corsFallback = isProduction ? "" : "http://localhost:3000,http://localhost:5173,http://localhost:5678";
@@ -116,11 +118,36 @@ app.use(timeoutMiddleware(120_000));
 app.use(correlationIdMiddleware);
 app.use(accessLogMiddleware);
 app.use(rateLimitMiddleware);
+// Ozon API rate limiter (Redis counter-based, prevents 429 errors)
+const { ozonRateLimiter } = await import("./middleware/ozon-rate-limiter.js");
+app.use(ozonRateLimiter);
 app.use(idempotencyMiddleware);
 app.use(authMiddleware);
 app.use(auditMiddleware);
 app.use(requestTimingMiddleware);
 app.use(mockMiddleware);
+
+// ---- API Versioning ----
+// All API routes are mounted under /api/v1 (current) and /api (deprecated, to be removed in v2).
+// Clients should migrate to /api/v1. Old /api paths receive a deprecation header.
+
+const API_V1 = "/api/v1";
+
+/** Mount a router at both /api and /api/v1, with deprecation header on /api paths. */
+function mountApi(
+  path: string,
+  ...handlers: (express.RequestHandler | express.Router)[]
+): void {
+  // v1 (current)
+  app.use(`${API_V1}${path}`, ...handlers);
+  // Legacy path with deprecation notice
+  app.use(`/api${path}`, (req, res, next) => {
+    res.setHeader("X-API-Deprecated", "true");
+    res.setHeader("X-API-Deprecation-Date", "2026-10-01");
+    res.setHeader("Sunset", "2027-04-01");
+    next();
+  }, ...handlers);
+}
 
 // Serve downloaded images for Ozon URL import (Ozon has no local-file upload API)
 import { mkdirSync, existsSync } from "node:fs";
@@ -128,18 +155,20 @@ const tmpImgDir = "./data/tmp-images";
 if (!existsSync(tmpImgDir)) mkdirSync(tmpImgDir, { recursive: true });
 app.use("/tmp-images", express.static(tmpImgDir, { maxAge: 300_000 }));
 
-app.use("/api", createStatsRouter());
-app.use("/api", createBackupRouter());
-app.use("/api", createWebhookRouter());
-app.use("/api", createPriceRouter());
-app.use("/api", createStoreRouter());
-app.use("/api", createStoreAdminRouter());
+mountApi("", createStatsRouter());
+mountApi("", createBackupRouter());
+mountApi("", createWebhookRouter());
+mountApi("", createPriceRouter());
+mountApi("", createStoreRouter());
+mountApi("", createStoreAdminRouter());
 
 app.use(createDashboardHtmlRouter());
 
 await loadSwagger();
 if (swaggerUi) {
-  app.use("/api/docs", swaggerUi.serve as express.RequestHandler, swaggerUi.setup(swaggerSpec));
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const ui = swaggerUi as any;
+  app.use("/api/docs", ui.serve, ui.setup(swaggerSpec));
 }
 
 app.get("/metrics", async (_req, res) => {
@@ -248,14 +277,14 @@ registerJob("data-consistency-check", 6 * 3600_000, async () => {
   // 1. Order count mismatch — local vs Ozon (last 24h)
   try {
     const yesterday = new Date(Date.now() - 24 * 3600_000).toISOString();
-    const localRows = await db?.all(
+    const localRows = (await db?.all(
       "SELECT COUNT(*) as cnt FROM local_orders WHERE created_at >= ?",
       [yesterday]
-    ).catch(() => [] as Array<{ cnt: number }>);
-    const localCount = localRows?.[0]?.cnt ?? -1;
+    ).catch(() => [])) as Array<{ cnt: number }>;
+    const localCount: number = localRows?.[0]?.cnt ?? -1;
 
     // Fetch Ozon posting count via FBO list
-    let ozonCount = -1;
+    let ozonCount: number = -1;
     try {
       const ozonResp = await ozonClient.request<{ result: { count?: number } }>(
         "POST", "/v3/posting/fbo/list",
@@ -354,6 +383,29 @@ registerJob("finance-reconcile", 24 * 3600_000, async () => {
   }
 });
 
+// Ozon Order Sync v2 — every 5 minutes, with Redis distributed lock
+registerJob("ozon-order-sync-v2", 5 * 60_000, async () => {
+  if (!db) { logger.warn("OzonOrderSync: DB unavailable, skipping cycle"); return; }
+  const { OzonOrderSyncService } = await import("./services/ozon-order-sync.js");
+  const { acquireLock, releaseLock } = await import("./services/redis-lock.js");
+  const lockToken = await acquireLock("global", 300);
+  if (!lockToken) { logger.info("OzonOrderSync: Global lock held by another instance, skipping"); return; }
+  try {
+    const service = new OzonOrderSyncService(db);
+    const result = await service.syncAllStores();
+    logger.info({ ...result }, "OzonOrderSync: Scheduled sync completed");
+    if (result.errors.length > 0) {
+      const { emitEvent } = await import("./services/notification-events.js");
+      await emitEvent("ORDER_SYNC_FAILED", {
+        error: result.errors.slice(0, 3).join("; "),
+        storeCount: String(result.storesScanned),
+      });
+    }
+  } finally {
+    await releaseLock("global", lockToken);
+  }
+});
+
 startScheduler();
 
 // ---- RAG incremental indexing (hourly) ----
@@ -370,10 +422,10 @@ setInterval(async () => {
   }
 }, RAG_INDEX_INTERVAL * 60 * 1000);
 logger.info({ intervalMin: RAG_INDEX_INTERVAL }, "RAG indexer scheduled");
-registerCleanup(async () => { stopScheduler(); });
+registerCleanup(async () => { await stopScheduler(); });
 
 const { TaskQueue } = await import("./db/task-queue.js");
-const taskQueue = new TaskQueue(db, config.maxTaskConcurrency);
+const taskQueue = new TaskQueue(db ?? undefined, config.maxTaskConcurrency);
 await taskQueue.init();
 logger.info({ stats: taskQueue.getStats() }, "Task queue initialized");
 
@@ -408,7 +460,7 @@ taskQueue.registerHandler("webhook_retry", async (task) => {
 });
 
 app.use("/api/task", createTaskRouter(taskQueue));
-app.use("/api", createProcessRouter(config, taskQueue));
+mountApi("", createProcessRouter(config, taskQueue));
 
 const { OzonClient, AuthManager } = await import("@onzo/ozon-api-wrapper");
 const ozonClient = new OzonClient({
@@ -436,20 +488,18 @@ const sharedVisionClient = new GlmVisionClient({
 });
 
 app.use(createHealthRouter(ozonClient));
-app.use("/api", createDiagnoseRouter(ozonClient));
-app.use("/api", createOrderRouter(ozonClient));
-app.use("/api", createBulkRouter(taskQueue));
-app.use("/api", createDashboardRouter(taskQueue));
+mountApi("", createDiagnoseRouter(ozonClient));
+mountApi("", createOrderRouter(ozonClient));
+mountApi("", createBulkRouter(taskQueue));
+mountApi("", createDashboardRouter(taskQueue));
 app.use("/api/analyze", createAnalyzeRouter());
-// COS Image Upload
+// COS Image Upload — mounted under both v1 and legacy /api
 const cosUploader = new CosUploader(db);
-app.post('/api/images/upload', async (req, res) => {
+const { validate: validateZod, CosUploadSchema, CosBatchUploadSchema } = await import("./middleware/validate.js");
+const cosRouter = express.Router();
+cosRouter.post('/images/upload', validateZod(CosUploadSchema), async (req, res) => {
   try {
     const { filePath, productId, key } = req.body as { filePath: string; productId: string; key?: string };
-    if (!filePath || !productId) {
-      res.status(400).json({ success: false, error: 'filePath and productId required' });
-      return;
-    }
     const result = await cosUploader.uploadImage(filePath, productId, key);
     res.json({ success: result.success, data: result });
   } catch (err) {
@@ -457,13 +507,9 @@ app.post('/api/images/upload', async (req, res) => {
   }
 });
 
-app.post('/api/images/batch-upload', async (req, res) => {
+cosRouter.post('/images/batch-upload', validateZod(CosBatchUploadSchema), async (req, res) => {
   try {
     const { files } = req.body as { files: Array<{ filePath: string; productId: string; key?: string }> };
-    if (!files || !Array.isArray(files)) {
-      res.status(400).json({ success: false, error: 'files array required' });
-      return;
-    }
     const results = await cosUploader.uploadImagesBatch(files);
     res.json({ success: true, data: results });
   } catch (err) {
@@ -471,7 +517,7 @@ app.post('/api/images/batch-upload', async (req, res) => {
   }
 });
 
-app.post('/api/images/retry-dead-letter', async (_req, res) => {
+cosRouter.post('/images/retry-dead-letter', async (_req, res) => {
   try {
     const results = await cosUploader.retryDeadLetterImages();
     res.json({ success: true, data: results });
@@ -479,32 +525,70 @@ app.post('/api/images/retry-dead-letter', async (_req, res) => {
     res.status(500).json({ success: false, error: (err as Error).message });
   }
 });
+app.use("/api", cosRouter);
+app.use(`${API_V1}`, cosRouter);
 
-app.use("/api/inventory", createInventoryRouter());
-app.use("/api/aftersales", createAftersalesRouter());
-app.use("/api", createAlertRouter());
-app.use("/api", createPromoRouter());
-app.use("/api", ragRateLimit, createRagRouter());
+mountApi("/inventory", createInventoryRouter());
+mountApi("/aftersales", createAftersalesRouter());
+mountApi("", createAlertRouter());
+mountApi("", createPromoRouter());
+mountApi("", createOpsRouter());
+// Ozon Order Sync v2 routes
+const { createOzonOrderRouter } = await import("./routes/ozon-order.route.js");
+mountApi("", createOzonOrderRouter(db, ozonClient));
+// Purchase Pay routes (1688 auto-payment)
+const { createPurchasePayRouter } = await import("./routes/purchase-pay.route.js");
+mountApi("", createPurchasePayRouter(db));
+// 1688 Message Callback (order/payment/logistics push events)
+const { create1688CallbackRouter } = await import("./routes/1688-callback.route.js");
+mountApi("", create1688CallbackRouter());
+mountApi("", ragRateLimit, createRagRouter());
 
 // Data export routes
 const { createExportRouter } = await import("./routes/export.route.js");
-app.use("/api", createExportRouter());
+mountApi("", createExportRouter());
 
-// Oozo: process 1688 plugin downloads (images + videos 鈫?Russian localized)
+// Oozo: process 1688 plugin downloads (images + videos → Russian localized)
 const { createOozoRouter } = await import("./routes/oozo.route.js");
-app.use("/api", createOozoRouter(sharedDeepseekClient, sharedVisionClient, ozonClient));
+mountApi("", createOozoRouter(sharedDeepseekClient, sharedVisionClient, ozonClient));
+// SKU-1688 Mapping routes
+const { createSkuMappingRouter } = await import("./routes/sku-mapping.route.js");
+mountApi("", createSkuMappingRouter());
+// Logistics routes (freight forwarder tracking → Ozon backfill)
+const { createLogisticsRouter } = await import("./routes/logistics.route.js");
+mountApi("", createLogisticsRouter(ozonClient));
+// Report routes (finance, alerts, Excel export, daily routine)
+const { createReportRouter } = await import("./routes/report.route.js");
+mountApi("", createReportRouter());
+
+// Procurement routes (MANUAL_PAY_MODE) — 1688采购管理
+const { createProcurementRouter } = await import("./routes/procurement.route.js");
+mountApi("", createProcurementRouter(ozonClient));
+
+// ---- Request Metrics (path-normalized to prevent Prometheus cardinality explosion) ----
+
+/** Replace dynamic path segments with :param placeholders to bound metric cardinality. */
+function normalizePath(path: string): string {
+  // UUIDs
+  let normalized = path.replace(/[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi, ":uuid");
+  // Numeric IDs (standalone or path segments)
+  normalized = normalized.replace(/\/\d+/g, "/:id");
+  // ISO date strings
+  normalized = normalized.replace(/\d{4}-\d{2}-\d{2}/g, ":date");
+  return normalized;
+}
 
 app.use((req, res, next) => {
   const start = Date.now();
-  const route = req.path;
+  const route = normalizePath(req.path);
   const method = req.method;
-  
+
   res.on('finish', () => {
     const duration = (Date.now() - start) / 1000;
-    requestCounter.inc({ route, method, status_code: res.statusCode });
-    requestDuration.observe({ route, method }, duration);
+    requestCounter.inc({ path: route, method, status_code: res.statusCode.toString() });
+    requestDuration.observe({ path: route, method }, duration);
   });
-  
+
   next();
 });
 
@@ -516,9 +600,71 @@ const server = app.listen(config.port, () => {
 
   // Run startup smoke tests — non-blocking, results logged
   runSmokeTests(ozonClient).catch(() => {});
+
+  // Start logistics polling (1688 tracking → freight forwarder)
+  startLogisticsPolling();
+
+  // Register logistics monitoring job (LOGISTICS_ENABLE flag)
+  if (process.env.LOGISTICS_ENABLE === "true") {
+    registerJob("logistics-delay-check", 30 * 60_000, async () => {
+      const { LogisticsOrchestrator } = await import("./services/logistics-orchestrator.js");
+      const orchestrator = new LogisticsOrchestrator(db);
+      const alertCount = await orchestrator.checkDelays();
+      if (alertCount > 0) {
+        logger.warn({ alertCount }, "Scheduled logistics delay check — alerts sent");
+      }
+    });
+    logger.info("Logistics module ENABLED — auto-shipment + tracking webhooks active");
+  }
+
+  // Register transition logistics alert jobs (TRANSITION_LOGISTICS=kuajingbus)
+  if (process.env.TRANSITION_LOGISTICS === "kuajingbus") {
+    registerJob("transition-24h-check", 60 * 60_000, async () => {
+      const { TransitionLogisticsService } = await import("./services/transition-logistics.js");
+      const service = new TransitionLogisticsService(db);
+      await service.check24hOverdue();
+    });
+    registerJob("transition-48h-check", 120 * 60_000, async () => {
+      const { TransitionLogisticsService } = await import("./services/transition-logistics.js");
+      const service = new TransitionLogisticsService(db);
+      await service.check48hOverdue();
+    });
+    logger.info("Transition logistics ENABLED — 跨境巴士 semi-auto workflow + TG alerts active");
+  }
+
+  // Register Redis health check (all modes — alerts on disconnect)
+  registerJob("redis-health-check", 5 * 60_000, async () => {
+    const { checkRedisHealth } = await import("./services/redis-health.js");
+    await checkRedisHealth();
+  });
+
+  // Register manual procurement jobs (MANUAL_PAY_MODE=true)
+  if (process.env.MANUAL_PAY_MODE === "true") {
+    registerJob("procurement-sync", 10 * 60_000, async () => {
+      const { ManualProcurementService } = await import("./services/manual-procurement.js");
+      const service = new ManualProcurementService(db);
+      const result = await service.runProcurementBatch(ozonClient);
+      if (result.created > 0 || result.failed > 0) {
+        logger.info({ created: result.created, failed: result.failed, profitBlocked: result.profitBlocked }, "Procurement batch complete");
+      }
+    }, { timeoutMs: 5 * 60_000 });
+    registerJob("procurement-unpaid-reminder", 60 * 60_000, async () => {
+      const { ManualProcurementService } = await import("./services/manual-procurement.js");
+      const service = new ManualProcurementService(db);
+      const count = await service.remindUnpaidOrders();
+      if (count > 0) logger.warn({ count }, "Unpaid purchase reminders sent");
+    });
+    registerJob("procurement-status-poll", 30 * 60_000, async () => {
+      const { ManualProcurementService } = await import("./services/manual-procurement.js");
+      const service = new ManualProcurementService(db);
+      await service.pollPurchaseStatus();
+    });
+    logger.info("Manual procurement ENABLED — 1688 purchase orders created without auto-pay");
+  }
 });
 
 registerCleanup(async () => {
+  stopLogisticsPolling();
   await shutdownTracing();
 });
 

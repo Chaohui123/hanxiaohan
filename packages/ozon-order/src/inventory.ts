@@ -110,18 +110,18 @@ export class InventoryManager {
   }
 
   async getStock(offerId: string, sku: number): Promise<InventoryRecord | null> {
-    const rows = await this.db.all<InventoryRecord>("SELECT * FROM inventory WHERE offer_id=? AND sku=?", [offerId, sku]);
-    const r = rows[0]
-    if (!r) return null
+    const rows = await this.db.all<Record<string, unknown>>("SELECT * FROM inventory WHERE offer_id=? AND sku=?", [offerId, sku]);
+    const r = rows[0];
+    if (!r) return null;
     // Normalize possible column names from different adapters/mocks
-    const stockAvailable = r.stock_available ?? r.stockAvailable ?? r.avail ?? 0
-    const stockReserved = r.stock_reserved ?? r.stockReserved ?? r.reserved ?? 0
+    const stockAvailable = (r.stock_available ?? r.stockAvailable ?? r.avail ?? 0) as number;
+    const stockReserved = (r.stock_reserved ?? r.stockReserved ?? r.reserved ?? 0) as number;
     return {
-      offerId: r.offer_id ?? r.oid ?? offerId,
-      sku: r.sku ?? sku,
+      offerId: (r.offer_id ?? r.oid ?? offerId) as string,
+      sku: (r.sku ?? sku) as number,
       stockAvailable,
       stockReserved,
-      updatedAt: r.updated_at ?? r.updatedAt ?? (new Date()).toISOString(),
-    }
+      updatedAt: (r.updated_at ?? r.updatedAt ?? (new Date()).toISOString()) as string,
+    };
   }
 }
