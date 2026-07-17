@@ -92,6 +92,9 @@ RUN mkdir -p /app/data/backups /app/data/browser /app/logs \
 COPY scripts/fix-symlinks.sh /app/scripts/fix-symlinks.sh
 RUN chmod +x /app/scripts/fix-symlinks.sh
 
+# Template files (跨境巴士 export, etc.)
+COPY assets/ /app/assets/
+
 EXPOSE 3000
 
 # Healthcheck: confirms the process is alive and serving
