@@ -1,0 +1,59 @@
+name: Config Update
+
+on:
+  workflow_dispatch:
+
+jobs:
+  update-env:
+    runs-on: ubuntu-latest
+    steps:
+      - name: SSH → append procurement config
+        uses: appleboy/ssh-action@v1
+        with:
+          host: ${{ secrets.SSH_HOST }}
+          username: ${{ secrets.SSH_USER }}
+          key: ${{ secrets.SSH_PRIVATE_KEY }}
+          script: |
+            set -e
+            cd /root/onzo
+
+            echo "=== Checking current config ==="
+            grep -q "MANUAL_PAY_MODE" .env.production && echo "MANUAL_PAY_MODE already exists, skipping" && exit 0 || true
+
+            echo "=== Appending procurement + logistics config ==="
+            cat >> .env.production << 'ENVEOF'
+            # ====================== 货代中转仓收货地址 ======================
+            FREIGHT_ADDRESS=广东省东莞市常平镇土塘港建路45号7号楼放兔喜240247室 韩小寒 18928225650
+
+            # ====================== 物流配送模块 ======================
+            LOGISTICS_ENABLE=false
+            TRANSITION_LOGISTICS=kuajingbus
+            LOGISTICS_PROVIDER=auto
+
+            # ====================== 1688 开放平台（采购）======================
+            ALIBABA_APP_KEY=1390512
+            ALIBABA_APP_SECRET=88CGgcf4v9m
+            ALIBABA_ACCESS_TOKEN=06a9b42a-4290-4c48-bcc7-a41986724016
+            ALIBABA_GATEWAY=https://gw.open.1688.com/openapi/
+
+            # ====================== 1688 采购模式 ======================
+            MANUAL_PAY_MODE=true
+            MANUAL_PROFIT_THRESHOLD_MARGIN=0.10
+            SUPPLIER_MIN_PICKUP_RATE=0.9
+            PURCHASE_MAX_RPM=5
+            PURCHASE_DAILY_LIMIT_CY=5000
+            PURCHASE_MAX_ORDER_CY=2000
+            ENVEOF
+
+            echo "=== Config appended ==="
+            grep "MANUAL_PAY_MODE\|FREIGHT_ADDRESS\|ALIBABA_APP_KEY" .env.production
+
+            echo "=== Restarting services ==="
+            docker compose --profile production --env-file .env.production up -d
+
+            echo "=== Verifying ==="
+            sleep 5
+            docker compose logs --tail 20 api-services | grep -i "manual\|1688\|logistics" || echo "(no matching log lines yet)"
+            curl -s http://localhost:3000/health
+
+            echo "=== Done ==="
