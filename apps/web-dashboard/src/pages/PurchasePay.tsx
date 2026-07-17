@@ -11,6 +11,7 @@ const STATUS_MAP: Record<string, { label: string; color: string }> = {
   paid:             { label: "已支付",   color: "green" },
   failed:           { label: "支付失败", color: "red" },
   cancelled:        { label: "已取消",   color: "default" },
+  completed:        { label: "已完成 🔒", color: "green" },
   idle:             { label: "未发货",   color: "default" },
   shipped:          { label: "已发货",   color: "blue" },
   delivered:        { label: "已签收",   color: "green" },
@@ -89,6 +90,32 @@ export default function PurchasePay() {
                 <Button size="small" onClick={() => window.open(url, "_blank")}>1688</Button>
               </Tooltip>
             )}
+            {st !== "completed" && (
+              <Button size="small" icon={<EditOutlined />}
+                onClick={() => {
+                  setEditForm({
+                    paymentStatus: (r.payment_status as string) || "",
+                    paySerial: (r.pay_serial as string) || "",
+                    logisticsStatus: (r.logistics_status as string) || "",
+                    logisticsTracking: (r.logistics_tracking as string) || "",
+                    logisticsCarrier: (r.logistics_carrier as string) || "",
+                  });
+                  setEditModal(r);
+                }}>
+                编辑
+              </Button>
+            )}
+            {st !== "failed" && st !== "completed" && (
+              <Button size="small" type="primary"
+                onClick={() => {
+                  updateMutation.mutate(
+                    { id: r.id as string, paymentStatus: "completed" },
+                    { onSuccess: () => message.success("已标记为完成，订单锁定"), onError: (e: Error) => message.error(e.message) }
+                  );
+                }}>
+                完成
+              </Button>
+            )}
             {st === "failed" && (
               <Button size="small" type="primary" danger icon={<ReloadOutlined />}
                 loading={retryMutation.isPending}
@@ -99,19 +126,6 @@ export default function PurchasePay() {
                 重试
               </Button>
             )}
-            <Button size="small" icon={<EditOutlined />}
-              onClick={() => {
-                setEditForm({
-                  paymentStatus: (r.payment_status as string) || "",
-                  paySerial: (r.pay_serial as string) || "",
-                  logisticsStatus: (r.logistics_status as string) || "",
-                  logisticsTracking: (r.logistics_tracking as string) || "",
-                  logisticsCarrier: (r.logistics_carrier as string) || "",
-                });
-                setEditModal(r);
-              }}>
-              编辑
-            </Button>
           </Space>
         );
       },

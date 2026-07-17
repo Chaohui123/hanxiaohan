@@ -202,9 +202,20 @@ export function createPurchasePayRouter(db: DbAdapter | null): Router {
         logisticsStatus?: string; logisticsTracking?: string; logisticsCarrier?: string;
       };
 
-      const existing = await db.all<{ id: string }>("SELECT id FROM purchase_1688 WHERE id = ?", [id]);
+      const existing = await db.all<{ id: string; payment_status: string }>(
+        "SELECT id, payment_status FROM purchase_1688 WHERE id = ?", [id]
+      );
       if (existing.length === 0) {
         return res.status(404).json({ success: false, error: { code: "NOT_FOUND", message: "采购单不存在" }, correlationId: req.correlationId });
+      }
+
+      // Completed orders are locked — Ozon tracking finished, no further edits allowed
+      if (existing[0].payment_status === "completed") {
+        return res.status(409).json({
+          success: false,
+          error: { code: "LOCKED", message: "该采购单已完成（Ozon物流追踪结束），不可再修改", retryable: false },
+          correlationId: req.correlationId,
+        });
       }
 
       const sets: string[] = [];
@@ -218,6 +229,11 @@ export function createPurchasePayRouter(db: DbAdapter | null): Router {
 
       if (sets.length === 0) {
         return res.status(400).json({ success: false, error: { code: "NO_FIELDS", message: "至少提供一个字段" }, correlationId: req.correlationId });
+      }
+
+      // Auto-set completed_at when marking as completed
+      if (paymentStatus === "completed") {
+        sets.push("completed_at = datetime('now')");
       }
 
       sets.push("updated_at = datetime('now')");
