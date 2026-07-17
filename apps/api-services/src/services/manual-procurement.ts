@@ -715,18 +715,57 @@ export class ManualProcurementService {
   async pollPurchaseStatus(): Promise<number> {
     if (!this.db) return 0;
 
-    const rows = await this.db.all<{ id: string; ozon_posting_number: string }>(
-      `SELECT id, ozon_posting_number FROM purchase_1688
-       WHERE payment_status = 'pending_payment'
+    // Find non-completed purchase orders with Ozon posting numbers
+    const purchases = await this.db.all<{
+      id: string; ozon_posting_number: string; payment_status: string; logistics_status: string;
+    }>(
+      `SELECT id, ozon_posting_number, payment_status, logistics_status
+       FROM purchase_1688
+       WHERE payment_status != 'completed'
+         AND ozon_posting_number IS NOT NULL AND ozon_posting_number != ''
        LIMIT 100`
     );
 
-    // For each pending order, try to query 1688 for status
-    // In transition mode without real 1688 API polling, we rely on callbacks
-    // This is the fallback placeholder
-    logger.debug({ pendingCount: rows.length }, "ManualProcurement: polling purchase status");
+    if (purchases.length === 0) return 0;
 
-    return rows.length;
+    let autoCompleted = 0;
+
+    for (const p of purchases) {
+      try {
+        // Check local order status synced from Ozon by order-sync jobs
+        const orders = await this.db.all<{ status: string }>(
+          `SELECT status FROM local_orders WHERE posting_number = ? LIMIT 1`,
+          [p.ozon_posting_number]
+        );
+        const ozonOrders = await this.db.all<{ status: string }>(
+          `SELECT status FROM ozon_orders WHERE posting_number = ? LIMIT 1`,
+          [p.ozon_posting_number]
+        );
+
+        const ozonStatus = orders[0]?.status || ozonOrders[0]?.status || "";
+
+        // Auto-complete when Ozon order is fully delivered
+        if (ozonStatus === "delivered") {
+          await this.db.run(
+            `UPDATE purchase_1688 SET payment_status = 'completed', logistics_status = 'delivered', updated_at = datetime('now') WHERE id = ?`,
+            [p.id]
+          );
+          logger.info({ id: p.id, postingNumber: p.ozon_posting_number, ozonStatus },
+            "ManualProcurement: auto-completed — Ozon order delivered");
+          autoCompleted++;
+        }
+      } catch (err) {
+        logger.warn({ id: p.id, err: (err as Error).message },
+          "ManualProcurement: failed to poll purchase status");
+      }
+    }
+
+    if (autoCompleted > 0) {
+      logger.info({ autoCompleted, total: purchases.length },
+        "ManualProcurement: pollPurchaseStatus — auto-completed purchases");
+    }
+
+    return autoCompleted;
   }
 
   // ==============================================================
