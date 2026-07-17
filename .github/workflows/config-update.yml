@@ -6,6 +6,7 @@ on:
 jobs:
   update-env:
     runs-on: ubuntu-latest
+    environment: production
     steps:
       - name: SSH → append procurement config
         uses: appleboy/ssh-action@v1
