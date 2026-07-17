@@ -417,30 +417,26 @@ export function createLogisticsRouter(ozonClient: OzonClient): Router {
       const weightMap = new Map<string, number>();
       for (const s of skuRows) weightMap.set(s.ozon_posting_number, s.weight_kg || 0.3);
 
-      // Load original template from repo assets
-      const XLSX = await import("xlsx");
-      const { readFileSync } = await import("node:fs");
+      // Load original template with formatting preserved (xlsx-populate)
+      const XlsxPopulate = await import("xlsx-populate");
       const { join } = await import("node:path");
       const templatePath = join(process.cwd(), "assets", "kuajingbus-template.xlsx");
-      const templateBuf = readFileSync(templatePath);
-      const wb = XLSX.read(templateBuf, { type: "buffer" });
+      const wb = await XlsxPopulate.fromFileAsync(templatePath);
 
-      // Add data rows to "基础信息" sheet (first sheet), keeping all instruction rows
-      const ws = wb.Sheets[wb.SheetNames[0]!];
-      if (!ws) throw new Error("Template missing 基础信息 sheet");
+      // Work on first sheet (基础信息)
+      const ws = wb.sheet(0);
 
-      // Find the row after "请在此行开始填写真实订单" to start appending data
-      let startRow = 6; // default: known position in template
-      const range = XLSX.utils.decode_range(ws["!ref"] || "A1");
-      for (let r = 1; r <= range.e.r; r++) {
-        const cell = ws[XLSX.utils.encode_cell({ r, c: 0 })];
-        if (cell && typeof cell.v === "string" && cell.v.includes("请在此行开始填写真实订单")) {
+      // Find "请在此行开始填写真实订单" row
+      let startRow = 6; // fallback
+      for (let r = 0; r < 50; r++) {
+        const val = ws.cell(r, 0).value();
+        if (val && typeof val === "string" && val.includes("请在此行开始填写真实订单")) {
           startRow = r + 1;
           break;
         }
       }
 
-      // Build rows from purchase data
+      // Append purchase data rows
       let rowIdx = startRow;
       for (const p of purchases) {
         const skus = JSON.parse(p.sku_list_json || "[]") as Array<{ sku: number; quantity: number; unitPriceCny: number }>;
@@ -449,33 +445,25 @@ export function createLogisticsRouter(ozonClient: OzonClient): Router {
         const totalQty = skus.reduce((s, sk) => s + sk.quantity, 0);
         const weight = weightMap.get(p.ozon_posting_number) || "";
 
-        const data = [
-          "",                              // A 注释
-          "1052",                          // B 仓库代码
-          "10",                            // C 服务代码
-          p.ozon_posting_number,           // D 电商平台订单号
-          p.logistics_tracking || "",      // E 面单条形码
-          "",                              // F 产品图片 — 人工
-          "",                              // G 产品名称 — 非必填
-          String(totalQty),                // H 产品数量
-          "1688",                          // I 打包来源
-          "",                              // J 快递单号/SKUID — 人工
-          weight ? String(weight) : "",    // K 预估重量(kg)
-          "1688",                          // L 采购平台
-          p.id,                            // M 采购单号
-        ];
+        // Column A=0, B=1, ... M=12
+        ws.cell(rowIdx, 0).value("");                          // A 注释
+        ws.cell(rowIdx, 1).value("1052");                       // B 仓库代码
+        ws.cell(rowIdx, 2).value("10");                         // C 服务代码
+        ws.cell(rowIdx, 3).value(p.ozon_posting_number);        // D 电商平台订单号
+        ws.cell(rowIdx, 4).value(p.logistics_tracking || "");   // E 面单条形码
+        ws.cell(rowIdx, 5).value("");                           // F 产品图片 — 人工
+        ws.cell(rowIdx, 6).value("");                           // G 产品名称 — 非必填
+        ws.cell(rowIdx, 7).value(Number(totalQty));             // H 产品数量
+        ws.cell(rowIdx, 8).value("1688");                       // I 打包来源
+        ws.cell(rowIdx, 9).value("");                           // J 快递单号/SKUID — 人工
+        ws.cell(rowIdx, 10).value(weight ? Number(weight) : "");// K 预估重量(kg)
+        ws.cell(rowIdx, 11).value("1688");                      // L 采购平台
+        ws.cell(rowIdx, 12).value(p.id);                        // M 采购单号
 
-        for (let c = 0; c < data.length; c++) {
-          const cell = XLSX.utils.encode_cell({ r: rowIdx, c });
-          ws[cell] = { t: "s", v: data[c] };
-        }
         rowIdx++;
       }
 
-      // Update sheet range
-      ws["!ref"] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rowIdx - 1, c: 12 } });
-
-      const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+      const buf = await wb.outputAsync();
       const filename = `跨境巴士_${new Date().toISOString().slice(0, 10)}.xlsx`;
 
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
