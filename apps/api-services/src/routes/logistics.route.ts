@@ -384,39 +384,64 @@ export function createLogisticsRouter(ozonClient: OzonClient): Router {
     }
   });
 
-  /** GET /api/logistics/export-kuajingbus — export purchase orders to 跨境巴士 template */
-  router.get("/logistics/export-kuajingbus", async (_req, res) => {
+  /** POST /api/logistics/export-kuajingbus — export selected purchases to 跨境巴士 template */
+  router.post("/logistics/export-kuajingbus", async (req, res) => {
     try {
       const db = await getDb().catch(() => null);
       if (!db) return res.status(503).json({ success: false, error: { code: "DB_UNAVAILABLE" } });
 
-      // Fetch paid purchases with logistics info
+      const { ids } = (req.body || {}) as { ids?: string[] };
+      if (!ids || ids.length === 0) {
+        return res.status(400).json({ success: false, error: { code: "MISSING", message: "请在请求中提供要导出的采购单ID列表 ids: [...]" } });
+      }
+
+      // Fetch selected purchases
+      const placeholders = ids.map(() => "?").join(",");
       const purchases = await db.all<Record<string, string>>(
-        `SELECT id, ozon_posting_number, logistics_tracking, logistics_carrier,
-                sku_list_json, freight_address, source_1688_url
+        `SELECT id, ozon_posting_number, logistics_tracking,
+                sku_list_json
          FROM purchase_1688
-         WHERE payment_status IN ('paid','shipped')
-           AND logistics_status != 'idle'
-         ORDER BY created_at DESC
-         LIMIT 100`
+         WHERE id IN (${placeholders})
+         ORDER BY created_at DESC`,
+        ids
       );
 
       if (purchases.length === 0) {
-        return res.json({ success: true, data: { count: 0, message: "没有待导出的采购单" } });
+        return res.json({ success: true, data: { count: 0, message: "未找到指定的采购单" } });
       }
 
-      // Get SKU mapping weight info
+      // Get SKU weights
       const skuRows = await db.all<{ ozon_posting_number: string; weight_kg: number }>(
-        `SELECT DISTINCT s.ozon_offer_id, s.weight_kg FROM sku_1688_mapping s`
+        `SELECT DISTINCT ozon_offer_id, weight_kg FROM sku_1688_mapping`
       ).catch(() => []);
-
       const weightMap = new Map<string, number>();
       for (const s of skuRows) weightMap.set(s.ozon_posting_number, s.weight_kg || 0.3);
 
-      // Template: A=注释 B=仓库代码 C=服务代码 D=电商平台订单号 E=面单条形码
-      // F=产品图片 G=产品名称(非必填) H=产品数量 I=打包来源 J=快递单号/SKUID
-      // K=预估重量(kg) L=采购平台 M=采购单号
-      const rows: Record<string, string>[] = [];
+      // Load original template from repo assets
+      const XLSX = await import("xlsx");
+      const { readFileSync } = await import("node:fs");
+      const { join } = await import("node:path");
+      const templatePath = join(process.cwd(), "assets", "kuajingbus-template.xlsx");
+      const templateBuf = readFileSync(templatePath);
+      const wb = XLSX.read(templateBuf, { type: "buffer" });
+
+      // Add data rows to "基础信息" sheet (first sheet), keeping all instruction rows
+      const ws = wb.Sheets[wb.SheetNames[0]!];
+      if (!ws) throw new Error("Template missing 基础信息 sheet");
+
+      // Find the row after "请在此行开始填写真实订单" to start appending data
+      let startRow = 6; // default: known position in template
+      const range = XLSX.utils.decode_range(ws["!ref"] || "A1");
+      for (let r = 1; r <= range.e.r; r++) {
+        const cell = ws[XLSX.utils.encode_cell({ r, c: 0 })];
+        if (cell && typeof cell.v === "string" && cell.v.includes("请在此行开始填写真实订单")) {
+          startRow = r + 1;
+          break;
+        }
+      }
+
+      // Build rows from purchase data
+      let rowIdx = startRow;
       for (const p of purchases) {
         const skus = JSON.parse(p.sku_list_json || "[]") as Array<{ sku: number; quantity: number; unitPriceCny: number }>;
         if (skus.length === 0) continue;
@@ -424,73 +449,34 @@ export function createLogisticsRouter(ozonClient: OzonClient): Router {
         const totalQty = skus.reduce((s, sk) => s + sk.quantity, 0);
         const weight = weightMap.get(p.ozon_posting_number) || "";
 
-        rows.push({
-          "A": "",                                    // 注释
-          "B": "1052",                                // 仓库代码 1052=东莞永泽仓
-          "C": "10",                                  // 服务代码 10=OZON UNI
-          "D": p.ozon_posting_number,                 // 电商平台订单号
-          "E": p.logistics_tracking || "",            // 面单条形码
-          "F": "",                                    // 产品图片 — 人工填
-          "G": "",                                    // 产品名称 — 非必填
-          "H": String(totalQty),                      // 产品数量
-          "I": "1688",                                // 打包来源
-          "J": "",                                    // 快递单号/SKUID — 人工填
-          "K": weight ? String(weight) : "",           // 预估重量(kg)
-          "L": "1688",                                // 采购平台
-          "M": p.id,                                  // 采购单号
-        });
+        const data = [
+          "",                              // A 注释
+          "1052",                          // B 仓库代码
+          "10",                            // C 服务代码
+          p.ozon_posting_number,           // D 电商平台订单号
+          p.logistics_tracking || "",      // E 面单条形码
+          "",                              // F 产品图片 — 人工
+          "",                              // G 产品名称 — 非必填
+          String(totalQty),                // H 产品数量
+          "1688",                          // I 打包来源
+          "",                              // J 快递单号/SKUID — 人工
+          weight ? String(weight) : "",    // K 预估重量(kg)
+          "1688",                          // L 采购平台
+          p.id,                            // M 采购单号
+        ];
+
+        for (let c = 0; c < data.length; c++) {
+          const cell = XLSX.utils.encode_cell({ r: rowIdx, c });
+          ws[cell] = { t: "s", v: data[c] };
+        }
+        rowIdx++;
       }
 
-      const XLSX = await import("xlsx");
-      const wb = XLSX.utils.book_new();
-
-      const headers = ["注释", "仓库代码", "服务代码", "电商平台订单号", "面单条形码",
-        "产品图片地址", "产品名称", "产品数量", "打包来源",
-        "快递单号/SKUID", "预估重量(kg)", "采购平台", "采购单号"];
-      const keys = ["A","B","C","D","E","F","G","H","I","J","K","L","M"];
-      const wsData = XLSX.utils.json_to_sheet(rows, { header: keys });
-      // Replace key names with Chinese headers
-      for (let i = 0; i < headers.length; i++) {
-        const cell = XLSX.utils.encode_cell({ r: 0, c: i });
-        if (wsData[cell]) wsData[cell].v = headers[i];
-      }
-      XLSX.utils.book_append_sheet(wb, wsData, "基础信息");
-
-      // Sheet 2: 仓库信息 (reference)
-      const warehouseData = [["仓库名称", "仓库代码"]] as unknown[][];
-      const warehouses = [
-        ["1052东莞永泽仓", "1052"],
-      ];
-      for (const w of warehouses) warehouseData.push(w);
-      const wsWH = XLSX.utils.aoa_to_sheet(warehouseData);
-      XLSX.utils.book_append_sheet(wb, wsWH, "仓库信息");
-
-      // Sheet 3: 物流方式 (reference)
-      const logisticsData = [["物流方式", "物流代码"]] as unknown[][];
-      const methods = [
-        ["OZON UNI", "10"], ["OZON EUB", "15"], ["OZON FBP", "13"],
-        ["OZON CEL", "28"], ["CDEK", "55"], ["Boxberry", "59"],
-      ];
-      for (const m of methods) logisticsData.push(m);
-      const wsLG = XLSX.utils.aoa_to_sheet(logisticsData);
-      XLSX.utils.book_append_sheet(wb, wsLG, "物流方式");
-
-      // Sheet 4: 填写示例 (instructions)
-      const exampleData = [["必填字段说明", "填写内容", "备注"]] as unknown[][];
-      const examples = [
-        ["仓库代码", "123", "对应仓库信息sheet中的代码"],
-        ["物流代码", "10", "对应物流方式sheet中的代码(OZON UNI)"],
-        ["平台订单号", "Ozon posting number", "从采购单自动填入"],
-        ["运单号", "国际物流单号", "货代提供的追踪号"],
-        ["货物来源", "快递单号 或 库存", "1688发货选快递单号"],
-        ["采购平台", "1688", "默认1688"],
-      ];
-      for (const e of examples) exampleData.push(e);
-      const wsEx = XLSX.utils.aoa_to_sheet(exampleData);
-      XLSX.utils.book_append_sheet(wb, wsEx, "填写示例");
+      // Update sheet range
+      ws["!ref"] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: rowIdx - 1, c: 12 } });
 
       const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
-      const filename = `跨境巴士订单_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      const filename = `跨境巴士_${new Date().toISOString().slice(0, 10)}.xlsx`;
 
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", `attachment; filename=${encodeURIComponent(filename)}`);

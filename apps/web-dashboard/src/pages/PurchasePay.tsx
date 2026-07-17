@@ -48,6 +48,7 @@ export default function PurchasePay() {
   const [editModal, setEditModal] = useState<Record<string, unknown> | null>(null);
   const [payForm, setPayForm] = useState({ postingNumber: "", costCny: 0, sellingPriceRub: 0, ozonOrderId: 0 });
   const [editForm, setEditForm] = useState({ paymentStatus: "", paySerial: "", logisticsStatus: "", logisticsTracking: "", logisticsCarrier: "" });
+  const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
   if (isLoading) return <Spin size="large" style={{ display: "block", margin: "100px auto" }} />;
 
@@ -152,20 +153,27 @@ export default function PurchasePay() {
             title="采购支付列表"
             extra={
               <Space>
-                <Button icon={<ExportOutlined />} onClick={() => {
-                  const key = localStorage.getItem("onzo-api-key") || "";
-                  const url = `/api/logistics/export-kuajingbus`;
-                  fetch(url, { headers: { "X-API-Key": key } })
-                    .then(r => r.blob())
-                    .then(b => { const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = `跨境巴士_${new Date().toISOString().slice(0,10)}.xlsx`; a.click(); message.success("下载完成"); })
-                    .catch(() => message.error("下载失败"));
-                }}>导出跨境巴士</Button>
+                <Button icon={<ExportOutlined />} disabled={selectedRowKeys.length === 0}
+                  onClick={() => {
+                    const key = localStorage.getItem("onzo-api-key") || "";
+                    fetch("/api/logistics/export-kuajingbus", {
+                      method: "POST",
+                      headers: { "Content-Type": "application/json", "X-API-Key": key },
+                      body: JSON.stringify({ ids: selectedRowKeys }),
+                    })
+                      .then(r => { if (!r.ok) throw new Error("导出失败"); return r.blob(); })
+                      .then(b => { const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = `跨境巴士_${new Date().toISOString().slice(0,10)}.xlsx`; a.click(); message.success(`已导出 ${selectedRowKeys.length} 单`); })
+                      .catch((e) => message.error(e.message));
+                  }}>
+                  导出跨境巴士 ({selectedRowKeys.length})
+                </Button>
                 <Button icon={<ThunderboltOutlined />} onClick={() => setModalOpen(true)}>手动支付</Button>
                 <Button icon={<ReloadOutlined />} onClick={() => message.info("刷新中...")}>刷新</Button>
               </Space>
             }
           >
-            <Table dataSource={items.map((item, i) => ({ ...item, key: i }))} columns={columns} pagination={{ pageSize: 20 }} size="small" scroll={{ y: 500 }} />
+            <Table dataSource={items.map((item) => ({ ...item, key: item.id as string }))} columns={columns} pagination={{ pageSize: 20 }} size="small" scroll={{ y: 500 }}
+              rowSelection={{ selectedRowKeys, onChange: (keys) => setSelectedRowKeys(keys) }} />
           </Card>
         </Col>
       </Row>
