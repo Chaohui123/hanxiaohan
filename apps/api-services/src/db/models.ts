@@ -173,7 +173,11 @@ export async function getStoreConfigs(): Promise<StoreConfig[]> {
   const db = await getDb();
   if (!db) return [];
 
-  return db.all("SELECT * FROM store_configs WHERE active = 1") as Promise<StoreConfig[]>;
+  return db.all(
+    `SELECT store_id as "storeId", client_id as "clientId", api_key as "apiKey",
+            store_name as "storeName", proxy_url as "proxyUrl", active
+     FROM store_configs WHERE active = 1`
+  ) as Promise<StoreConfig[]>;
 }
 
 /** Alias for getStoreConfigs — explicit name for multi-store sync usage. */
