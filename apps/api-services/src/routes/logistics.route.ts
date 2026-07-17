@@ -413,42 +413,44 @@ export function createLogisticsRouter(ozonClient: OzonClient): Router {
       const weightMap = new Map<string, number>();
       for (const s of skuRows) weightMap.set(s.ozon_posting_number, s.weight_kg || 0.3);
 
-      // Build template rows — only B,C,D,E,H,I,J are required by 跨境巴士
-      // A=仓库代码 B=物流代码 C=平台订单号 D=运单号 E=产品图片地址
-      // F=产品名称 G=产品数量 H=货物来源 I=快递单号/SKUID J=预估重量
-      // K=采购平台 L=采购单号
+      // Template columns per 跨境巴士:
+      // A=注释 B=仓库代码 C=服务代码(物流方式) D=平台订单号 E=运单号
+      // F=产品图片地址 G=产品名称(颜色+规格) H=产品数量 I=货物来源
+      // J=快递单号/SKUID K=预估重量(kg) L=采购平台 M=采购单号
       const rows: Record<string, string>[] = [];
       for (const p of purchases) {
         const skus = JSON.parse(p.sku_list_json || "[]") as Array<{ sku: number; quantity: number; unitPriceCny: number }>;
-        const weight = weightMap.get(p.ozon_posting_number) || 0.5;
-
         if (skus.length === 0) continue;
+
         const totalQty = skus.reduce((s, sk) => s + sk.quantity, 0);
+        const weight = weightMap.get(p.ozon_posting_number) || "";
 
         rows.push({
-          "A": "123",
-          "B": "10",
-          "C": p.ozon_posting_number,
-          "D": p.logistics_tracking || "",
-          "E": "",
-          "F": "",
-          "G": String(totalQty),
-          "H": "快递单号",
-          "I": p.logistics_tracking || "",
-          "J": String(weight),
-          "K": "1688",
-          "L": p.id,
+          "A": "",                                    // 注释 — 人工填
+          "B": "123",                                 // 仓库代码 123=东莞常平国际仓
+          "C": "10",                                  // 服务代码 10=OZON UNI
+          "D": p.ozon_posting_number,                 // 平台订单号
+          "E": p.logistics_tracking || "",            // 运单号(国际)
+          "F": "",                                    // 产品图片 — 人工填
+          "G": "",                                    // 产品名称(颜色+规格) — 人工填
+          "H": String(totalQty),                      // 产品数量
+          "I": "快递单号",                            // 货物来源
+          "J": "",                                    // 快递单号(国内1688) — 人工填
+          "K": weight ? String(weight) : "",           // 预估重量
+          "L": "1688",                                // 采购平台
+          "M": p.id,                                  // 采购单号
         });
       }
 
-      // Write xlsx — use A-L column headers matching 跨境巴士 import format
       const XLSX = await import("xlsx");
       const wb = XLSX.utils.book_new();
 
-      const headers = ["仓库代码", "物流代码", "平台订单号", "运单号", "产品图片地址",
-        "产品名称", "产品数量", "货物来源", "快递单号/SKUID", "预估重量", "采购平台", "采购单号"];
-      const wsData = XLSX.utils.json_to_sheet(rows, { header: ["A","B","C","D","E","F","G","H","I","J","K","L"] });
-      // Rename headers from A,B,C... to actual Chinese names
+      const headers = ["注释", "仓库代码", "服务代码", "平台订单号", "运单号",
+        "产品图片地址", "产品名称(颜色+规格)", "产品数量", "货物来源",
+        "快递单号/SKUID", "预估重量(kg)", "采购平台", "采购单号"];
+      const keys = ["A","B","C","D","E","F","G","H","I","J","K","L","M"];
+      const wsData = XLSX.utils.json_to_sheet(rows, { header: keys });
+      // Replace key names with Chinese headers
       for (let i = 0; i < headers.length; i++) {
         const cell = XLSX.utils.encode_cell({ r: 0, c: i });
         if (wsData[cell]) wsData[cell].v = headers[i];
