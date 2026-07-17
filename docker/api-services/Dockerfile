@@ -56,9 +56,9 @@ RUN for pkg in logger shared-types ozon-api-wrapper ai scraper validator ozon-or
     done && \
     ./node_modules/.bin/tsc -p apps/api-services/tsconfig.json --noEmitOnError false 2>&1 | head -3 || true
 
-# Step 5: Fix package.json main fields (src/index.ts → dist/index.js)
+# Step 5: Fix package.json paths (src/ → dist/ for compiled JS)
 RUN for f in packages/*/package.json; do \
-      sed -i 's|"./src/index.ts"|"./dist/index.js"|' $f; \
+      sed -i 's|"./src/\(.*\)\.ts"|"./dist/\1.js"|g' $f; \
     done
 RUN cp -r packages/scraper/src/scripts packages/scraper/dist/scripts || true
 
