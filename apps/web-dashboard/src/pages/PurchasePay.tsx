@@ -152,6 +152,14 @@ export default function PurchasePay() {
             title="采购支付列表"
             extra={
               <Space>
+                <Button icon={<ExportOutlined />} onClick={() => {
+                  const key = localStorage.getItem("onzo-api-key") || "";
+                  const url = `/api/logistics/export-kuajingbus`;
+                  fetch(url, { headers: { "X-API-Key": key } })
+                    .then(r => r.blob())
+                    .then(b => { const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = `跨境巴士_${new Date().toISOString().slice(0,10)}.xlsx`; a.click(); message.success("下载完成"); })
+                    .catch(() => message.error("下载失败"));
+                }}>导出跨境巴士</Button>
                 <Button icon={<ThunderboltOutlined />} onClick={() => setModalOpen(true)}>手动支付</Button>
                 <Button icon={<ReloadOutlined />} onClick={() => message.info("刷新中...")}>刷新</Button>
               </Space>
