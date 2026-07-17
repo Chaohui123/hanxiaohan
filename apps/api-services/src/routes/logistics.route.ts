@@ -389,95 +389,43 @@ export function createLogisticsRouter(ozonClient: OzonClient): Router {
     try {
       const db = await getDb().catch(() => null);
       if (!db) return res.status(503).json({ success: false, error: { code: "DB_UNAVAILABLE" } });
-
       const { ids } = (req.body || {}) as { ids?: string[] };
-      if (!ids || ids.length === 0) {
-        return res.status(400).json({ success: false, error: { code: "MISSING", message: "请在请求中提供要导出的采购单ID列表 ids: [...]" } });
-      }
-
-      // Fetch selected purchases
-      const placeholders = ids.map(() => "?").join(",");
+      if (!ids || ids.length === 0) return res.status(400).json({ success: false, error: { code: "MISSING", message: "ids required" } });
+      const ph = ids.map(() => "?").join(",");
       const purchases = await db.all<Record<string, string>>(
-        `SELECT id, ozon_posting_number, logistics_tracking,
-                sku_list_json
-         FROM purchase_1688
-         WHERE id IN (${placeholders})
-         ORDER BY created_at DESC`,
-        ids
-      );
-
-      if (purchases.length === 0) {
-        return res.json({ success: true, data: { count: 0, message: "未找到指定的采购单" } });
-      }
-
-      // Get SKU weights
-      const skuRows = await db.all<{ ozon_posting_number: string; weight_kg: number }>(
-        `SELECT DISTINCT ozon_offer_id, weight_kg FROM sku_1688_mapping`
-      ).catch(() => []);
-      const weightMap = new Map<string, number>();
-      for (const s of skuRows) weightMap.set(s.ozon_posting_number, s.weight_kg || 0.3);
-
-      // Load original template — edit XML directly to preserve ALL formatting
-      const AdmZip = (await import("adm-zip")).default;
+        `SELECT id, ozon_posting_number, logistics_tracking, sku_list_json FROM purchase_1688 WHERE id IN (${ph}) ORDER BY created_at DESC`, ids);
+      if (purchases.length === 0) return res.json({ success: true, data: { count: 0 } });
+      // Load template via xlsx — add data to existing sheet, preserve all instruction rows
+      const XLSX = await import("xlsx");
       const { readFileSync } = await import("node:fs");
       const { join } = await import("node:path");
-      const templatePath = join(process.cwd(), "assets", "kuajingbus-template.xlsx");
-
-      const zip = new AdmZip(readFileSync(templatePath));
-      const sheetXml = zip.readAsText("xl/worksheets/sheet1.xml");
-
-      // Find "请在此行开始填写真实订单" — search for the row index
-      const markerMatch = sheetXml.match(/<row r="(\d+)"[^>]*>.*?请在此行开始填写真实订单.*?<\/row>/s);
-      let nextRow = 7; // fallback
-      if (markerMatch) {
-        nextRow = parseInt(markerMatch[1]) + 1;
+      const wb = XLSX.read(readFileSync(join(process.cwd(), "assets", "kuajingbus-template.xlsx")), { type: "buffer" });
+      const ws = wb.Sheets[wb.SheetNames[0]!];
+      const range = XLSX.utils.decode_range(ws["!ref"] || "A1");
+      let startRow = 7;
+      for (let r = 0; r <= range.e.r; r++) {
+        const c = ws[XLSX.utils.encode_cell({ r, c: 0 })];
+        if (c && c.v && String(c.v).includes("真实订单")) { startRow = r + 1; break; }
       }
-
-      // Build XML for new data rows (preserving template's column structure)
-      const rowXmls: string[] = [];
+      const skuRows = await db.all<{ ozon_posting_number: string; weight_kg: number }>(
+        `SELECT DISTINCT ozon_offer_id, weight_kg FROM sku_1688_mapping`).catch(() => []);
+      const wm = new Map<string, number>();
+      for (const s of skuRows) wm.set(s.ozon_posting_number, s.weight_kg || 0.3);
+      let ri = startRow;
       for (const p of purchases) {
-        const skus = JSON.parse(p.sku_list_json || "[]") as Array<{ sku: number; quantity: number; unitPriceCny: number }>;
+        const skus = JSON.parse(p.sku_list_json || "[]") as Array<{ sku: number; quantity: number }>;
         if (skus.length === 0) continue;
-        const totalQty = skus.reduce((s, sk) => s + sk.quantity, 0);
-        const weight = weightMap.get(p.ozon_posting_number) || "";
-
-        const vals = [
-          "",                              // A
-          "1052",                          // B
-          "10",                            // C
-          p.ozon_posting_number,           // D
-          p.logistics_tracking || "",      // E
-          "",                              // F
-          "",                              // G
-          String(totalQty),               // H
-          "1688",                          // I
-          "",                              // J
-          weight ? String(weight) : "",    // K
-          "1688",                          // L
-          p.id,                            // M
-        ];
-
-        // Build row XML: <row r="N"><c r="A7" t="inlineStr"><is><t>val</t></is></c>...</row>
-        let cellsXml = "";
-        for (let ci = 0; ci < vals.length; ci++) {
-          const col = String.fromCharCode(65 + ci); // A, B, C...
-          const ref = `${col}${nextRow}`;
-          const escaped = vals[ci].replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;").replace(/"/g, "&quot;");
-          cellsXml += `<c r="${ref}" t="inlineStr"><is><t>${escaped}</t></is></c>`;
-        }
-        rowXmls.push(`<row r="${nextRow}">${cellsXml}</row>`);
-        nextRow++;
+        const qty = skus.reduce((s, sk) => s + sk.quantity, 0);
+        const w = wm.get(p.ozon_posting_number) || "";
+        const vals = ["", "1052", "10", p.ozon_posting_number, p.logistics_tracking || "",
+          "", "", String(qty), "1688", "", w ? String(w) : "", "1688", p.id];
+        for (let ci = 0; ci < vals.length; ci++)
+          ws[XLSX.utils.encode_cell({ r: ri, c: ci })] = { t: "s", v: vals[ci] };
+        ri++;
       }
-
-      // Insert new rows before any existing data rows (after marker row)
-      const insertPos = sheetXml.lastIndexOf("</row>", sheetXml.indexOf(`r="${nextRow - rowXmls.length - 1}"`) + 10) + 6;
-      // Simpler: insert before </sheetData>
-      const newSheetXml = sheetXml.replace("</sheetData>", rowXmls.join("") + "</sheetData>");
-
-      zip.updateFile("xl/worksheets/sheet1.xml", Buffer.from(newSheetXml, "utf-8"));
-      const buf = zip.toBuffer();
+      ws["!ref"] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: ri - 1, c: 12 } });
+      const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
       const filename = `跨境巴士_${new Date().toISOString().slice(0, 10)}.xlsx`;
-
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", `attachment; filename=${encodeURIComponent(filename)}`);
       res.send(buf);

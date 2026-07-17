@@ -28,7 +28,6 @@
     "@opentelemetry/sdk-node": "^0.220.0",
     "@opentelemetry/sdk-trace-base": "^2.9.0",
     "@opentelemetry/semantic-conventions": "^1.41.1",
-    "adm-zip": "^0.6.0",
     "cors": "^2.8.6",
     "cos-nodejs-sdk-v5": "^2.15.4",
     "dotenv": "^17.0.0",
@@ -38,8 +37,7 @@
     "pgvector": "^0.2.0",
     "pino": "^10.0.0",
     "swagger-ui-express": "^5.0.1",
-    "xlsx": "^0.18.5",
-    "xlsx-populate": "^1.21.0"
+    "xlsx": "^0.18.5"
   },
   "devDependencies": {
     "@types/cors": "^2.8.19",
