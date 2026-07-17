@@ -384,47 +384,48 @@ export function createLogisticsRouter(ozonClient: OzonClient): Router {
     }
   });
 
-  /** POST /api/logistics/export-kuajingbus — export selected purchases to 跨境巴士 template */
+  /** POST /api/logistics/export-kuajingbus — export with openpyxl (preserves ALL template formatting) */
   router.post("/logistics/export-kuajingbus", async (req, res) => {
     try {
       const db = await getDb().catch(() => null);
       if (!db) return res.status(503).json({ success: false, error: { code: "DB_UNAVAILABLE" } });
       const { ids } = (req.body || {}) as { ids?: string[] };
       if (!ids || ids.length === 0) return res.status(400).json({ success: false, error: { code: "MISSING", message: "ids required" } });
+
       const ph = ids.map(() => "?").join(",");
       const purchases = await db.all<Record<string, string>>(
         `SELECT id, ozon_posting_number, logistics_tracking, sku_list_json FROM purchase_1688 WHERE id IN (${ph}) ORDER BY created_at DESC`, ids);
       if (purchases.length === 0) return res.json({ success: true, data: { count: 0 } });
-      // Load template via xlsx — add data to existing sheet, preserve all instruction rows
-      const XLSX = await import("xlsx");
-      const { readFileSync } = await import("node:fs");
-      const { join } = await import("node:path");
-      const wb = XLSX.read(readFileSync(join(process.cwd(), "assets", "kuajingbus-template.xlsx")), { type: "buffer" });
-      const ws = wb.Sheets[wb.SheetNames[0]!];
-      const range = XLSX.utils.decode_range(ws["!ref"] || "A1");
-      let startRow = 7;
-      for (let r = 0; r <= range.e.r; r++) {
-        const c = ws[XLSX.utils.encode_cell({ r, c: 0 })];
-        if (c && c.v && String(c.v).includes("真实订单")) { startRow = r + 1; break; }
-      }
+
       const skuRows = await db.all<{ ozon_posting_number: string; weight_kg: number }>(
         `SELECT DISTINCT ozon_offer_id, weight_kg FROM sku_1688_mapping`).catch(() => []);
       const wm = new Map<string, number>();
       for (const s of skuRows) wm.set(s.ozon_posting_number, s.weight_kg || 0.3);
-      let ri = startRow;
-      for (const p of purchases) {
+
+      // Build data payload for Python script
+      const orders = purchases.map(p => {
         const skus = JSON.parse(p.sku_list_json || "[]") as Array<{ sku: number; quantity: number }>;
-        if (skus.length === 0) continue;
-        const qty = skus.reduce((s, sk) => s + sk.quantity, 0);
-        const w = wm.get(p.ozon_posting_number) || "";
-        const vals = ["", "1052", "10", p.ozon_posting_number, p.logistics_tracking || "",
-          "", "", String(qty), "1688", "", w ? String(w) : "", "1688", p.id];
-        for (let ci = 0; ci < vals.length; ci++)
-          ws[XLSX.utils.encode_cell({ r: ri, c: ci })] = { t: "s", v: vals[ci] };
-        ri++;
-      }
-      ws["!ref"] = XLSX.utils.encode_range({ s: { r: 0, c: 0 }, e: { r: ri - 1, c: 12 } });
-      const buf = XLSX.write(wb, { type: "buffer", bookType: "xlsx" }) as Buffer;
+        return {
+          id: p.id,
+          posting: p.ozon_posting_number,
+          tracking: p.logistics_tracking || "",
+          qty: skus.reduce((s, sk) => s + sk.quantity, 0),
+          weight: wm.get(p.ozon_posting_number) || "",
+        };
+      });
+
+      // Call Python openpyxl script — preserves 100% of template formatting
+      const { execFile } = await import("node:child_process");
+      const { join } = await import("node:path");
+      const pyPath = join(process.cwd(), "apps", "api-services", "dist", "services", "kuajingbus-export.py");
+      const child = execFile("python3", [pyPath], { maxBuffer: 50 * 1024 * 1024, encoding: null });
+      child.stdin!.end(JSON.stringify(orders));
+      const chunks: Buffer[] = [];
+      child.stdout!.on("data", (c: Buffer) => chunks.push(c));
+      const exitCode = await new Promise<number>((resolve) => child.on("close", resolve));
+      if (exitCode !== 0) throw new Error("Python export script failed");
+
+      const buf = Buffer.concat(chunks);
       const filename = `跨境巴士_${new Date().toISOString().slice(0, 10)}.xlsx`;
       res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
       res.setHeader("Content-Disposition", `attachment; filename=${encodeURIComponent(filename)}`);
