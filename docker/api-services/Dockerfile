@@ -92,7 +92,8 @@ COPY --from=builder /app/pnpm-workspace.yaml ./
 
 # Runtime directories (all persisted via Docker volumes)
 RUN mkdir -p /app/data/backups /app/data/browser /app/logs \
-             /app/uploads /app/dead-letter /app/data/tmp-images
+             /app/uploads /app/dead-letter /app/data/tmp-images \
+             /app/data/images
 
 # Startup symlink repair script (fixes pnpm workspace links after Docker COPY)
 COPY scripts/fix-symlinks.sh /app/scripts/fix-symlinks.sh

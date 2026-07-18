@@ -84,7 +84,58 @@ for pkg in logger shared-types cache; do
   fi
 done
 
-# ---- 5. Final validation ----
+# ---- 5. Model & connectivity checks ----
+echo "[fix-symlinks] Checking LLM connectivity..."
+
+# DeepSeek check
+if [ -n "$DEEPSEEK_API_KEY" ]; then
+  DS_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 \
+    -X POST https://api.deepseek.com/v1/chat/completions \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $DEEPSEEK_API_KEY" \
+    -d '{"model":"deepseek-v4-pro","messages":[{"role":"user","content":"ping"}],"max_tokens":1}' 2>/dev/null || echo "000")
+  if [ "$DS_STATUS" = "200" ]; then
+    echo "  ✅ DeepSeek (deepseek-v4-pro): connected"
+  else
+    echo "  ⚠️ DeepSeek: HTTP $DS_STATUS — check DEEPSEEK_API_KEY"
+  fi
+else
+  echo "  ⚠️ DEEPSEEK_API_KEY not set"
+fi
+
+# GLM check
+if [ -n "$GLM_API_KEY" ]; then
+  GLM_STATUS=$(curl -s -o /dev/null -w "%{http_code}" --connect-timeout 5 \
+    -X POST "${GLM_BASE_URL:-https://open.bigmodel.cn/api/paas/v4}/chat/completions" \
+    -H "Content-Type: application/json" \
+    -H "Authorization: Bearer $GLM_API_KEY" \
+    -d '{"model":"glm-4.6v-flash","messages":[{"role":"user","content":"ping"}],"max_tokens":1}' 2>/dev/null || echo "000")
+  if [ "$GLM_STATUS" = "200" ]; then
+    echo "  ✅ GLM Vision (glm-4.6v-flash): connected"
+  else
+    echo "  ⚠️ GLM Vision: HTTP $GLM_STATUS"
+  fi
+else
+  echo "  ⚠️ GLM_API_KEY not set — image optimization disabled"
+fi
+
+# Model name validation
+LLM_MODEL="${LLM_MODEL_ID:-deepseek-v4-pro}"
+if [ "$LLM_MODEL" != "deepseek-v4-pro" ]; then
+  echo "  ❌ LLM_MODEL_ID is '$LLM_MODEL' — MUST be 'deepseek-v4-pro'"
+  exit 1
+fi
+echo "  ✅ LLM_MODEL_ID: $LLM_MODEL"
+
+# Image directory permissions
+mkdir -p /app/data/images /app/data/tmp-images 2>/dev/null
+if [ -w /app/data/images ] && [ -w /app/data/tmp-images ]; then
+  echo "  ✅ Image directories: writable"
+else
+  echo "  ❌ Image directories: NOT writable — check volume mounts"
+fi
+
+# ---- 6. Final validation ----
 echo "[fix-symlinks] Running Node.js import test..."
 node -e "
 const fs = require('fs');
