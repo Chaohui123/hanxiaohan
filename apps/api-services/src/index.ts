@@ -571,6 +571,10 @@ mountApi("", createLangGraphRouter());
 const { createPipelineRouter } = await import("./routes/pipeline.route.js");
 mountApi("", createPipelineRouter());
 
+// Market Analysis Routes (7-module Ozon market intelligence)
+const { createMarketRouter } = await import("./routes/market.route.js");
+mountApi("", createMarketRouter());
+
 // ---- Request Metrics (path-normalized to prevent Prometheus cardinality explosion) ----
 
 /** Replace dynamic path segments with :param placeholders to bound metric cardinality. */
