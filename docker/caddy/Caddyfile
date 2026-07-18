@@ -28,10 +28,6 @@
 				dial_timeout 10s
 				response_header_timeout 120s
 			}
-			@backend_down status 502 503
-			handle_response @backend_down {
-				respond "Service temporarily unavailable — please retry" 503
-			}
 		}
 	}
 
