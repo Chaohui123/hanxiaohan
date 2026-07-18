@@ -72,9 +72,12 @@ WORKDIR /app
 
 ENV NODE_ENV=production
 
-# Playwright Chromium system deps + runtime utilities
+# Alpine Chromium (musl native, no glibc compat issues) + Playwright system deps + runtime utils
+# NOTE: Do NOT use "npx playwright install chromium" — it downloads glibc binaries
+# Alpine apk provides chromium that matches musl libc
 RUN apk add --no-cache \
     wget postgresql-client ca-certificates \
+    chromium \
     nss nspr dbus-libs at-spi2-core cups-libs libdrm mesa-gbm \
     libxcb libx11 libxcomposite libxdamage libxext libxfixes \
     libxrandr pango cairo alsa-lib gtk+3.0 \
@@ -86,9 +89,6 @@ COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/apps ./apps
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/pnpm-workspace.yaml ./
-
-# Install Playwright Chromium for 1688 scraper
-RUN cd /app && npx playwright install chromium 2>&1 || echo "Playwright install skipped"
 
 # Runtime directories (all persisted via Docker volumes)
 RUN mkdir -p /app/data/backups /app/data/browser /app/logs \

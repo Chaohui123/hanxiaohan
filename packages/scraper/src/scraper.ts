@@ -433,9 +433,17 @@ export class ProductScraper {
     // Get proxy from pool if not explicitly configured
     const proxy = this.config.proxy || this.proxyManager.getProxy() || undefined;
 
+    // Alpine Chromium: use system binary, not Playwright's glibc download
+    const execPath = process.env.CHROMIUM_PATH || "/usr/bin/chromium-browser";
     this.browser = await chrome.launch({
       headless: this.config.headless,
+      executablePath: execPath,
       proxy: proxy as { server: string } | undefined,
+      args: [
+        "--no-sandbox",
+        "--disable-setuid-sandbox",
+        "--disable-dev-shm-usage",
+      ],
     });
 
     this.context = await this.browser.newContext(createStealthConfig());
