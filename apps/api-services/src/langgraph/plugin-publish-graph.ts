@@ -9,6 +9,7 @@ import { optimizeProductImages } from "../client/glm-vision-client.js";
 import { deepseekComplete } from "./client/deepseek-client.js";
 import { getDb } from "../db/connection.js";
 import { resolveCategory } from "../services/category-resolver.js";
+import { resolveModelName } from "../services/model-name.js";
 
 const State = Annotation.Root({
   // Input from plugin
@@ -128,6 +129,13 @@ async function publishNode(s: typeof State.State): Promise<Partial<typeof State.
   try {
     const cat = await resolveCategory(s.title.slice(0, 20)) || { id: 17028929, name: "Наушники и гарнитуры", parentId: 0, level: 1, path: [], typeId: 504866264 };
 
+    // Resolve model name (Ozon mandatory attribute 9048)
+    const { modelName } = await resolveModelName({
+      title: s.title,
+      specs: s.specs || [],
+      category: cat.name,
+    });
+
     const body = {
       items: [{
         offer_id: `PLUG-${Date.now().toString(36)}`,
@@ -141,6 +149,7 @@ async function publishNode(s: typeof State.State): Promise<Partial<typeof State.
         dimension_unit: "mm",
         weight_unit: "g",
         type_id: cat.typeId,
+        attributes: [{ id: 9048, values: [{ value: modelName }] }],
         images: (s.imageUrls || []).slice(0, 10),
       }],
     };
