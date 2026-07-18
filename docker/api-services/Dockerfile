@@ -71,10 +71,13 @@ RUN sed -i 's|dl-cdn.alpinelinux.org|mirrors.aliyun.com|g' /etc/apk/repositories
 WORKDIR /app
 
 ENV NODE_ENV=production
-ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
-# Minimal runtime deps: wget for healthcheck, pg_dump for backup, CA certs for HTTPS
-RUN apk add --no-cache wget postgresql-client ca-certificates \
+# Playwright Chromium system deps + runtime utilities
+RUN apk add --no-cache \
+    wget postgresql-client ca-certificates \
+    nss nspr dbus-libs at-spi2-core cups-libs libdrm mesa-gbm \
+    libxcb libx11 libxcomposite libxdamage libxext libxfixes \
+    libxrandr pango cairo alsa-lib gtk+3.0 \
     && rm -rf /var/cache/apk/*
 
 # Full COPY of node_modules + built packages (no pnpm deploy — guaranteed completeness)
@@ -83,6 +86,9 @@ COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/apps ./apps
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/pnpm-workspace.yaml ./
+
+# Install Playwright Chromium for 1688 scraper
+RUN cd /app && npx playwright install chromium 2>&1 || echo "Playwright install skipped"
 
 # Runtime directories (all persisted via Docker volumes)
 RUN mkdir -p /app/data/backups /app/data/browser /app/logs \
