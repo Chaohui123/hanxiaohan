@@ -32,7 +32,14 @@ export interface ProcessedImage {
  */
 export async function downloadImage(url: string): Promise<string | null> {
   try {
-    const resp = await fetch(url, { signal: AbortSignal.timeout(30_000) });
+    const resp = await fetch(url, {
+      signal: AbortSignal.timeout(30_000),
+      headers: {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36",
+        "Referer": "https://detail.1688.com/",
+        "Accept": "image/avif,image/webp,image/*",
+      },
+    });
     if (!resp.ok) return null;
 
     const ext = url.match(/\.(jpg|jpeg|png|webp)/i)?.[0] || ".jpg";

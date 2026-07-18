@@ -1,5 +1,5 @@
 // ============================================================
-// Image Upload Route — receive local files, optimize, store
+// Image Upload Route — native stream, no multer dependency
 // POST /api/image/upload — multipart file upload
 // ============================================================
 
@@ -8,62 +8,88 @@ import { logger } from "@onzo/logger";
 import { mkdirSync, existsSync, createWriteStream } from "node:fs";
 import { join, extname } from "node:path";
 import { randomUUID } from "node:crypto";
-import { pipeline } from "node:stream/promises";
-import multer from "multer";
 
 const IMG_DIR = process.env.IMAGE_STORAGE_PATH || "./data/images";
 if (!existsSync(IMG_DIR)) mkdirSync(IMG_DIR, { recursive: true });
 
-const upload = multer({
-  storage: multer.diskStorage({
-    destination: IMG_DIR,
-    filename: (_req, file, cb) => {
-      const ext = extname(file.originalname) || ".jpg";
-      cb(null, `${randomUUID()}${ext}`);
-    },
-  }),
-  limits: { fileSize: 20 * 1024 * 1024, files: 15 }, // 20MB per file, 15 max
-  fileFilter: (_req, file, cb) => {
-    const allowed = /\.(jpg|jpeg|png|webp|gif)$/i;
-    cb(null, allowed.test(file.originalname));
-  },
-});
+const MAX_FILES = 15;
+const MAX_SIZE = 20 * 1024 * 1024;
 
 export function createImageUploadRouter(): Router {
   const router = Router();
 
-  // POST /api/image/upload — batch upload images
-  router.post("/image/upload", upload.array("images", 15), async (req, res) => {
+  router.post("/image/upload", async (req, res) => {
     try {
-      const files = req.files as Express.Multer.File[];
-      if (!files || files.length === 0) {
-        return res.status(400).json({ success: false, error: { code: "NO_FILES", message: "No image files provided" } });
+      const contentType = req.headers["content-type"] || "";
+      if (!contentType.includes("multipart/form-data")) {
+        return res.status(400).json({ success: false, error: { code: "BAD_FORMAT", message: "Use multipart/form-data" } });
       }
 
-      const results: Array<{ originalName: string; savedAs: string; url: string; optimized: boolean }> = [];
+      const boundary = contentType.match(/boundary=(.+)/)?.[1];
+      if (!boundary) return res.status(400).json({ success: false, error: { code: "NO_BOUNDARY" } });
 
-      for (const file of files) {
-        const optimized = await optimizeFile(file.path);
-        const finalPath = optimized || file.path;
-        const filename = finalPath.split(/[/\\]/).pop() || file.filename;
+      const chunks: Buffer[] = [];
+      for await (const chunk of req) chunks.push(Buffer.from(chunk as Buffer));
+      const raw = Buffer.concat(chunks);
 
-        results.push({
-          originalName: file.originalname,
-          savedAs: filename,
-          url: `https://huashangshangmao.top/images/${filename}`,
-          optimized: !!optimized,
-        });
+      // Parse multipart: find image files
+      const results: Array<{ originalName: string; savedAs: string; url: string }> = [];
+      const parts = raw.toString("binary").split("--" + boundary);
+
+      for (const part of parts) {
+        if (!part.includes("Content-Disposition") || !part.includes("filename=")) continue;
+
+        const nameMatch = part.match(/filename="([^"]+)"/);
+        const originalName = nameMatch?.[1] || "image.jpg";
+
+        // Find binary data after \r\n\r\n
+        const headerEnd = part.indexOf("\r\n\r\n");
+        if (headerEnd < 0) continue;
+        const dataStart = headerEnd + 4;
+        let dataEnd = part.lastIndexOf("\r\n--");
+        if (dataEnd < 0) dataEnd = part.lastIndexOf("\r\n");
+        if (dataEnd < dataStart) continue;
+
+        const imageData = Buffer.from(part.slice(dataStart, dataEnd), "binary");
+        if (imageData.length > MAX_SIZE || imageData.length < 1000) continue;
+
+        const ext = extname(originalName).toLowerCase();
+        if (![".jpg", ".jpeg", ".png", ".webp", ".gif"].includes(ext)) continue;
+
+        const filename = `${randomUUID()}${ext}`;
+        const filepath = join(IMG_DIR, filename);
+        createWriteStream(filepath).end(imageData);
+
+        // Optimize: 3:4 crop
+        try {
+          const sharp = (await import("sharp")).default;
+          const optPath = filepath.replace(/\.\w+$/, "_opt.jpg");
+          await sharp(filepath).resize(900, 1200, { fit: "cover", position: "center" })
+            .jpeg({ quality: 90, progressive: true }).toFile(optPath);
+          results.push({
+            originalName,
+            savedAs: optPath.split(/[/\\]/).pop() || filename,
+            url: `https://huashangshangmao.top/images/${optPath.split(/[/\\]/).pop()}`,
+          });
+        } catch {
+          results.push({
+            originalName,
+            savedAs: filename,
+            url: `https://huashangshangmao.top/images/${filename}`,
+          });
+        }
+
+        if (results.length >= MAX_FILES) break;
+      }
+
+      if (results.length === 0) {
+        return res.status(400).json({ success: false, error: { code: "NO_IMAGES", message: "No valid images found" } });
       }
 
       logger.info({ count: results.length }, "Image upload complete");
-
       res.json({
         success: true,
-        data: {
-          uploaded: results.length,
-          images: results,
-          urls: results.map(r => r.url),
-        },
+        data: { uploaded: results.length, images: results, urls: results.map(r => r.url) },
         correlationId: req.correlationId,
       });
     } catch (err) {
@@ -72,18 +98,4 @@ export function createImageUploadRouter(): Router {
   });
 
   return router;
-}
-
-async function optimizeFile(filepath: string): Promise<string | null> {
-  try {
-    const sharp = (await import("sharp")).default;
-    const outPath = filepath.replace(/\.\w+$/, "_opt.jpg");
-    await sharp(filepath)
-      .resize(900, 1200, { fit: "cover", position: "center" })
-      .jpeg({ quality: 90, progressive: true })
-      .toFile(outPath);
-    return outPath;
-  } catch {
-    return null; // sharp not available — use original
-  }
 }
