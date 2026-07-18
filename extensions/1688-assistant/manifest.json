@@ -1,0 +1,29 @@
+{
+  "manifest_version": 3,
+  "name": "ONZO 1688采购助手",
+  "version": "1.0.0",
+  "description": "一键采集1688商品数据，同步至ONZO ERP，参与大盘选品、成本拆解、Ozon自动上架",
+  "permissions": ["storage", "activeTab"],
+  "host_permissions": [
+    "https://detail.1688.com/*",
+    "https://*.1688.com/*",
+    "https://huashangshangmao.top/*"
+  ],
+  "action": {
+    "default_popup": "popup.html",
+    "default_title": "ONZO 1688采购助手"
+  },
+  "content_scripts": [{
+    "matches": ["https://detail.1688.com/offer/*.html*"],
+    "js": ["content.js"],
+    "run_at": "document_idle"
+  }],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  }
+}

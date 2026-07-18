@@ -154,9 +154,15 @@ const tmpImgDir = "./data/tmp-images";
 if (!existsSync(tmpImgDir)) mkdirSync(tmpImgDir, { recursive: true });
 app.use("/tmp-images", express.static(tmpImgDir, { maxAge: 300_000 }));
 
+// Webhook: mounted at /api directly (without mountApi deprecation middleware)
+// Must be before other mountApi calls to avoid deprecation headers on Ozon requests
+app.use("/api", createWebhookRouter());
+
 mountApi("", createStatsRouter());
 mountApi("", createBackupRouter());
-mountApi("", createWebhookRouter());
+// Webhook: mounted directly (no mountApi) to avoid deprecation headers interfering with Ozon
+app.use("/api", createWebhookRouter());
+app.use("/api/v1", createWebhookRouter());
 mountApi("", createPriceRouter());
 mountApi("", createStoreRouter());
 mountApi("", createStoreAdminRouter());
@@ -572,9 +578,22 @@ mountApi("", createPipelineRouter());
 const { createMarketRouter } = await import("./routes/market.route.js");
 mountApi("", createMarketRouter());
 
+// Direct listing — AI translate + Ozon API (no scraper)
+const { createDirectListRouter } = await import("./routes/direct-list.route.js");
+mountApi("", createDirectListRouter());
+
+// 1688 Plugin data receiver
+const { createPluginRouter } = await import("./routes/plugin.route.js");
+mountApi("", createPluginRouter());
+
+// Product Selection Lists (毛子ERP风格选品榜单)
+const { createSelectionRouter } = await import("./routes/selection.route.js");
+mountApi("", createSelectionRouter());
+
 // Ozon Profit Calculator
-const { createProfitCalcRouter } = await import("./routes/profit-calc.route.js");
-mountApi("", createProfitCalcRouter());
+// Disabled: profit-calc.route.ts not in Docker image yet
+// const { createProfitCalcRouter } = await import("./routes/profit-calc.route.js");
+// mountApi("", createProfitCalcRouter());
 
 // Task scheduler routes
 const { createTaskTriggerRouter } = await import("./routes/task.route.js");

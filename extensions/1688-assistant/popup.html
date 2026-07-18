@@ -1,0 +1,41 @@
+<!DOCTYPE html>
+<html>
+<head><meta charset="utf-8"><title>ONZO 采购助手</title>
+<style>
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { width:320px; font:13px/1.5 sans-serif; background:#0f1117; color:#e1e4ed; padding:16px; }
+  h2 { font-size:15px; margin-bottom:12px; }
+  label { display:block; font-size:11px; color:#8890a4; margin:8px 0 4px; }
+  input { width:100%; padding:8px; border:1px solid #2a2d3a; border-radius:6px; background:#1a1d28; color:#e1e4ed; font-size:12px; }
+  button { width:100%; margin:10px 0; padding:10px; border:none; border-radius:8px; cursor:pointer; font-size:12px; font-weight:600; }
+  .btn-primary { background:#3b82f6; color:#fff; }
+  .btn-sm { background:#374151; color:#e1e4ed; font-size:11px; padding:6px; }
+  .status { font-size:11px; color:#8890a4; margin-top:8px; }
+  .link { color:#3b82f6; cursor:pointer; font-size:11px; text-decoration:underline; }
+  hr { border-color:#2a2d3a; margin:12px 0; }
+</style>
+</head>
+<body>
+<h2>📦 ONZO 1688采购助手</h2>
+<label>API密钥</label>
+<input type="password" id="apiKey" placeholder="输入ONZO API Key...">
+
+<button class="btn-primary" id="saveKey">💾 保存密钥</button>
+<button class="btn-sm" id="openDashboard">📊 打开运营大盘</button>
+<button class="btn-sm" id="downloadCrx">📥 下载插件安装包</button>
+
+<div class="status" id="status"></div>
+
+<hr>
+<div style="font-size:11px;color:#8890a4">
+  <strong>使用方式:</strong><br>
+  1. 输入API密钥并保存<br>
+  2. 打开任意1688商品详情页<br>
+  3. 右下角弹出面板操作<br>
+  <br>
+  <a class="link" href="https://huashangshangmao.top" target="_blank">访问 ONZO 管理后台 →</a>
+</div>
+
+<script src="popup.js"></script>
+</body>
+</html>
