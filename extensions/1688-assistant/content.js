@@ -180,23 +180,25 @@
   }
 
   async function autoList(product) {
-    setStatus("⏳ 上架中...");
+    setStatus("⏳ GLM优化图片 + 上架中...");
     try {
       const apiKey = await getApiKey();
-      const resp = await fetch(`${API_BASE}/api/direct-list`, {
+      // Full pipeline: GLM image optimization → DeepSeek → Ozon
+      const resp = await fetch(`${API_BASE}/api/product/plugin-select-publish`, {
         method: "POST",
         headers: { "Content-Type": "application/json", "X-API-Key": apiKey },
         body: JSON.stringify({
-          titleCn: product.title,
+          title: product.title,
           sourceUrl: product.sourceUrl,
           priceCny: product.price?.min || 0,
           weightG: 500,
-          ozonPriceRub: Math.round((product.price?.min || 50) * 80),
+          imageUrls: product.images || [],
+          specs: product.specs || [],
         }),
       });
       const data = await resp.json();
       if (data.success) {
-        setStatus(`🚀 已上架! productId: ${data.data?.productId || "OK"}`);
+        setStatus(`🚀 已上架! GLM优化✅ | 评分${data.data?.score || "?"}分 | 利润率${data.data?.marginPercent || "?"}%`);
         window.open(`https://seller.ozon.ru/app/products`, "_blank");
       } else {
         setStatus(`❌ ${data.error?.message || "上架失败"}`);

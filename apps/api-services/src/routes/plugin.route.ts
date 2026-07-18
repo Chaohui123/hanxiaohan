@@ -85,6 +85,70 @@ export function createPluginRouter(): Router {
     }
   });
 
+  // POST /api/product/plugin-select-publish — full pipeline: GLM image opt → DeepSeek → Ozon
+  router.post("/product/plugin-select-publish", async (req, res) => {
+    try {
+      const input = req.body as {
+        title?: string; sourceUrl?: string; priceCny?: number;
+        weightG?: number; imageUrls?: string[];
+        specs?: Array<{ name: string; value: string }>;
+      };
+      if (!input.title) {
+        return res.status(400).json({ success: false, error: { code: "MISSING", message: "title required" } });
+      }
+
+      const { executePluginPublish } = await import("../langgraph/plugin-publish-graph.js");
+      const result = await executePluginPublish({
+        title: input.title, sourceUrl: input.sourceUrl || "",
+        priceCny: input.priceCny || 50, weightG: input.weightG || 500,
+        imageUrls: input.imageUrls || [], specs: input.specs || [],
+      });
+
+      res.json({
+        success: result.published,
+        data: {
+          published: result.published,
+          productId: result.productId || null,
+          taskId: result.taskId || null,
+          score: result.score,
+          titleRu: result.titleRu?.slice(0, 80),
+          marginPercent: result.marginPercent,
+          imageProcessFailed: result.imageProcessFailed,
+          imageFailReason: result.imageFailReason,
+          steps: result.steps,
+        },
+        correlationId: req.correlationId,
+      });
+    } catch (err) {
+      res.status(500).json({ success: false, error: { code: "PLUGIN_PUBLISH_ERROR", message: (err as Error).message }, correlationId: req.correlationId });
+    }
+  });
+
+  // GET /api/image/list/:productId — view original/optimized images
+  router.get("/image/list/:productId", async (req, res) => {
+    try {
+      const db = await getDb().catch(() => null);
+      const rows = db ? await db.all<{ id: string; images_json: string; title: string }>(
+        "SELECT id, images_json, title FROM plugin_products WHERE id = ? OR source_url LIKE ? LIMIT 1",
+        [req.params.productId, `%${req.params.productId}%`],
+      ) : [];
+      if (rows.length === 0) return res.status(404).json({ success: false, error: { code: "NOT_FOUND" } });
+
+      const r = rows[0]!;
+      res.json({
+        success: true,
+        data: {
+          id: r.id,
+          title: r.title,
+          images: JSON.parse(r.images_json || "[]") as string[],
+        },
+        correlationId: req.correlationId,
+      });
+    } catch (err) {
+      res.status(500).json({ success: false, error: { code: "IMAGE_ERROR", message: (err as Error).message } });
+    }
+  });
+
   // GET /api/crawl/plugin-list — list collected products
   router.get("/crawl/plugin-list", async (req, res) => {
     try {
