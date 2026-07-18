@@ -19,31 +19,45 @@ type HealthChecks = Record<string, HealthDetail | Record<string, HealthDetail>>;
 export function createHealthRouter(ozonClient?: OzonClient): Router {
   const router = Router();
 
-  // GET /health — liveness (lightweight: process + fast DB ping, for Docker healthcheck)
+  // GET / — root health, returns plain text OK (for third-party tools scanning domain root)
+  router.get("/", (_req, res) => {
+    res.setHeader("Content-Type", "text/plain; charset=utf-8");
+    res.send("OK");
+  });
+
+  // GET /health — standardized health check (returns 200 always, degraded status on failures)
   router.get("/health", async (_req, res) => {
-    // Fast DB ping — fail open (2s timeout) to avoid cascading restarts
+    try {
+      const { getFullHealth } = await import("../utils/health-check.js");
+      const result = await getFullHealth();
+      res.setHeader("Access-Control-Allow-Origin", "*");
+      res.json(result);
+    } catch {
+      // Always return 200 — even on error
+      res.json({
+        code: 0,
+        status: "degraded",
+        llmModel: process.env.LLM_MODEL_ID || "deepseek-v4-pro",
+        opsAgentRunning: false,
+        promoAgentRunning: false,
+        crawlAvailable: false,
+        dbConnected: false,
+        timestamp: new Date().toISOString(),
+      });
+    }
+  });
+
+  // Legacy health (for Docker healthcheck — lightweight, no external deps)
+  router.get("/health/light", async (_req, res) => {
     let dbOk = true;
     try {
       const db = await Promise.race([
         getDb(),
         new Promise<null>((_, reject) => setTimeout(() => reject(new Error("timeout")), 2_000)),
       ]);
-      if (db) {
-        await Promise.race([
-          db.all("SELECT 1"),
-          new Promise<[]>((_, reject) => setTimeout(() => reject(new Error("timeout")), 1_000)),
-        ]);
-      }
-    } catch {
-      dbOk = false; // degraded but not dead — don't restart container for DB issues
-    }
-
-    res.json({
-      status: "ok",
-      uptime: process.uptime(),
-      timestamp: new Date().toISOString(),
-      dbConnected: dbOk,
-    });
+      if (db) await Promise.race([db.all("SELECT 1"), new Promise<[]>((_, reject) => setTimeout(() => reject(new Error("timeout")), 1_000))]);
+    } catch { dbOk = false; }
+    res.json({ status: "ok", uptime: process.uptime(), timestamp: new Date().toISOString(), dbConnected: dbOk });
   });
 
   // GET /ready/pipeline — deep pipeline health (all external deps)

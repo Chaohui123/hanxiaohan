@@ -28,7 +28,10 @@ const API_KEYS: Set<string> = new Set(
 if (API_KEY) API_KEYS.add(API_KEY);
 
 const PUBLIC_PATHS = [
+  "/",
   "/health",
+  "/health/light",
+  "/api/health",
   "/ready",
   "/ready/pipeline",
   "/api/webhook/ozon",

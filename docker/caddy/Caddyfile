@@ -1,24 +1,22 @@
 # ============================================================
-# ONZO Caddy Reverse Proxy — Automatic HTTPS via Let's Encrypt
-# Domain: set CADDY_DOMAIN in .env.production
+# ONZO Caddy Reverse Proxy — HTTPS + SPA + CORS + Monitor
 # ============================================================
 
 {$CADDY_DOMAIN:localhost} {
-	# ---- Feishu Bot Callback (receives messages & button clicks) ----
-	handle /feishu/* {
-		reverse_proxy ops-agent:8181 {
-			header_up X-Forwarded-For {remote_host}
-		}
+	# ---- CORS: allow third-party health checks ----
+	@cors_preflight method OPTIONS
+	handle @cors_preflight {
+		header Access-Control-Allow-Origin "*"
+		header Access-Control-Allow-Methods "GET, POST, OPTIONS"
+		header Access-Control-Allow-Headers "Content-Type, X-API-Key, Authorization"
+		respond 204
 	}
 
-	# ---- Ozon Webhook Receiver (must be public, no auth) ----
-	# Ozon pushes order status changes to this endpoint.
-	# Registered via: npx tsx scripts/setup-webhook.ts
-	handle /api/webhook/ozon {
+	# ---- Root + Health (public, no auth, returns 200 to all) ----
+	handle /health {
 		reverse_proxy api-services:3000 {
-			# Forward original client IP for IP whitelist validation
 			header_up X-Forwarded-For {remote_host}
-			header_up X-Real-IP {remote_host}
+			transport http { dial_timeout 5s }
 		}
 	}
 
@@ -26,29 +24,47 @@
 	handle /api/* {
 		reverse_proxy api-services:3000 {
 			header_up X-Forwarded-For {remote_host}
+			transport http {
+				dial_timeout 10s
+				response_header_timeout 120s
+			}
+			@backend_down status 502 503
+			handle_response @backend_down {
+				respond "Service temporarily unavailable — please retry" 503
+			}
 		}
 	}
 
-	# ---- Health Check (no auth required) ----
-	handle /health {
-		reverse_proxy api-services:3000
+	# ---- Feishu Bot Callback ----
+	handle /feishu/* {
+		reverse_proxy ops-agent:8181 {
+			header_up X-Forwarded-For {remote_host}
+			transport http { dial_timeout 5s }
+		}
 	}
 
-	# ---- Metrics Endpoint ----
-	handle /metrics {
-		reverse_proxy api-services:3000
+	# ---- Ozon Webhook ----
+	handle /api/webhook/ozon {
+		reverse_proxy api-services:3000 {
+			header_up X-Forwarded-For {remote_host}
+			header_up X-Real-IP {remote_host}
+			transport http { dial_timeout 10s }
+		}
 	}
 
-	# ---- Web Dashboard (React SPA) ----
-	# Static assets (JS/CSS/images) have content-hash filenames → immutable cache
+	# ---- Static Assets (immutable, content-hash filenames) ----
 	handle /assets/* {
 		header Cache-Control "public, max-age=31536000, immutable"
 		reverse_proxy web-dashboard:80
 	}
-	# HTML entry point + all other SPA routes → no-cache
+
+	# ---- Web Dashboard SPA (all other routes) ----
 	handle {
 		header Cache-Control "no-cache"
-		reverse_proxy web-dashboard:80
+		reverse_proxy web-dashboard:80 {
+			header_up X-Forwarded-For {remote_host}
+			transport http { dial_timeout 5s }
+		}
 	}
 
 	# ---- Security Headers ----
@@ -57,11 +73,9 @@
 		X-Frame-Options "DENY"
 		Referrer-Policy "strict-origin-when-cross-origin"
 		Strict-Transport-Security "max-age=31536000; includeSubDomains"
-		# Disable FLoC / Topics API
-		Permissions-Policy "interest-cohort=()"
 	}
 
-	# ---- Access Log (JSON format, rotated) ----
+	# ---- Access Log ----
 	log {
 		output file /data/caddy/access.log {
 			roll_size 10mb
