@@ -3,6 +3,7 @@ import { FeishuBot } from "@onzo/feishu-bot";
 import type { FeishuConfig } from "@onzo/feishu-bot";
 import { registerCommands } from "./commands.js";
 import { startPatrol, stopPatrol } from "./patrol.js";
+import { startReviewServer } from "./review-server.js";
 import { logger } from "@onzo/logger";
 import type { ApiConfig } from "./api-client.js";
 
@@ -48,6 +49,9 @@ bot.start().then(() => {
   logger.fatal({ err }, "Failed to start Feishu Bot");
   process.exit(1);
 });
+
+// Start review HTTP server for pipeline approval
+startReviewServer();
 
 // ---- Graceful shutdown ----
 function shutdown(signal: string) {

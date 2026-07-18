@@ -28,6 +28,7 @@ import {
   stepFillAttributes,
   stepDownloadAndUploadImages,
   stepCreateDraft,
+  stepOpsReview,
   buildProcessedProduct,
   recordPipelineFailure,
   recordPipelineSuccess,
@@ -236,6 +237,16 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
       }
 
       // Step 7: Create draft with image IDs (Ozon CDN)
+      // Ops-agent review before publishing to Ozon
+      const review = await stepOpsReview(ctx, processed);
+      if (!review.approved) {
+        logger.warn({ taskId: ctx.taskId, reason: review.reason }, "Ops-agent rejected listing");
+        return;
+      }
+      if (review.riskLevel === "high") {
+        logger.warn({ taskId: ctx.taskId, suggestions: review.suggestions }, "Ops-agent high risk — proceeding with caution");
+      }
+
       const draftResult = await stepCreateDraft(ctx, ozonClient, processed);
 
       // Success
@@ -366,6 +377,16 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
           correlationId: ctx.correlationId,
         });
         return;
+      }
+
+      // Ops-agent review before publishing to Ozon
+      const review = await stepOpsReview(ctx, processed);
+      if (!review.approved) {
+        logger.warn({ taskId: ctx.taskId, reason: review.reason }, "Ops-agent rejected listing");
+        return;
+      }
+      if (review.riskLevel === "high") {
+        logger.warn({ taskId: ctx.taskId, suggestions: review.suggestions }, "Ops-agent high risk — proceeding with caution");
       }
 
       const draftResult = await stepCreateDraft(ctx, ozonClient, processed);
@@ -511,6 +532,16 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
           correlationId: req.correlationId,
         });
         return;
+      }
+
+      // Ops-agent review before publishing to Ozon
+      const review = await stepOpsReview(ctx, processed);
+      if (!review.approved) {
+        logger.warn({ taskId: ctx.taskId, reason: review.reason }, "Ops-agent rejected listing");
+        return;
+      }
+      if (review.riskLevel === "high") {
+        logger.warn({ taskId: ctx.taskId, suggestions: review.suggestions }, "Ops-agent high risk — proceeding with caution");
       }
 
       const draftResult = await stepCreateDraft(ctx, ozonClient, processed);

@@ -350,6 +350,59 @@ export async function stepUploadImages(
   }
 }
 
+// ---- Step: Ops Review — send to ops-agent for automated safety/compliance judgment ----
+
+export interface OpsReviewResult {
+  approved: boolean;
+  reason?: string;
+  riskLevel: "low" | "medium" | "high";
+  suggestions: string[];
+}
+
+/**
+ * Call ops-agent for automated review before publishing to Ozon.
+ * Ops-agent checks: category compliance, price sanity, image count, restricted keywords.
+ */
+export async function stepOpsReview(
+  ctx: PipelineContext,
+  processed: ProcessedProduct,
+): Promise<OpsReviewResult> {
+  try {
+    const opsApiBase = process.env.OPS_AGENT_API || "http://ops-agent:8181";
+    const resp = await fetch(`${opsApiBase}/api/review/listing`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        taskId: ctx.taskId,
+        sourceUrl: ctx.sourceUrl,
+        titleRu: processed.titleRu,
+        descriptionRu: processed.descriptionRu,
+        categoryId: processed.categoryId,
+        categoryName: ctx.category?.categoryName || "",
+        priceRub: processed.priceRub,
+        imageCount: ctx.imageIds?.length ?? 0,
+        specifications: processed.specificationsRu || [],
+        weightKg: processed.weightKg,
+      }),
+      signal: AbortSignal.timeout(15_000),
+    });
+
+    if (!resp.ok) {
+      logger.warn({ taskId: ctx.taskId, status: resp.status },
+        "Ops-agent review unavailable — allowing listing");
+      return { approved: true, riskLevel: "low", suggestions: [] };
+    }
+
+    const result = (await resp.json()) as OpsReviewResult;
+    logger.info({ taskId: ctx.taskId, ...result }, "Ops-agent review result");
+    return result;
+  } catch {
+    // Ops-agent unreachable — allow listing (fail open)
+    logger.info({ taskId: ctx.taskId }, "Ops-agent unreachable — auto-approving");
+    return { approved: true, riskLevel: "low", suggestions: [] };
+  }
+}
+
 export async function stepCreateDraft(
   ctx: PipelineContext,
   ozonClient: OzonClient,

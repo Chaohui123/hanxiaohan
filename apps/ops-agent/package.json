@@ -14,10 +14,12 @@
     "vitest": "^2.0.0"
   },
   "dependencies": {
+    "@onzo/embedding": "workspace:*",
+    "@onzo/feishu-bot": "workspace:*",
     "@onzo/logger": "workspace:*",
     "@onzo/shared-types": "workspace:*",
-    "@onzo/feishu-bot": "workspace:*",
-    "@onzo/embedding": "workspace:*",
-    "dotenv": "^17.0.0"
+    "@types/express": "^4.17.25",
+    "dotenv": "^17.0.0",
+    "express": "^4.22.2"
   }
 }
