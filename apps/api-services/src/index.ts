@@ -594,6 +594,14 @@ mountApi("", createPluginRouter());
 const { createImageUploadRouter } = await import("./routes/image-upload.route.js");
 mountApi("", createImageUploadRouter());
 
+// Material routes (plugin download progress + WebSocket)
+const { createMaterialRouter } = await import("./routes/material.route.js");
+mountApi("", createMaterialRouter());
+
+// WebSocket relay (requires ws package in Docker image — deferred to next build)
+// const { startWsRelay } = await import("./services/ws-relay.js");
+// startWsRelay(server);
+
 // Product Selection Lists (毛子ERP风格选品榜单)
 const { createSelectionRouter } = await import("./routes/selection.route.js");
 mountApi("", createSelectionRouter());
