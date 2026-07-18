@@ -99,6 +99,14 @@ export function createWebhookRouter(): Router {
       return;
     }
 
+    // Ozon registration test ping: no body/payload → always return 200
+    // Ozon sends a minimal POST when registering the webhook URL
+    const rawJson = rawBody.length > 0 ? (() => { try { return JSON.parse(rawBody); } catch { return null; } })() : null;
+    if (!rawJson || Object.keys(rawJson).length === 0) {
+      res.json({ success: true, message: "Webhook endpoint active", correlationId: req.correlationId });
+      return;
+    }
+
     // Reject requests without signature in production — prevents forged webhooks
     if (ENFORCE_WEBHOOK_SIGNATURE && !signature) {
       logger.warn({ clientIp, correlationId: req.correlationId }, "Webhook rejected — missing X-Ozon-Signature header");

@@ -2,11 +2,30 @@
 # ONZO Caddy Reverse Proxy — HTTPS + SPA + CORS
 # ============================================================
 
+# HTTP-only server: handles health checks + webhook without HTTPS redirect
+http://{$CADDY_DOMAIN:localhost} {
+	handle /health {
+		reverse_proxy api-services:3000
+	}
+	handle /api/webhook/ozon {
+		reverse_proxy api-services:3000
+	}
+	# Everything else → redirect to HTTPS
+	handle {
+		redir https://{host}{uri} 308
+	}
+}
+
 {$CADDY_DOMAIN:localhost} {
 	# CORS headers for third-party health checks
 	header Access-Control-Allow-Origin *
 	header Access-Control-Allow-Methods "GET, POST, OPTIONS"
 	header Access-Control-Allow-Headers "Content-Type, X-API-Key, Authorization"
+
+	# Webhook — must return 200 to Ozon registration test (HTTP+HTTPS)
+	handle /api/webhook/ozon {
+		reverse_proxy api-services:3000
+	}
 
 	# Root + Health (public, no auth)
 	handle /health {
