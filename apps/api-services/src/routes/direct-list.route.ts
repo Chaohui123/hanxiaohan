@@ -20,6 +20,7 @@ interface DirectListingInput {
   weightG: number;
   ozonPriceRub: number;
   features?: string;
+  imageUrls?: string[];
 }
 
 export function createDirectListRouter(): Router {
@@ -82,6 +83,10 @@ export function createDirectListRouter(): Router {
       (body.items as Array<Record<string, unknown>>)[0]!["attributes"] = [
         { id: 9048, values: [{ value: modelName }] },
       ];
+      // Add images if provided (Ozon accepts direct URLs)
+      if (input.imageUrls && input.imageUrls.length > 0) {
+        (body.items as Array<Record<string, unknown>>)[0]!["images"] = input.imageUrls.slice(0, 10);
+      }
 
       const ozonResp = await fetch(`${OZON_API}/v3/product/import`, {
         method: "POST",
