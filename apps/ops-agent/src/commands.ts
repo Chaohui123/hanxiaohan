@@ -26,6 +26,12 @@ const HELP_TEXT = [
   "tasks / 任务 — 任务队列",
   "pipeline / 管线 — 外部依赖检查",
   "",
+  "📦 上架命令：",
+  "select <关键词> / 选品 — 自动搜索1688并上架",
+  "listing <1688链接> — 提交1688商品上架",
+  "listing status <任务ID> — 查询上架进度",
+  "listing recent — 最近上架记录",
+  "",
   "⚠️ 执行命令（需确认）：",
   "backup / 备份 — 手动触发备份",
   "sync / 同步 — 手动触发订单同步",
@@ -35,6 +41,8 @@ const HELP_TEXT = [
   "",
   "help / 帮助 — 显示此消息",
 ].join("\n");
+
+const LISTING_URL_RE = /^https?:\/\/(?:detail\.)?1688\.com\b/;
 
 export function registerCommands(bot: FeishuBot, config: ApiConfig): void {
   // ---- Pending confirmations ----
@@ -68,6 +76,20 @@ export function registerCommands(bot: FeishuBot, config: ApiConfig): void {
 
     // Match command keyword
     const cmd = ctx.text.toLowerCase().replace(/^[@\s]+/, "").trim();
+
+    // 自动选品（关键词 → 搜索1688 → 自动上架）
+    if (cmd.startsWith("select") || cmd.startsWith("选品")) {
+      const keyword = ctx.text.split(/\s+/).slice(1).join(" ");
+      await handleAutoSelect(bot, ctx.chatId, config, keyword);
+      return;
+    }
+
+    // 上架命令（支持子命令 + URL）
+    if (cmd.startsWith("listing") || cmd.startsWith("上架")) {
+      const listingArgs = ctx.text.split(/\s+/).slice(1);
+      await handleListing(bot, ctx.chatId, config, listingArgs);
+      return;
+    }
 
     switch (cmd) {
       case "help":
@@ -354,6 +376,176 @@ async function handleTasks(
     );
   } catch (err) {
     await bot.sendMessage(chatId, `❌ 查询失败: ${(err as Error).message}`);
+  }
+}
+
+async function handleListing(
+  bot: FeishuBot,
+  chatId: string,
+  config: ApiConfig,
+  args: string[],
+): Promise<void> {
+  const sub = args[0]?.toLowerCase();
+
+  // listing status <taskId>
+  if (sub === "status") {
+    const taskId = args[1];
+    if (!taskId) {
+      await bot.sendMessage(chatId, "⚠️ 用法: listing status <任务ID>");
+      return;
+    }
+    try {
+      const data = await apiClient.taskProgress(config, taskId);
+      const status = (data as { status?: string; error_message?: string; progress?: number }).status || "unknown";
+      const error = (data as { error_message?: string }).error_message || "";
+      const progress = (data as { progress?: number }).progress;
+      const lines = [
+        `📦 上架进度 — ${taskId}`,
+        `状态: ${status}`,
+        progress != null ? `进度: ${progress}%` : "",
+        error ? `错误: ${error}` : "",
+      ].filter(Boolean);
+      await bot.sendMessage(chatId, lines.join("\n"));
+    } catch (err) {
+      await bot.sendMessage(chatId, `❌ 查询失败: ${(err as Error).message}`);
+    }
+    return;
+  }
+
+  // listing recent
+  if (sub === "recent") {
+    try {
+      const data = await apiClient.recentListings(config, 5);
+      const items = (data as { items?: Array<{ sourceUrl: string; status: string; title?: string; taskId?: string }> }).items || [];
+      if (items.length === 0) {
+        await bot.sendMessage(chatId, "📦 暂无上架记录");
+        return;
+      }
+      const lines = ["📦 最近上架", ""];
+      for (const item of items) {
+        const emoji = item.status === "done" ? "✅"
+          : item.status === "failed" ? "❌"
+          : item.status === "processing" ? "⏳"
+          : "📌";
+        const title = (item.title || item.sourceUrl || "").slice(0, 40);
+        lines.push(`${emoji} ${title}\n   ${item.status} | ${item.taskId || ""}`);
+      }
+      await bot.sendMessage(chatId, lines.join("\n"));
+    } catch (err) {
+      await bot.sendMessage(chatId, `❌ 查询失败: ${(err as Error).message}`);
+    }
+    return;
+  }
+
+  // listing <1688-url> — submit
+  const url = args[0];
+  if (!url || !LISTING_URL_RE.test(url)) {
+    await bot.sendMessage(chatId, [
+      "📦 上架命令",
+      "",
+      "用法:",
+      "  listing <1688商品链接> — 提交上架",
+      "  listing status <任务ID> — 查询进度",
+      "  listing recent — 最近上架记录",
+      "",
+      "示例: listing https://detail.1688.com/offer/xxx.html",
+    ].join("\n"));
+    return;
+  }
+
+  try {
+    const data = await apiClient.submitListing(config, url);
+    const taskId = (data as { taskId?: string; id?: string }).taskId || (data as { id?: string }).id || "unknown";
+    await bot.sendMessage(chatId, [
+      `📦 已提交上架任务`,
+      ``,
+      `🔗 ${url.slice(0, 80)}...`,
+      `🆔 任务ID: \`${taskId}\``,
+      ``,
+      `查询进度: listing status ${taskId}`,
+    ].join("\n"));
+  } catch (err) {
+    await bot.sendMessage(chatId, `❌ 提交失败: ${(err as Error).message}`);
+  }
+}
+
+// ---- Auto Select: 关键词 → DeepSeek 搜索1688 → 自动上架全流程 ----
+
+async function handleAutoSelect(
+  bot: FeishuBot,
+  chatId: string,
+  config: ApiConfig,
+  keyword: string,
+): Promise<void> {
+  if (!keyword || keyword.length < 2) {
+    await bot.sendMessage(chatId, "⚠️ 用法: 选品 <关键词>\n\n示例: 选品 蓝牙耳机");
+    return;
+  }
+
+  try {
+    await bot.sendMessage(chatId, `🔍 正在搜索1688: "${keyword}"...`);
+
+    // Step 1: Use DeepSeek to find best 1688 product
+    const searchQuery = `在1688上搜索"${keyword}"，列出3个最热销的商品链接（完整 https://detail.1688.com/offer/... 格式），并给出推荐理由。`;
+
+    const deepseekResp = await fetch("https://api.deepseek.com/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY || ""}`,
+      },
+      body: JSON.stringify({
+        model: "deepseek-v4-pro",
+        messages: [
+          { role: "system", content: "你是一个1688选品助手。返回格式: 第1行商品链接，第2行推荐理由。商品链接必须是真实存在的1688链接。" },
+          { role: "user", content: searchQuery },
+        ],
+        temperature: 0.3,
+        max_tokens: 500,
+      }),
+      signal: AbortSignal.timeout(30_000),
+    });
+
+    const llm = await deepseekResp.json() as { choices?: Array<{ message?: { content?: string } }> };
+    const content = llm.choices?.[0]?.message?.content || "";
+
+    // Extract URL from LLM response
+    const urlMatch = content.match(/https:\/\/detail\.1688\.com\/offer\/[^\s"'<>\]]+/);
+    if (!urlMatch) {
+      await bot.sendMessage(chatId, `❌ 未找到1688商品链接\n\nDeepSeek回复:\n${content.slice(0, 300)}`);
+      return;
+    }
+
+    const productUrl = urlMatch[0];
+    const reason = content.replace(productUrl, "").replace(/^\s*\n+/, "").slice(0, 100);
+
+    await bot.sendMessage(chatId, `✅ 找到商品: ${productUrl}\n📝 ${reason}`);
+
+    // Step 2: Submit for full pipeline (analysis → listing → ads → orders)
+    const resp = await fetch(`${config.apiBase}/api/product/launch`, {
+      method: "POST",
+      headers: { "X-API-Key": config.apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ sourceUrl: productUrl, storeId: "store_1" }),
+      signal: AbortSignal.timeout(15_000),
+    });
+    const launch = await resp.json() as { success?: boolean; data?: { taskId?: string } };
+
+    if (launch.success) {
+      await bot.sendMessage(chatId, [
+        `🚀 全流程已启动！`,
+        ``,
+        `🔗 ${productUrl}`,
+        `🆔 ${launch.data?.taskId || "unknown"}`,
+        ``,
+        `流程: 选品分析 → Ozon上架 → 推广投放 → 订单同步 → 利润核算`,
+      ].join("\n"));
+    } else {
+      await bot.sendMessage(chatId, `⚠️ 全流程启动失败，仅提交上架\n\n正在提交备用上架...`);
+      await apiClient.submitListing(config, productUrl);
+      await bot.sendMessage(chatId, `✅ 已通过备用通道提交上架: ${productUrl}`);
+    }
+  } catch (err) {
+    await bot.sendMessage(chatId, `❌ 自动选品失败: ${(err as Error).message}`);
   }
 }
 
