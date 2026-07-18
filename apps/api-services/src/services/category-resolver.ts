@@ -90,28 +90,41 @@ export async function refreshCategoryTree(): Promise<number> {
   const data = await resp.json() as { result?: Array<{ description_category_id: number; category_name: string; children?: unknown[] }> };
   const tree = data.result || [];
 
-  db.exec("DROP TABLE IF EXISTS ozon_categories");
-  db.exec(`CREATE TABLE ozon_categories (id INTEGER PRIMARY KEY, name TEXT, parent_id INTEGER, level INTEGER, leaf INTEGER)`);
-
-  // Use raw SQLite for batch insert (faster)
+  // Use raw SQLite for full tree import
   const Database = (await import("better-sqlite3")).default;
   const sqlite = new Database("./data/onzo.db");
+  sqlite.exec("DROP TABLE IF EXISTS ozon_categories");
+  sqlite.exec("CREATE TABLE ozon_categories (id INTEGER PRIMARY KEY, name TEXT, parent_id INTEGER, level INTEGER, leaf INTEGER)");
   const insert = sqlite.prepare("INSERT OR REPLACE INTO ozon_categories(id,name,parent_id,level,leaf) VALUES(?,?,?,?,?)");
 
+  let totalCount = 0;
   function walk(nodes: Array<Record<string, unknown>>, parent: number, level: number) {
     for (const n of nodes) {
       const children = n.children as Array<Record<string, unknown>> | undefined;
-      const leaf = children && (children as Array<unknown>).length > 0 ? 0 : 1;
-      insert.run(n.description_category_id as number, n.category_name as string, parent, level, leaf);
-      if (!leaf && children) walk(children, n.description_category_id as number, level + 1);
+      // Category nodes with description_category_id
+      if (n.description_category_id) {
+        const catChildren = children || [];
+        const leaf = catChildren.length === 0 ? 1 : 0;
+        insert.run(n.description_category_id as number, (n.category_name || n.type_name) as string, parent, level, leaf);
+        totalCount++;
+        // Walk category children
+        for (const child of catChildren) {
+          if ((child as Record<string, unknown>).description_category_id) {
+            walk([child as Record<string, unknown>], n.description_category_id as number, level + 1);
+          } else if ((child as Record<string, unknown>).type_id) {
+            // Leaf type node under category
+            insert.run((child as Record<string, unknown>).type_id as number, (child as Record<string, unknown>).type_name as string, n.description_category_id as number, level + 1, 1);
+            totalCount++;
+          }
+        }
+      }
     }
   }
 
   walk(tree as Array<Record<string, unknown>>, 0, 0);
   sqlite.close();
-  _db = null; // Reset cached DB
+  _db = null;
 
-  const count = tree.length;
-  logger.info({ count }, "Category tree refreshed");
-  return count;
+  logger.info({ totalCount }, "Category tree fully refreshed");
+  return totalCount;
 }
