@@ -10,7 +10,7 @@
 import express from "express";
 import { logger } from "@onzo/logger";
 
-const PORT = parseInt(process.env.OPS_REVIEW_PORT || "8181", 10);
+const PORT = parseInt(process.env.OPS_REVIEW_PORT || "8183", 10);
 
 const app: express.Express = express();
 app.use(express.json());
