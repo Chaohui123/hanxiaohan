@@ -130,10 +130,32 @@ export async function generateCopy(
     logger.warn({ err }, "RAG copy search failed, continuing without context");
   }
 
+  // 2.6 RAG 合规知识库检索 — 注入Ozon规则上下文
+  let ragCompliance = "";
+  try {
+    const compResp = await fetch(`${config.apiBase}/api/rag/playbook/search`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", "X-API-Key": config.apiKey },
+      body: JSON.stringify({ query: `${name} ${product.category || ""}`, scenario: "compliance", topK: 3 }),
+      signal: AbortSignal.timeout(10_000),
+    });
+    if (compResp.ok) {
+      const compData = await compResp.json() as { results?: Array<{ title?: string; content?: string }> };
+      if (compData.results?.length) {
+        ragCompliance = compData.results
+          .map((r) => `[合规规则-${r.title || ""}]: ${(r.content || "").slice(0, 300)}`)
+          .join("\n");
+      }
+    }
+  } catch { /* non-blocking */ }
+
   // 3. 构建 prompt
-  const systemPrompt = ragContext
-    ? `你是一个俄罗斯电商文案专家。\n\n以下是同类商品的优秀文案参考：\n${ragContext}\n\n请参考以上文案的风格和结构，但不要直接复制。`
-    : COPY_SYSTEM_PROMPT;
+  const complianceNote = ragCompliance
+    ? `\n\n⚠️ Ozon平台合规规则（必须遵守）：\n${ragCompliance}\n\n请确保生成的文案不违反以上规则。`
+    : "";
+  const systemPrompt = (ragContext
+    ? `你是一个俄罗斯电商文案专家。\n\n以下是同类商品的优秀文案参考：\n${ragContext}\n\n请参考以上文案的风格和结构，但不要直接复制。${complianceNote}`
+    : COPY_SYSTEM_PROMPT + complianceNote);
 
   const userPrompt = [
     "请为以下商品生成俄语文案：",

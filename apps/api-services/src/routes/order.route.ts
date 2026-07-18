@@ -122,7 +122,7 @@ export function createOrderRouter(ozonClient: OzonClient): Router {
     }
   });
 
-  // GET /api/orders — list locally synced orders
+  // GET /api/orders — list locally synced orders (supports ?status= & ?days=)
   router.get("/orders", async (req, res) => {
     try {
       const db = await getDb();
@@ -131,13 +131,26 @@ export function createOrderRouter(ozonClient: OzonClient): Router {
         return;
       }
       const status = req.query.status as string | undefined;
-      const sql = status
-        ? "SELECT * FROM local_orders WHERE status = ? ORDER BY created_at DESC LIMIT 100"
-        : "SELECT * FROM local_orders ORDER BY created_at DESC LIMIT 100";
-      const params = status ? [status] : [];
+      const days = parseInt(req.query.days as string || "0", 10);
+
+      let sql = "SELECT * FROM local_orders";
+      const conditions: string[] = [];
+      const params: (string | number)[] = [];
+
+      if (status) { conditions.push("status = ?"); params.push(status); }
+      if (days > 0) { conditions.push("created_at >= datetime('now', ?)"); params.push(`-${days} days`); }
+
+      if (conditions.length > 0) sql += " WHERE " + conditions.join(" AND ");
+      sql += " ORDER BY created_at DESC LIMIT 100";
 
       const rows = await db.all(sql, params);
-      res.json({ success: true, data: rows, correlationId: req.correlationId });
+      const formatted = rows.map((r: Record<string, unknown>) => ({
+        ...r,
+        createdAt: r.created_at,
+        total: r.total_price_rub,
+        price: r.total_price_rub,
+      }));
+      res.json({ success: true, data: formatted, correlationId: req.correlationId });
     } catch (err) {
       res.status(500).json({
         success: false,

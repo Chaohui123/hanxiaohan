@@ -254,8 +254,8 @@ async function reportNode(
 
 function shouldAutoList(
   state: typeof AutoSelectState.State,
-): "auto_list" | "report" {
-  return state.validationPassed && state.scored.length > 0 ? "auto_list" : "report";
+): "auto_list" | "gen_report" {
+  return state.validationPassed && state.scored.length > 0 ? "auto_list" : "gen_report";
 }
 
 // ---- Build graph ----
@@ -267,7 +267,7 @@ function buildAutoSelectGraph() {
     .addNode("cross_validate", crossValidateNode)
     .addNode("auto_list", autoListNode)
     .addNode("auto_promo", autoPromoNode)
-    .addNode("report", reportNode)
+    .addNode("gen_report", reportNode)
 
     .addEdge("__start__", "ops_search")
     .addEdge("ops_search", "promo_score")
@@ -275,12 +275,12 @@ function buildAutoSelectGraph() {
 
     .addConditionalEdges("cross_validate", shouldAutoList, {
       auto_list: "auto_list",
-      report: "report",
+      gen_report: "gen_report",
     })
 
     .addEdge("auto_list", "auto_promo")
-    .addEdge("auto_promo", "report")
-    .addEdge("report", END)
+    .addEdge("auto_promo", "gen_report")
+    .addEdge("gen_report", END)
 
     .compile();
 }

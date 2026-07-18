@@ -149,6 +149,17 @@ export function createStoreRouter(): Router {
     });
   });
 
+  // GET /api/stores/fx — current CNY→RUB exchange rate
+  router.get("/stores/fx", async (_req, res) => {
+    try {
+      const { getExchangeRate } = await import("../services/exchange-rate.js");
+      const rr = await getExchangeRate();
+      res.json({ rate: rr.rate, cached: rr.cached, source: rr.source, reliable: rr.reliable });
+    } catch (err) {
+      res.status(500).json({ rate: 11.5, cached: false, source: "fallback", reliable: false });
+    }
+  });
+
   return router;
 }
 

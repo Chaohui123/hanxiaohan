@@ -5,7 +5,7 @@ import { triggerMarketPoll, triggerPriceAdjust, taskLogs } from "../task/schedul
 export function createTaskTriggerRouter(): Router {
   const router = Router();
 
-  router.post("/task/run-market", async (_req, res) => {
+  router.post("/run-market", async (_req, res) => {
     try {
       const log = await triggerMarketPoll();
       res.json({ success: true, data: log, correlationId: _req.correlationId });
@@ -14,7 +14,7 @@ export function createTaskTriggerRouter(): Router {
     }
   });
 
-  router.post("/task/run-price", async (_req, res) => {
+  router.post("/run-price", async (_req, res) => {
     try {
       const log = await triggerPriceAdjust();
       res.json({ success: true, data: log, correlationId: _req.correlationId });
@@ -23,7 +23,7 @@ export function createTaskTriggerRouter(): Router {
     }
   });
 
-  router.get("/task/logs", (_req, res) => {
+  router.get("/logs", (_req, res) => {
     res.json({ success: true, data: taskLogs.slice(0, 20), correlationId: _req.correlationId });
   });
 

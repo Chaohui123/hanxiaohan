@@ -9,7 +9,6 @@ import { accessLogMiddleware } from "./middleware/access-log.js";
 import { errorHandler } from "./middleware/error-handler.js";
 import { createLogger } from "./middleware/logger.js";
 import { createHealthRouter } from "./routes/health.route.js";
-import { createTaskRouter } from "./routes/task.route.js";
 import { createProcessRouter } from "./routes/process.route.js";
 import { createStatsRouter } from "./routes/stats.route.js";
 import { createBackupRouter, startAutoBackup, stopAutoBackup } from "./routes/backup.route.js";
@@ -458,8 +457,6 @@ taskQueue.registerHandler("webhook_retry", async (task) => {
     throw err;
   }
 });
-
-app.use("/api/task", createTaskRouter(taskQueue));
 mountApi("", createProcessRouter(config, taskQueue));
 
 const { OzonClient, AuthManager } = await import("@onzo/ozon-api-wrapper");

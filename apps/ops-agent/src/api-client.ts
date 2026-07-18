@@ -40,4 +40,13 @@ export const apiClient = {
   reconcile: (c: ApiConfig, dateFrom: string, dateTo: string) =>
     api<Record<string, unknown>>(c, "POST", "/api/orders/reconcile", { dateFrom, dateTo }),
   pipelineHealth: (c: ApiConfig) => api<Record<string, unknown>>(c, "GET", "/ready/pipeline"),
+  /** 提交1688链接上架 */
+  submitListing: (c: ApiConfig, sourceUrl: string) =>
+    api<Record<string, unknown>>(c, "POST", "/api/process", { sourceUrl, storeId: "store_1" }),
+  /** 查询上架进度 */
+  taskProgress: (c: ApiConfig, taskId: string) =>
+    api<Record<string, unknown>>(c, "GET", `/api/task/${taskId}`),
+  /** 查询最近上架记录 */
+  recentListings: (c: ApiConfig, limit = 5) =>
+    api<Record<string, unknown>>(c, "GET", `/api/process/recent?limit=${limit}`),
 };

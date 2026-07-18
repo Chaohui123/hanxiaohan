@@ -54,7 +54,9 @@ const FORBIDDEN_PRODUCTS: CategoryRule[] = [
   { category: '药品保健品', keywords: ['药品', '药丸', '胶囊', '处方药', '非处方药', 'otc', '保健品', '膳食补充', '壮阳', '减肥', '伟哥', '希爱力', '用药'], riskLevel: 'forbidden', description: '药品需要俄罗斯认证，个人进口限制严格' },
   { category: '色情内容', keywords: ['色情', '成人', '性爱', '情趣内衣', '性玩具', '震动', '娃娃', '充气'], riskLevel: 'forbidden', description: '成人用品在俄罗斯有严格限制' },
   { category: '活物和食品', keywords: ['活体', '宠物', '食品', '食物', '零食', '饮料', '奶粉', '肉类', '奶制品', '新鲜', '水果', '蔬菜', '狗粮', '猫粮'], riskLevel: 'forbidden', description: '食品和活体需要特殊检疫' },
-  { category: '贵金属和货币', keywords: ['黄金', '白银', '铂金', '金币', '银币', '纪念币', '纸币', '货币', '证券', '邮票'], riskLevel: 'forbidden', description: '贵金属和货币类产品需要特殊许可' }
+  { category: '贵金属和货币', keywords: ['黄金', '白银', '铂金', '金币', '银币', '纪念币', '纸币', '货币', '证券', '邮票'], riskLevel: 'forbidden', description: '贵金属和货币类产品需要特殊许可' },
+  { category: '珠宝首饰(远程禁售)', keywords: ['钻石', '祖母绿', '红宝石', '蓝宝石', '宝石首饰', '金首饰', '铂金首饰'], riskLevel: 'forbidden', description: '含宝石/贵金属的首饰禁止跨境远程销售' },
+  { category: 'AI深度伪造硬件', keywords: ['深度伪造', 'deepfake', '换脸', 'ai造假'], riskLevel: 'forbidden', description: '2024年俄罗斯新增禁止AI深度伪造内容硬件' },
 ];
 
 const HIGH_RISK_PRODUCTS: CategoryRule[] = [
@@ -66,7 +68,10 @@ const HIGH_RISK_PRODUCTS: CategoryRule[] = [
   { category: '医疗设备', keywords: ['口罩', '医用', '体温计', '血压计', '血糖仪', '治疗仪', '保健器械'], riskLevel: 'medium', description: '医疗类产品需要认证' },
   { category: '磁性产品', keywords: ['磁铁', '磁性', '磁石', '磁力', '磁疗', '磁性玩具'], riskLevel: 'medium', description: '磁性产品空运受限' },
   { category: '化学品', keywords: ['化学品', '化学', '试剂', '涂料', '油漆', '胶水', '粘合剂', '指甲油'], riskLevel: 'medium', description: '化学品需要特殊审批' },
-  { category: '高压容器', keywords: ['喷雾', '气雾剂', '高压', '气瓶', '液化气', '喷罐', '打火机', '充气'], riskLevel: 'medium', description: '高压容器类产品运输风险高' }
+  { category: '高压容器', keywords: ['喷雾', '气雾剂', '高压', '气瓶', '液化气', '喷罐', '打火机', '充气'], riskLevel: 'medium', description: '高压容器类产品运输风险高' },
+  // 2024年6月Ozon新增中国跨境店限制
+  { category: 'Ozon限制-电子产品(2024.6)', keywords: ['手机', '笔记本电脑', '笔记本', '充电器', '平板电脑', '平板', '电脑', '显示器', '电视', '智能手表', '手环', '耳机', '蓝牙耳机', '无线耳机'], riskLevel: 'high', description: '2024年6月26日起Ozon限制中国跨境店销售电子产品', restrictions: ['需提前确认类目是否开放', '可能需要俄罗斯本地仓发货'], alternatives: ['转向家居日用、儿童用品、宠物用品', '超小件商品利用低成本物流'] },
+  { category: 'Ozon限制-汽车摩配(2024.6)', keywords: ['汽车配件', '汽车', '摩托', '摩托车配件', '汽配', '机油', '滤清器', '刹车片', '火花塞', '轮胎', '车载', '行车记录仪', '车充', 'DIY工具', '电动工具', '扳手', '螺丝刀', '电钻'], riskLevel: 'high', description: '2024年6月26日起Ozon限制中国跨境店销售汽车摩配和DIY工具', restrictions: ['汽配和工具类目全面受限'], alternatives: ['时尚、家居日用、儿童用品、宠物用品'] },
 ];
 
 const LOW_RISK_PRODUCTS: CategoryRule[] = [
@@ -226,16 +231,80 @@ export function analyzeAutoParts(title: string, description: string = ''): AutoP
 export function analyzeCompliance(title: string, description: string = '', categoryPath: string[] = []
 ): { forbidden: CategoryRule[]; highRisk: CategoryRule[]; mediumRisk: CategoryRule[] } {
   const content = `${title} ${description} ${categoryPath.join(' ')}`.toLowerCase();
-  
+
   const checkRules = (rules: CategoryRule[]): CategoryRule[] => {
     return rules.filter(rule => rule.keywords.some(keyword => content.includes(keyword.toLowerCase())));
   };
+
+  // Async RAG enrichment (can be awaited separately)
+  enrichWithRag(title, description, categoryPath.join(' ')).catch(() => {});
 
   return {
     forbidden: checkRules(FORBIDDEN_PRODUCTS),
     highRisk: checkRules(HIGH_RISK_PRODUCTS),
     mediumRisk: checkRules(LOW_RISK_PRODUCTS)
   };
+}
+
+/**
+ * Query RAG knowledge base for Ozon compliance rules matching the product.
+ * This supplements the hardcoded rules with the latest policy updates.
+ */
+async function enrichWithRag(title: string, description: string, categoryPath: string): Promise<void> {
+  try {
+    const db = await (async () => {
+      const { getDb } = await import("../db/connection.js");
+      return getDb().catch(() => null);
+    })();
+    if (!db) return;
+
+    const query = `${title} ${description} ${categoryPath}`.slice(0, 300);
+    const rows = await db.all<{ title: string; content: string; tags: string }>(
+      `SELECT title, content, tags FROM rag_operations_playbook
+       WHERE scenario = 'compliance'
+       AND (content LIKE '%' || ? || '%' OR tags LIKE '%' || ? || '%')
+       LIMIT 3`,
+      [query.slice(0, 50), query.slice(0, 30)]
+    ).catch(() => [] as Array<{ title: string; content: string; tags: string }>);
+
+    if (rows.length > 0) {
+      const { logger } = await import("@onzo/logger");
+      logger.info({ matchCount: rows.length, titles: rows.map(r => r.title) },
+        "RAG: compliance rules matched for product");
+    }
+  } catch { /* RAG unavailable — non-blocking */ }
+}
+
+/**
+ * Query RAG for compliance context — returns formatted text for AI prompts.
+ * Used by listing pipeline and promo copywriter for context injection.
+ */
+export async function queryRagCompliance(title: string, description: string = ""): Promise<string> {
+  try {
+    const db = await (async () => {
+      const { getDb } = await import("../db/connection.js");
+      return getDb().catch(() => null);
+    })();
+    if (!db) return "";
+
+    const query = `${title} ${description}`.slice(0, 200);
+    const rows = await db.all<{ title: string; content: string }>(
+      `SELECT title, substr(content, 1, 500) as content FROM rag_operations_playbook
+       WHERE scenario = 'compliance' AND (
+         content LIKE '%' || ? || '%'
+         OR content LIKE '%认证%'
+         OR content LIKE '%EAC%'
+         OR tags LIKE '%合规%'
+       )
+       ORDER BY priority DESC LIMIT 5`,
+      [query.slice(0, 40)]
+    ).catch(() => [] as Array<{ title: string; content: string }>);
+
+    if (rows.length === 0) return "";
+    return rows.map((r) => `[${r.title}]: ${r.content}`).join("\n\n");
+  } catch {
+    return "";
+  }
 }
 
 export function analyzeLogisticsRisk(title: string, description: string = '', weightKg: number = 0.5

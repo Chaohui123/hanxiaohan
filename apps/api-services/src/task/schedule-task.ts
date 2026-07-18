@@ -2,10 +2,16 @@
 // Daily Scheduled Tasks — cron-based automation
 // 02:00 大盘轮询+自动上架
 // 08:00 全店商品调价
+// Falls back gracefully if node-cron is not installed
 // ============================================================
 
-import cron from "node-cron";
 import { logger } from "@onzo/logger";
+
+let cronMod: typeof import("node-cron") | null = null;
+try {
+  cronMod = await import("node-cron");
+} catch { logger.warn("node-cron not installed — scheduled tasks disabled"); }
+
 import { executeDailyMarketPoll } from "../langgraph/daily-market-graph.js";
 import { executeDailyPriceAdjust } from "../langgraph/daily-price-graph.js";
 
@@ -110,13 +116,19 @@ export function startScheduledTasks(): void {
     return;
   }
 
+  const schedule = cronMod?.schedule;
+  if (!schedule) {
+    logger.warn("ScheduledTask: cron unavailable, tasks will not run on schedule");
+    return;
+  }
+
   // Daily market poll: 02:00
-  cron.schedule(process.env.MARKET_TASK_CRON || "0 2 * * *", () => {
+  schedule(process.env.MARKET_TASK_CRON || "0 2 * * *", () => {
     runMarketPoll().catch(() => {});
   });
 
   // Daily price adjust: 08:00
-  cron.schedule(process.env.PRICE_TASK_CRON || "0 8 * * *", () => {
+  schedule(process.env.PRICE_TASK_CRON || "0 8 * * *", () => {
     runPriceAdjust().catch(() => {});
   });
 

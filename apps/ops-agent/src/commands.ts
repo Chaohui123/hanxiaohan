@@ -55,8 +55,9 @@ export function registerCommands(bot: FeishuBot, config: ApiConfig): void {
       return;
     }
 
-    // Process "yes" confirmation
-    if (ctx.text.toLowerCase() === "yes") {
+    // Process "yes" / "是" / "确认" confirmation
+    const confirmLower = ctx.text.toLowerCase().trim();
+    if (confirmLower === "yes" || confirmLower === "是" || confirmLower === "确认") {
       for (const prefix of ["backup", "sync", "reconcile"]) {
         const key = `${prefix}_${ctx.chatId}`;
         const entry = pending.get(key);
