@@ -153,6 +153,10 @@ import { mkdirSync, existsSync } from "node:fs";
 const tmpImgDir = "./data/tmp-images";
 if (!existsSync(tmpImgDir)) mkdirSync(tmpImgDir, { recursive: true });
 app.use("/tmp-images", express.static(tmpImgDir, { maxAge: 300_000 }));
+// Serve processed product images
+const imgDir = process.env.IMAGE_STORAGE_PATH || "./data/images";
+if (!existsSync(imgDir)) mkdirSync(imgDir, { recursive: true });
+app.use("/images", express.static(imgDir, { maxAge: 86400_000 }));
 
 // Webhook: mounted at /api directly (without mountApi deprecation middleware)
 // Must be before other mountApi calls to avoid deprecation headers on Ozon requests

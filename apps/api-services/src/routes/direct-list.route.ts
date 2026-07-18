@@ -8,6 +8,7 @@ import { logger } from "@onzo/logger";
 import { deepseekComplete } from "../langgraph/client/deepseek-client.js";
 import { resolveCategory } from "../services/category-resolver.js";
 import { resolveModelName } from "../services/model-name.js";
+import { getOptimizedImageUrls } from "../services/image-processor.js";
 
 const OZON_API = "https://api-seller.ozon.ru";
 const CLIENT_ID = process.env.OZON_CLIENT_IDS || "";
@@ -83,9 +84,14 @@ export function createDirectListRouter(): Router {
       (body.items as Array<Record<string, unknown>>)[0]!["attributes"] = [
         { id: 9048, values: [{ value: modelName }] },
       ];
-      // Add images if provided (Ozon accepts direct URLs)
+      // Download + optimize images before Ozon publish (3:4 crop, local storage)
+      let finalImageUrls: string[] = [];
       if (input.imageUrls && input.imageUrls.length > 0) {
-        (body.items as Array<Record<string, unknown>>)[0]!["images"] = input.imageUrls.slice(0, 10);
+        logger.info({ count: input.imageUrls.length }, "Processing images for Ozon");
+        finalImageUrls = await getOptimizedImageUrls(input.imageUrls);
+      }
+      if (finalImageUrls.length > 0) {
+        (body.items as Array<Record<string, unknown>>)[0]!["images"] = finalImageUrls.slice(0, 10);
       }
 
       const ozonResp = await fetch(`${OZON_API}/v3/product/import`, {

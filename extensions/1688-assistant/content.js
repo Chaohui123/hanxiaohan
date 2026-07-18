@@ -46,11 +46,24 @@
       }
     }
 
-    // Images
-    document.querySelectorAll(".detail-gallery img, .main-gallery img, .mod-detail-gallery img").forEach(img => {
-      const src = img.src || img.dataset.src;
-      if (src && src.includes("alicdn.com")) {
-        data.images.push(src.replace(/_\d+x\d+\.(jpg|png)/, ".$1"));
+    // Images — capture ALL (main + detail + description)
+    const seen = new Set();
+    document.querySelectorAll("img[src]").forEach(img => {
+      const src = img.src || img.dataset.src || img.getAttribute("data-src") || "";
+      if (!src || !src.startsWith("http")) return;
+      // Clean 1688 CDN URLs: remove size suffix for original quality
+      const clean = src.replace(/_\d+x\d+.*\.(jpg|png|jpeg|webp)/i, ".$1");
+      if (!seen.has(clean) && (src.includes("alicdn.com") || src.includes("1688.com") || src.includes("img."))) {
+        seen.add(clean);
+        data.images.push(clean);
+      }
+    });
+    // Also try video thumbnails
+    document.querySelectorAll("video[poster]").forEach(v => {
+      const poster = v.getAttribute("poster");
+      if (poster && !seen.has(poster)) {
+        seen.add(poster);
+        data.images.push(poster);
       }
     });
 
