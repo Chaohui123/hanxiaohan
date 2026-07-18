@@ -34,6 +34,7 @@ const PUBLIC_PATHS = [
   "/api/health",
   "/ready",
   "/ready/pipeline",
+  "/images",
   "/api/webhook/ozon",
   "/api/v1/webhook/ozon",
 ];
