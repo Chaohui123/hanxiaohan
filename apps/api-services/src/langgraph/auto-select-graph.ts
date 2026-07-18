@@ -1,19 +1,20 @@
 // ============================================================
-// Auto-Select Graph — Dual-Agent Cross-Validation Auto Listing
-//
-// Ops-Agent:      1688 search, scraping, listing, order sync
-// Promo-Agent:    product scoring, cross-validation, ad campaigns
-//
-// Flow:
-//   关键词 → Ops搜索1688 → Promo评分排序 → Cross-Validate
-//     ├─ 通过 → Ops自动上架 → Promo创建推广 → 报告
-//     └─ 未通过 → 报告评分详情(不自动上架)
+// Auto-Select Graph v2 — Dual-Agent with tie-breaking
+// Configurable scoring weights, secondary sort, manual publish
 // ============================================================
 
 import { StateGraph, END } from "@langchain/langgraph";
 import { Annotation } from "@langchain/langgraph";
 import { logger } from "@onzo/logger";
 import { deepseekChatCompletion } from "./client/deepseek-client.js";
+import { getDb } from "../db/connection.js";
+
+// ---- Configurable scoring weights (from .env) ----
+const W_MARGIN = parseInt(process.env.SCORE_WEIGHT_MARGIN || "40", 10);
+const W_SALES = parseInt(process.env.SCORE_WEIGHT_SALE || "30", 10);
+const W_COMPETE = parseInt(process.env.SCORE_WEIGHT_COMPETE || "20", 10);
+const W_RETURN = parseInt(process.env.SCORE_WEIGHT_RETURN || "10", 10);
+const W_TOTAL = W_MARGIN + W_SALES + W_COMPETE + W_RETURN;
 
 // ---- State ----
 
@@ -21,246 +22,215 @@ export const AutoSelectState = Annotation.Root({
   keyword: Annotation<string>(),
   storeId: Annotation<string>(),
 
-  // Ops: product search
   candidates: Annotation<Array<{ url: string; title: string; price: number; reason: string }>>(),
   opsSearchError: Annotation<string>(),
 
-  // Promo: scoring
-  scored: Annotation<Array<{ url: string; title: string; price: number; opsScore: number; promoScore: number; finalScore: number; margin: number; verdict: string }>>(),
+  scored: Annotation<Array<{
+    url: string; title: string; price: number; margin: number;
+    opsScore: number; promoScore: number; finalScore: number;
+    verdict: string; detail: { marginScore: number; salesScore: number; competeScore: number; returnScore: number };
+  }>>(),
   promoScoreError: Annotation<string>(),
 
-  // Cross-validation
+  // New: tie-breaking fields
+  topScore: Annotation<number>(),
+  topScoreProducts: Annotation<Array<{ url: string; title: string; price: number; margin: number; finalScore: number }>>(),
+  validateFailType: Annotation<string>(),  // "none" | "noCandidates" | "multipleTopScore" | "lowScore"
+  secondarySort: Annotation<Array<{ url: string; title: string; price: number; margin: number; finalScore: number }>>(),
+
   validationPassed: Annotation<boolean>(),
   validationIssues: Annotation<string[]>(),
 
-  // Listing
+  // Manual publish
+  manualPublishId: Annotation<string>(),
   listingTaskId: Annotation<string>(),
   listingError: Annotation<string>(),
 
-  // Promo ad
   promoPlanId: Annotation<string>(),
   promoError: Annotation<string>(),
 
-  // Report
   report: Annotation<string>(),
 });
 
-// ---- Node 1: Ops-Agent 搜索1688 ----
-
-async function opsSearchNode(
-  state: typeof AutoSelectState.State,
-): Promise<Partial<typeof AutoSelectState.State>> {
-  logger.info({ keyword: state.keyword }, "AutoSelect: Ops searching 1688");
-
+// ---- Node 1: Search 1688 ----
+async function opsSearchNode(s: typeof AutoSelectState.State): Promise<Partial<typeof AutoSelectState.State>> {
+  logger.info({ keyword: s.keyword }, "AutoSelect: searching 1688");
   try {
     const resp = await deepseekChatCompletion([
-      {
-        role: "system",
-        content: `你是1688选品专家。根据用户提供的关键词，返回3-5个1688上真实存在的热销商品。
-返回JSON数组格式: [{"url":"完整1688链接","title":"商品名称","price":价格(元),"reason":"推荐理由"}]
-只返回JSON，不要其他文字。链接格式必须是 https://detail.1688.com/offer/数字ID.html`,
-      },
-      { role: "user", content: `关键词: ${state.keyword}` },
+      { role: "system", content: "返回JSON: [{\"url\":\"https://detail.1688.com/offer/ID.html\",\"title\":\"商品名\",\"price\":价格元,\"reason\":\"推荐理由\"}]" },
+      { role: "user", content: s.keyword },
     ], { temperature: 0.2, maxTokens: 1000 });
-
     const raw = resp.choices[0]?.message?.content || "[]";
-    // Extract JSON from possible markdown code block
-    const jsonMatch = raw.match(/\[[\s\S]*\]/);
-    const candidates = JSON.parse(jsonMatch ? jsonMatch[0] : raw) as Array<{
-      url: string; title: string; price: number; reason: string;
-    }>;
-
-    return {
-      candidates: candidates.slice(0, 5),
-      opsSearchError: "",
-    };
-  } catch (err) {
-    return {
-      opsSearchError: (err as Error).message,
-      candidates: [],
-    };
-  }
+    const m = raw.match(/\[[\s\S]*\]/);
+    return { candidates: (m ? JSON.parse(m[0]) : []).slice(0, 5), opsSearchError: "" };
+  } catch (e) { return { opsSearchError: (e as Error).message, candidates: [] }; }
 }
 
-// ---- Node 2: Promo-Agent 评分排序 ----
+// ---- Node 2: Configurable scoring with tie-breaking ----
+async function promoScoreNode(s: typeof AutoSelectState.State): Promise<Partial<typeof AutoSelectState.State>> {
+  const cands = s.candidates;
+  if (cands.length === 0) return { promoScoreError: "No candidates", scored: [], topScore: 0, topScoreProducts: [] };
 
-async function promoScoreNode(
-  state: typeof AutoSelectState.State,
-): Promise<Partial<typeof AutoSelectState.State>> {
-  const candidates = state.candidates;
-  if (candidates.length === 0) {
-    return { promoScoreError: "No candidates to score" };
-  }
+  const scored = cands.map(c => {
+    // Multi-dimension scoring with configurable weights (based on real metrics, no random)
+    const marginScore = Math.min(1, Math.max(0, (200 - c.price) / 150));
+    const salesScore = 0.5;    // will be replaced by real sales data when available
+    const competeScore = c.price < 100 ? 0.8 : c.price < 200 ? 0.6 : 0.3;
+    const returnScore = 0.5;   // will be replaced by real return rate data when available
 
-  logger.info({ count: candidates.length }, "AutoSelect: Promo scoring products");
+    const finalScore = Math.round(
+      (marginScore * W_MARGIN + salesScore * W_SALES + competeScore * W_COMPETE + returnScore * W_RETURN) / W_TOTAL * 100
+    );
 
-  try {
-    const scored = candidates.map((c) => {
-      // Multi-dimensional scoring (reuses scorer.ts logic)
-      const marginScore = c.price > 0 ? Math.min(1, Math.max(0, (200 - c.price) / 150)) : 0.3;
-      const popularityScore = 0.7; // Default for new search results
-      const priceScore = c.price > 0 && c.price < 100 ? 0.8 : c.price < 200 ? 0.6 : 0.3;
-      const titleScore = c.title.length > 10 ? 0.7 : 0.3;
+    return {
+      url: c.url, title: c.title, price: c.price,
+      margin: Math.round((1 - c.price / 200) * 100),
+      opsScore: Math.round((marginScore * 0.5 + competeScore * 0.5) * 100),
+      promoScore: Math.round((salesScore * 0.6 + returnScore * 0.4) * 100),
+      finalScore,
+      verdict: finalScore >= 60 ? "recommend" : finalScore >= 40 ? "review" : "skip",
+      detail: {
+        marginScore: Math.round(marginScore * 100),
+        salesScore: Math.round(salesScore * 100),
+        competeScore: Math.round(competeScore * 100),
+        returnScore: Math.round(returnScore * 100),
+      },
+    };
+  });
+  scored.sort((a, b) => b.finalScore - a.finalScore);
 
-      const promoScore = Math.round((marginScore * 0.35 + popularityScore * 0.25 + priceScore * 0.25 + titleScore * 0.15) * 100);
+  // Find top score and tie products
+  const topScore = scored[0]?.finalScore || 0;
+  const topScoreProducts = scored
+    .filter(p => p.finalScore === topScore)
+    .map(p => ({ url: p.url, title: p.title, price: p.price, margin: p.margin, finalScore: p.finalScore }));
 
-      return {
-        url: c.url,
-        title: c.title,
-        price: c.price,
-        opsScore: Math.round((marginScore * 0.5 + priceScore * 0.5) * 100),
-        promoScore,
-        finalScore: Math.round((promoScore * 0.6 + Math.round((marginScore * 0.5 + priceScore * 0.5) * 100) * 0.4)),
-        margin: Math.round((1 - c.price / 200) * 100),
-        verdict: promoScore >= 60 ? "recommend" : promoScore >= 40 ? "review" : "skip",
-      };
-    });
+  // Secondary sort: margin desc → price asc → (margin already in display)
+  const secondarySort = [...topScoreProducts].sort((a, b) => {
+    if (b.margin !== a.margin) return b.margin - a.margin;
+    return a.price - b.price;
+  });
 
-    // Sort by final score descending
-    scored.sort((a, b) => b.finalScore - a.finalScore);
-
-    return { scored, promoScoreError: "" };
-  } catch (err) {
-    return { promoScoreError: (err as Error).message, scored: [] };
-  }
+  return { scored, topScore, topScoreProducts, secondarySort, promoScoreError: "" };
 }
 
-// ---- Node 3: Cross-Validation (Ops-Promo mutual check) ----
-
-async function crossValidateNode(
-  state: typeof AutoSelectState.State,
-): Promise<Partial<typeof AutoSelectState.State>> {
-  const top = state.scored[0];
-  if (!top) return { validationPassed: false, validationIssues: ["No candidates"] };
-
+// ---- Node 3: Improved Cross-Validation ----
+async function crossValidateNode(s: typeof AutoSelectState.State): Promise<Partial<typeof AutoSelectState.State>> {
   const issues: string[] = [];
+  let failType = "none";
 
-  // Check 1: URL format validation (Ops)
+  if (s.candidates.length === 0) {
+    failType = "noCandidates";
+    issues.push("未找到候选商品");
+    return { validationPassed: false, validationIssues: issues, validateFailType: failType };
+  }
+
+  const top = s.scored[0];
+  if (!top) { failType = "noCandidates"; issues.push("无有效候选"); return { validationPassed: false, validationIssues: issues, validateFailType: failType }; }
+
+  // Check for tie
+  if ((s.topScoreProducts || []).length >= 2) {
+    failType = "multipleTopScore";
+    issues.push("存在多款同分高分商品，系统无法自动选定唯一上架单品，请手动选择");
+    return { validationPassed: false, validationIssues: issues, validateFailType: failType };
+  }
+
+  // URL check
   if (!top.url.match(/https:\/\/detail\.1688\.com\/offer\/\d+\.html/)) {
-    issues.push(`[Ops] URL格式异常: ${top.url}`);
+    issues.push("URL格式异常");
   }
-
-  // Check 2: Price sanity (Promo)
-  if (top.price <= 0 || top.price > 10000) {
-    issues.push(`[Promo] 价格异常: ¥${top.price}`);
-  }
-
-  // Check 3: Score threshold
-  if (top.finalScore < 50) {
-    issues.push(`[Promo] 综合评分过低: ${top.finalScore}/100`);
-  }
-
-  // Check 4: Margin check
-  if (top.margin < 10) {
-    issues.push(`[Ops] 预估利润率不足: ${top.margin}%`);
-  }
-
-  // Check 5: Duplicate detection (both agents)
-  const top2 = state.scored[1];
-  if (top2 && top2.finalScore >= top.finalScore - 5) {
-    issues.push(`[Both] 存在得分相近的候选 (${top2.title.slice(0,20)})`);
-  }
+  // Price check
+  if (top.price <= 0 || top.price > 10000) issues.push("价格异常");
+  // Score check
+  if (top.finalScore < 50) { failType = "lowScore"; issues.push("综合评分过低"); }
 
   const passed = issues.length === 0;
+  if (!passed && !failType) failType = "lowScore";
 
-  return { validationPassed: passed, validationIssues: issues };
+  // Save diagnosis to DB
+  try {
+    const db = await getDb().catch(() => null);
+    if (db) {
+      db.exec("CREATE TABLE IF NOT EXISTS auto_select_diagnosis (id TEXT PRIMARY KEY, task_id TEXT, keyword TEXT, top_score INTEGER, top_products_json TEXT, fail_type TEXT, issues_json TEXT, created_at TEXT DEFAULT (datetime('now')))");
+      await db.run("INSERT INTO auto_select_diagnosis (id, task_id, keyword, top_score, top_products_json, fail_type, issues_json, created_at) VALUES (?,?,?,?,?,?,?,datetime('now'))",
+        [`diag_${Date.now()}`, s.manualPublishId || s.keyword, s.keyword, s.topScore, JSON.stringify(s.secondarySort || []), failType, JSON.stringify(issues)]
+      );
+    }
+  } catch { /* DB optional */ }
+
+  return { validationPassed: passed, validationIssues: issues, validateFailType: failType };
 }
 
-// ---- Node 4: Ops-Agent 自动上架 ----
-
-async function autoListNode(
-  state: typeof AutoSelectState.State,
-): Promise<Partial<typeof AutoSelectState.State>> {
-  const top = state.scored[0];
-  if (!top || !state.validationPassed) return {};
-
-  logger.info({ url: top.url }, "AutoSelect: submitting listing");
-
+// ---- Node 4: Auto List ----
+async function autoListNode(s: typeof AutoSelectState.State): Promise<Partial<typeof AutoSelectState.State>> {
+  const top = s.scored[0];
+  if (!top || !s.validationPassed) return {};
   try {
-    const resp = await fetch(`${process.env.API_BASE_URL || "http://localhost:3000"}/api/process`, {
-      method: "POST",
-      headers: { "X-API-Key": process.env.API_KEY || "", "Content-Type": "application/json" },
-      body: JSON.stringify({ url: top.url, storeId: state.storeId || "store_1" }),
-      signal: AbortSignal.timeout(30_000),
+    const r = await fetch(`${process.env.API_BASE_URL || "http://localhost:3000"}/api/process`, {
+      method: "POST", headers: { "X-API-Key": process.env.API_KEY || "", "Content-Type": "application/json" },
+      body: JSON.stringify({ url: top.url, storeId: s.storeId || "store_1" }), signal: AbortSignal.timeout(30_000),
     });
-    const data = await resp.json() as { success?: boolean; data?: { taskId?: string } };
-    return { listingTaskId: (data.data?.taskId || "submitted"), listingError: "" };
-  } catch (err) {
-    return { listingError: (err as Error).message };
-  }
+    const d = await r.json() as { data?: { taskId?: string } };
+    return { listingTaskId: d.data?.taskId || "submitted" };
+  } catch (e) { return { listingError: (e as Error).message }; }
 }
 
-// ---- Node 5: Promo-Agent 创建推广 ----
-
-async function autoPromoNode(
-  state: typeof AutoSelectState.State,
-): Promise<Partial<typeof AutoSelectState.State>> {
-  if (!state.listingTaskId) return {};
-
+// ---- Node 5: Manual Publish (bypass auto-check) ----
+async function manualPublishNode(s: typeof AutoSelectState.State): Promise<Partial<typeof AutoSelectState.State>> {
+  const url = s.manualPublishId;
+  if (!url) return { listingError: "No URL specified" };
+  logger.info({ url }, "AutoSelect: manual publish");
   try {
-    const resp = await fetch(`${process.env.API_BASE_URL || "http://localhost:3000"}/api/promo/decision`, {
-      method: "POST",
-      headers: { "X-API-Key": process.env.API_KEY || "", "Content-Type": "application/json" },
-      body: JSON.stringify({
-        id: `auto_${Date.now()}`,
-        actions: [{ offerId: state.listingTaskId, type: "launch_ad" }],
-        source: "auto_select_workflow",
-      }),
+    await fetch(`${process.env.API_BASE_URL || "http://localhost:3000"}/api/process`, {
+      method: "POST", headers: { "X-API-Key": process.env.API_KEY || "", "Content-Type": "application/json" },
+      body: JSON.stringify({ url, storeId: s.storeId || "store_1" }), signal: AbortSignal.timeout(30_000),
+    });
+    return { listingTaskId: "manual_ok" };
+  } catch (e) { return { listingError: (e as Error).message }; }
+}
+
+// ---- Node 6: Promo Ad ----
+async function autoPromoNode(s: typeof AutoSelectState.State): Promise<Partial<typeof AutoSelectState.State>> {
+  if (!s.listingTaskId) return {};
+  try {
+    await fetch(`${process.env.API_BASE_URL || "http://localhost:3000"}/api/promo/decision`, {
+      method: "POST", headers: { "X-API-Key": process.env.API_KEY || "", "Content-Type": "application/json" },
+      body: JSON.stringify({ id: `auto_${Date.now()}`, actions: [{ offerId: s.listingTaskId, type: "launch_ad" }] }),
       signal: AbortSignal.timeout(15_000),
     });
-    const data = await resp.json() as { id?: string };
-    return { promoPlanId: data.id || "created" };
-  } catch (err) {
-    return { promoError: (err as Error).message };
-  }
+    return { promoPlanId: "created" };
+  } catch (e) { return { promoError: (e as Error).message }; }
 }
 
-// ---- Node 6: 生成报告 ----
-
-async function reportNode(
-  state: typeof AutoSelectState.State,
-): Promise<Partial<typeof AutoSelectState.State>> {
-  const top = state.scored[0];
+// ---- Node 7: Report ----
+async function reportNode(s: typeof AutoSelectState.State): Promise<Partial<typeof AutoSelectState.State>> {
   const lines: string[] = [];
-
-  lines.push(`## 自动选品报告 — "${state.keyword}"`);
+  lines.push(`## 自动选品 — "${s.keyword}"`);
   lines.push("");
 
-  if (state.validationPassed && top) {
-    lines.push(`✅ 交叉验证通过，已自动上架`);
-    lines.push(`- 商品: ${top.title}`);
-    lines.push(`- 价格: ¥${top.price}`);
-    lines.push(`- 综合评分: ${top.finalScore}/100`);
-    lines.push(`- 利润率: ${top.margin}%`);
-    lines.push(`- 上架任务: ${state.listingTaskId || "已提交"}`);
-    lines.push(`- 推广计划: ${state.promoPlanId || "已创建"}`);
+  if (s.validateFailType === "multipleTopScore") {
+    lines.push(`⚠️ 校验未通过：存在 ${s.topScoreProducts?.length || 0} 款同分高分商品 (${s.topScore}分)，系统无法自动选定，请手动选择：`);
+    for (const p of (s.secondarySort || []).slice(0, 5)) {
+      lines.push(`  ${p.finalScore}分 | ${p.title.slice(0, 40)} | ¥${p.price} | 毛利${p.margin}%`);
+    }
+  } else if (s.validateFailType === "noCandidates") {
+    lines.push("❌ 未找到候选商品");
+  } else if (s.validationPassed) {
+    lines.push(`✅ 已自动上架: ${s.scored[0]?.title}`);
   } else {
-    lines.push(`⚠️ 验证未通过，未自动上架`);
-    lines.push(`验证问题:`);
-    for (const issue of (state.validationIssues || [])) {
-      lines.push(`  - ${issue}`);
-    }
-    lines.push("");
-    lines.push(`候选商品 (` + state.scored.length + `个):`);
-    for (const s of state.scored.slice(0, 5)) {
-      lines.push(`  ${s.finalScore}分 | ${s.title.slice(0, 40)} | ¥${s.price} | ${s.verdict}`);
-    }
+    lines.push("⚠️ 验证未通过");
   }
 
   return { report: lines.join("\n") };
 }
 
-// ---- Condition ----
-
-function shouldAutoList(
-  state: typeof AutoSelectState.State,
-): "auto_list" | "gen_report" {
-  return state.validationPassed && state.scored.length > 0 ? "auto_list" : "gen_report";
+// ---- Conditions ----
+function shouldAutoList(s: typeof AutoSelectState.State): "auto_list" | "gen_report" {
+  return s.validationPassed && s.scored.length > 0 ? "auto_list" : "gen_report";
 }
 
-// ---- Build graph ----
-
-function buildAutoSelectGraph() {
+// ---- Build ----
+export function buildAutoSelectGraph() {
   return new StateGraph(AutoSelectState)
     .addNode("ops_search", opsSearchNode)
     .addNode("promo_score", promoScoreNode)
@@ -274,40 +244,37 @@ function buildAutoSelectGraph() {
     .addEdge("promo_score", "cross_validate")
 
     .addConditionalEdges("cross_validate", shouldAutoList, {
-      auto_list: "auto_list",
-      gen_report: "gen_report",
+      auto_list: "auto_list", gen_report: "gen_report",
     })
-
     .addEdge("auto_list", "auto_promo")
     .addEdge("auto_promo", "gen_report")
     .addEdge("gen_report", END)
-
     .compile();
 }
 
-let _autoSelectGraph: ReturnType<typeof buildAutoSelectGraph> | null = null;
-
-export function getAutoSelectGraph() {
-  if (!_autoSelectGraph) _autoSelectGraph = buildAutoSelectGraph();
-  return _autoSelectGraph;
-}
+let _g: ReturnType<typeof buildAutoSelectGraph> | null = null;
+export function getAutoSelectGraph() { if (!_g) _g = buildAutoSelectGraph(); return _g; }
 
 export async function executeAutoSelect(keyword: string): Promise<typeof AutoSelectState.State> {
-  logger.info({ keyword }, "AutoSelect: starting");
-  const graph = getAutoSelectGraph();
-  return graph.invoke({
-    keyword,
-    storeId: "store_1",
-    candidates: [],
-    opsSearchError: "",
-    scored: [],
-    promoScoreError: "",
-    validationPassed: false,
-    validationIssues: [],
-    listingTaskId: "",
-    listingError: "",
-    promoPlanId: "",
-    promoError: "",
-    report: "",
+  return getAutoSelectGraph().invoke({
+    keyword, storeId: "store_1",
+    candidates: [], opsSearchError: "",
+    scored: [], promoScoreError: "",
+    topScore: 0, topScoreProducts: [], validateFailType: "none", secondarySort: [],
+    validationPassed: false, validationIssues: [],
+    manualPublishId: "", listingTaskId: "", listingError: "",
+    promoPlanId: "", promoError: "", report: "",
   });
+}
+
+// ---- Manual publish entry (bypass auto-select, used by frontend picker) ----
+export async function manualPublish(url: string, storeId: string = "store_1"): Promise<string> {
+  try {
+    const r = await fetch(`${process.env.API_BASE_URL || "http://localhost:3000"}/api/process`, {
+      method: "POST", headers: { "X-API-Key": process.env.API_KEY || "", "Content-Type": "application/json" },
+      body: JSON.stringify({ url, storeId }), signal: AbortSignal.timeout(30_000),
+    });
+    const d = await r.json() as { data?: { taskId?: string } };
+    return d.data?.taskId || "ok";
+  } catch (e) { throw e; }
 }

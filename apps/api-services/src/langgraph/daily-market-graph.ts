@@ -165,7 +165,7 @@ async function saveSnapshot(s: typeof State.State): Promise<Partial<typeof State
       margin: v.count > 0 ? Math.round(v.margin / v.count * 100) / 100 : 0,
       competition: v.count > 5 ? "high" : v.count > 2 ? "medium" : "low",
       label: v.count <= 2 ? "蓝海" : "红海",
-      traffic: Math.round(v.count * 7 + Math.random() * 5),
+      traffic: Math.round(v.count * 7),
     }));
 
     const structured = {
@@ -182,16 +182,16 @@ async function saveSnapshot(s: typeof State.State): Promise<Partial<typeof State
       categories,
       products: (s.recommendedProducts || []).map((p: {title:string;url:string;price:number;score:number}) => ({
         title: p.title, url: p.url, price: p.price, score: p.score,
-        monthlySales: Math.round(p.score * 3 + Math.random() * 100),
-        rating: Math.round((4 + Math.random()) * 10) / 10,
+        monthlySales: Math.round(p.score * 3),
+        rating: 4.0,
         profit: Math.round(p.price * 0.35),
       })),
       keywords: (s.recommendedProducts || []).slice(0, 3).map((p: {title:string}, i: number) => ({
         word: p.title.slice(0, 15),
-        volume: Math.floor(Math.random() * 50000),
-        cpc: Math.round(Math.random() * 20 + 5),
-        competition: ["low","medium","high"][i%3],
-        products: Math.floor(Math.random()*5000),
+        volume: 0,
+        cpc: 0,
+        competition: "pending",
+        products: 0,
         tag: ["蓝海词","高转化","内卷词"][i%3],
       })),
       costs: [

@@ -31,7 +31,7 @@ async function opsCompetitorCrawl(s: typeof State.State): Promise<Partial<typeof
 
 // Node 2: Promo ad performance
 async function promoAdPerf(s: typeof State.State): Promise<Partial<typeof State.State>> {
-  return { adPerformance: "ad_perf_placeholder" };
+  return { adPerformance: "暂无广告数据" };
 }
 
 // Node 3: LLM pricing strategy

@@ -320,13 +320,21 @@ export function createRagRouter(): Router {
     try {
       const db = await dbOrFail();
       const tables = ["rag_aftersales_scripts", "rag_competitor_reports", "rag_product_knowledge", "rag_copy_templates", "rag_operations_playbook"];
-      const kb: Record<string, { count: number; avgVectorDim: number; indexType: string }> = {};
+      const tableLabels: Record<string, string> = {
+        rag_aftersales_scripts: "售后话术库",
+        rag_competitor_reports: "竞品报告库",
+        rag_product_knowledge: "商品知识库",
+        rag_copy_templates: "文案模板库",
+        rag_operations_playbook: "运营手册库",
+      };
+      const kb: Record<string, { label: string; count: number; avgVectorDim: number; indexType: string }> = {};
       for (const t of tables) {
         const rows = await db.all<{ cnt: number }>(`SELECT COUNT(*) as cnt FROM ${t}`);
-        kb[t] = { count: rows[0]?.cnt || 0, avgVectorDim: 2048, indexType: "ivfflat" };
+        kb[tableLabels[t] || t] = { label: tableLabels[t] || t, count: rows[0]?.cnt || 0, avgVectorDim: 2048, indexType: "ivfflat" };
       }
       const embeddingCfg = {
         provider: process.env.EMBEDDING_PROVIDER || "zhipu",
+        providerLabel: "智谱AI (GLM)",
         model: process.env.EMBEDDING_MODEL || "embedding-3",
         dimensions: parseInt(process.env.EMBEDDING_DIMENSIONS || "2048", 10),
         timeout: parseInt(process.env.EMBEDDING_TIMEOUT_MS || "30000", 10),
