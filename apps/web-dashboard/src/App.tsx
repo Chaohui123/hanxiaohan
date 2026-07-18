@@ -29,6 +29,7 @@ const RagKnowledge = lazy(() => import("./pages/RagKnowledge"));
 const PurchasePay = lazy(() => import("./pages/PurchasePay"));
 const TaskMonitor = lazy(() => import("./pages/TaskMonitor"));
 const FailedProducts = lazy(() => import("./pages/FailedProducts"));
+const MarketAnalysis = lazy(() => import("./pages/MarketAnalysis"));
 
 const { Header, Sider, Content } = Layout;
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } });
@@ -62,6 +63,7 @@ const menuItems = [
   { key: "/pricing-history", icon: <LineChartOutlined />, label: <Link to="/pricing-history">调价历史</Link> },
   { key: "/promo-effect", icon: <FundOutlined />, label: <Link to="/promo-effect">推广效果</Link> },
   { key: "/rag", icon: <DatabaseOutlined />, label: <Link to="/rag">知识库</Link> },
+  { key: "/market", icon: <LineChartOutlined />, label: <Link to="/market">大盘分析</Link> },
   { key: "/purchase-pay", icon: <DollarOutlined />, label: <Link to="/purchase-pay">采购支付</Link> },
   { key: "/tasks", icon: <MonitorOutlined />, label: <Link to="/tasks">任务监控</Link> },
   { key: "/failed", icon: <RocketOutlined />, label: <Link to="/failed">失败重试</Link> },
@@ -117,6 +119,7 @@ function AppLayout() {
                 <Route path="/purchase-pay" element={<PurchasePay />} />
                 <Route path="/tasks" element={<TaskMonitor />} />
                 <Route path="/failed" element={<FailedProducts />} />
+                <Route path="/market" element={<MarketAnalysis />} />
               </Routes>
             </Suspense>
           </ErrorBoundary>
