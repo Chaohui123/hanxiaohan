@@ -575,6 +575,19 @@ mountApi("", createPipelineRouter());
 const { createMarketRouter } = await import("./routes/market.route.js");
 mountApi("", createMarketRouter());
 
+// Ozon Profit Calculator
+const { createProfitCalcRouter } = await import("./routes/profit-calc.route.js");
+mountApi("", createProfitCalcRouter());
+
+// Task scheduler routes
+const { createTaskTriggerRouter } = await import("./routes/task.route.js");
+app.use("/api/task", createTaskTriggerRouter());
+app.use("/api/v1/task", createTaskTriggerRouter());
+
+// Start cron-based scheduled tasks (02:00 market poll, 08:00 price adjust)
+const { startScheduledTasks } = await import("./task/schedule-task.js");
+startScheduledTasks();
+
 // ---- Request Metrics (path-normalized to prevent Prometheus cardinality explosion) ----
 
 /** Replace dynamic path segments with :param placeholders to bound metric cardinality. */
