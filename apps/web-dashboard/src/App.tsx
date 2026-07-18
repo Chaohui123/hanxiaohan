@@ -6,7 +6,7 @@ import {
   InboxOutlined, CustomerServiceOutlined, ShopOutlined,
   MonitorOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
   RocketOutlined, EyeOutlined, LineChartOutlined, FundOutlined, DatabaseOutlined,
-  DollarOutlined,
+  DollarOutlined, ChromeOutlined,
 } from "@ant-design/icons";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useAppStore } from "./stores/app-store";
@@ -30,6 +30,7 @@ const PurchasePay = lazy(() => import("./pages/PurchasePay"));
 const TaskMonitor = lazy(() => import("./pages/TaskMonitor"));
 const FailedProducts = lazy(() => import("./pages/FailedProducts"));
 const MarketAnalysis = lazy(() => import("./pages/MarketAnalysis"));
+const PluginGuide = lazy(() => import("./pages/PluginGuide"));
 
 const { Header, Sider, Content } = Layout;
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } });
@@ -63,6 +64,7 @@ const menuItems = [
   { key: "/pricing-history", icon: <LineChartOutlined />, label: <Link to="/pricing-history">调价历史</Link> },
   { key: "/promo-effect", icon: <FundOutlined />, label: <Link to="/promo-effect">推广效果</Link> },
   { key: "/rag", icon: <DatabaseOutlined />, label: <Link to="/rag">知识库</Link> },
+  { key: "/plugin", icon: <ChromeOutlined />, label: <Link to="/plugin">插件采集</Link> },
   { key: "/market", icon: <LineChartOutlined />, label: <Link to="/market">大盘分析</Link> },
   { key: "/purchase-pay", icon: <DollarOutlined />, label: <Link to="/purchase-pay">采购支付</Link> },
   { key: "/tasks", icon: <MonitorOutlined />, label: <Link to="/tasks">任务监控</Link> },
@@ -120,6 +122,7 @@ function AppLayout() {
                 <Route path="/tasks" element={<TaskMonitor />} />
                 <Route path="/failed" element={<FailedProducts />} />
                 <Route path="/market" element={<MarketAnalysis />} />
+                <Route path="/plugin" element={<PluginGuide />} />
               </Routes>
             </Suspense>
           </ErrorBoundary>

@@ -80,6 +80,7 @@ export default function Listing() {
         <Table dataSource={records} rowKey="id" size="small" pagination={{ pageSize: 20 }}
           columns={[
             { title: "URL", dataIndex: "sourceUrl", ellipsis: true },
+            { title: "来源", dataIndex: "source", width: 80, render: (s: string) => <Tag color={s === "plugin" ? "purple" : "blue"}>{s === "plugin" ? "插件" : "大盘"}</Tag> },
             { title: "状态", dataIndex: "status", render: (s: string) => <Tag color={s === "done" ? "green" : s === "failed" ? "red" : "blue"}>{s}</Tag> },
             { title: "草稿ID", dataIndex: "draftId" },
             { title: "时间", dataIndex: "createdAt", width: 160 },
@@ -94,12 +95,47 @@ export default function Listing() {
             <p><strong>关键词：</strong>{String((selectResult as Record<string, unknown>).keyword)}</p>
             <p><strong>候选商品：</strong>{String((selectResult as Record<string, unknown>).candidates)} 个</p>
 
-            {(selectResult as Record<string, unknown>).topProduct ? (
-              <>
-                <Divider />
-                <p><strong>🏆 最佳候选：</strong>{String((selectResult as Record<string, unknown>).topProduct)}</p>
-              </>
-            ) : null}
+            {/* Proper product display (not [object Object]) */}
+            {(() => {
+              const r = selectResult as Record<string, unknown>;
+              const failType = String(r.validateFailType || "");
+              const topProducts = (r.topScoreProducts as Array<{url:string;title:string;price:number;margin:number;finalScore:number}>) || [];
+              const secondary = (r.secondarySort as Array<{url:string;title:string;price:number;margin:number;finalScore:number}>) || [];
+              const passed = Boolean(r.validationPassed);
+
+              if (topProducts.length >= 2 && failType === "multipleTopScore") {
+                return (
+                  <div style={{ background: "#fffbe6", border: "1px solid #fadb14", padding: 12, borderRadius: 6, marginBottom: 12 }}>
+                    <p style={{ color: "#ad6800", fontWeight: "bold" }}>
+                      ⚠️ 存在 {topProducts.length} 款同分高分商品 ({String(r.topScore)}分)，请手动选择：
+                    </p>
+                    {secondary.map((p, i) => (
+                      <div key={i} style={{ display: "flex", alignItems: "center", padding: "6px 0", borderBottom: "1px solid #f0f0f0" }}>
+                        <span style={{ flex: 1, fontSize: 13 }}>{p.title?.slice(0, 35)}</span>
+                        <span style={{ width: 50 }}>¥{p.price}</span>
+                        <span style={{ width: 50, color: (p.margin||0) > 20 ? "green" : "orange" }}>{p.margin||0}%</span>
+                        <Button size="small" type="primary" style={{ marginLeft: 8 }}
+                          onClick={async () => {
+                            try {
+                              await api.post("/api/market/manual-publish", { url: p.url });
+                              message.success(`已上架: ${(p.title||"").slice(0, 20)}`);
+                            } catch (e) { message.error((e as Error).message); }
+                          }}>选定上架</Button>
+                      </div>
+                    ))}
+                  </div>
+                );
+              }
+              if (topProducts.length === 1 && topProducts[0]) {
+                return (
+                  <div style={{ background: "#f6ffed", padding: 12, borderRadius: 6 }}>
+                    <p><strong>🏆 {topProducts[0].title?.slice(0, 40)}</strong></p>
+                    <p>¥{topProducts[0].price} | 毛利 {topProducts[0].margin}% | {topProducts[0].finalScore}分</p>
+                  </div>
+                );
+              }
+              return null;
+            })()}
 
             <p><strong>交叉验证：</strong>
               {(selectResult as Record<string, unknown>).validationPassed
