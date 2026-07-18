@@ -677,6 +677,17 @@ const server = app.listen(config.port, () => {
     await checkRedisHealth();
   });
 
+  // Register Ozon category tree daily refresh (keeps category IDs in sync)
+  registerJob("category-tree-refresh", 24 * 3600_000, async () => {
+    const { refreshCategoryTree } = await import("./services/category-resolver.js");
+    try {
+      const count = await refreshCategoryTree();
+      logger.info({ count }, "Daily category tree refresh complete");
+    } catch (err) {
+      logger.warn({ err: (err as Error).message }, "Category tree refresh failed — will retry tomorrow");
+    }
+  });
+
   // Register manual procurement jobs (MANUAL_PAY_MODE=true)
   if (process.env.MANUAL_PAY_MODE === "true") {
     registerJob("procurement-sync", 10 * 60_000, async () => {
