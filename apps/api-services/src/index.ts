@@ -590,6 +590,10 @@ mountApi("", createDirectListRouter());
 const { createPluginRouter } = await import("./routes/plugin.route.js");
 mountApi("", createPluginRouter());
 
+// Image upload (file upload + optimize)
+const { createImageUploadRouter } = await import("./routes/image-upload.route.js");
+mountApi("", createImageUploadRouter());
+
 // Product Selection Lists (毛子ERP风格选品榜单)
 const { createSelectionRouter } = await import("./routes/selection.route.js");
 mountApi("", createSelectionRouter());
