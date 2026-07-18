@@ -1,77 +1,51 @@
 # ============================================================
-# ONZO Caddy Reverse Proxy — HTTPS + SPA + CORS + Monitor
+# ONZO Caddy Reverse Proxy — HTTPS + SPA + CORS
 # ============================================================
 
 {$CADDY_DOMAIN:localhost} {
-	# ---- CORS: allow third-party health checks ----
-	@cors_preflight method OPTIONS
-	handle @cors_preflight {
-		header Access-Control-Allow-Origin "*"
-		header Access-Control-Allow-Methods "GET, POST, OPTIONS"
-		header Access-Control-Allow-Headers "Content-Type, X-API-Key, Authorization"
-		respond 204
-	}
+	# CORS headers for third-party health checks
+	header Access-Control-Allow-Origin *
+	header Access-Control-Allow-Methods "GET, POST, OPTIONS"
+	header Access-Control-Allow-Headers "Content-Type, X-API-Key, Authorization"
 
-	# ---- Root + Health (public, no auth, returns 200 to all) ----
+	# Root + Health (public, no auth)
 	handle /health {
-		reverse_proxy api-services:3000 {
-			header_up X-Forwarded-For {remote_host}
-			transport http { dial_timeout 5s }
-		}
+		reverse_proxy api-services:3000
+	}
+	handle /health/light {
+		reverse_proxy api-services:3000
+	}
+	handle /api/health {
+		reverse_proxy api-services:3000
 	}
 
-	# ---- API Endpoints ----
+	# API endpoints
 	handle /api/* {
-		reverse_proxy api-services:3000 {
-			header_up X-Forwarded-For {remote_host}
-			transport http {
-				dial_timeout 10s
-				response_header_timeout 120s
-			}
-		}
+		reverse_proxy api-services:3000
 	}
 
-	# ---- Feishu Bot Callback ----
+	# Feishu Bot callback
 	handle /feishu/* {
-		reverse_proxy ops-agent:8181 {
-			header_up X-Forwarded-For {remote_host}
-			transport http { dial_timeout 5s }
-		}
+		reverse_proxy ops-agent:8181
 	}
 
-	# ---- Ozon Webhook ----
-	handle /api/webhook/ozon {
-		reverse_proxy api-services:3000 {
-			header_up X-Forwarded-For {remote_host}
-			header_up X-Real-IP {remote_host}
-			transport http { dial_timeout 10s }
-		}
-	}
-
-	# ---- Static Assets (immutable, content-hash filenames) ----
+	# Static assets (immutable cache)
 	handle /assets/* {
 		header Cache-Control "public, max-age=31536000, immutable"
 		reverse_proxy web-dashboard:80
 	}
 
-	# ---- Web Dashboard SPA (all other routes) ----
+	# SPA fallback — all other routes to frontend
 	handle {
 		header Cache-Control "no-cache"
-		reverse_proxy web-dashboard:80 {
-			header_up X-Forwarded-For {remote_host}
-			transport http { dial_timeout 5s }
-		}
+		reverse_proxy web-dashboard:80
 	}
 
-	# ---- Security Headers ----
-	header {
-		X-Content-Type-Options "nosniff"
-		X-Frame-Options "DENY"
-		Referrer-Policy "strict-origin-when-cross-origin"
-		Strict-Transport-Security "max-age=31536000; includeSubDomains"
-	}
+	# Security headers
+	header X-Content-Type-Options "nosniff"
+	header X-Frame-Options "DENY"
+	header Strict-Transport-Security "max-age=31536000; includeSubDomains"
 
-	# ---- Access Log ----
 	log {
 		output file /data/caddy/access.log {
 			roll_size 10mb
