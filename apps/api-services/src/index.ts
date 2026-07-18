@@ -565,6 +565,10 @@ mountApi("", createReportRouter());
 const { createProcurementRouter } = await import("./routes/procurement.route.js");
 mountApi("", createProcurementRouter(ozonClient));
 
+// LangGraph Workflow Routes (procurement + RAG chat)
+const { createLangGraphRouter } = await import("./routes/langgraph.route.js");
+mountApi("", createLangGraphRouter());
+
 // ---- Request Metrics (path-normalized to prevent Prometheus cardinality explosion) ----
 
 /** Replace dynamic path segments with :param placeholders to bound metric cardinality. */
