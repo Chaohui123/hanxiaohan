@@ -7,6 +7,10 @@ http://{$CADDY_DOMAIN:localhost} {
 	handle /health {
 		reverse_proxy api-services:3000
 	}
+	handle /images/* {
+		reverse_proxy api-services:3000
+	}
+
 	handle /api/webhook/ozon {
 		reverse_proxy api-services:3000
 	}
