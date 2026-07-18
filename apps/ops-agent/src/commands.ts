@@ -483,66 +483,61 @@ async function handleAutoSelect(
   }
 
   try {
-    await bot.sendMessage(chatId, `🔍 正在搜索1688: "${keyword}"...`);
+    await bot.sendMessage(chatId, `🔍 Ops-Agent + Promo-Agent 正在联合选品: "${keyword}"...`);
 
-    // Step 1: Use DeepSeek to find best 1688 product
-    const searchQuery = `在1688上搜索"${keyword}"，列出3个最热销的商品链接（完整 https://detail.1688.com/offer/... 格式），并给出推荐理由。`;
-
-    const deepseekResp = await fetch("https://api.deepseek.com/v1/chat/completions", {
+    // Call centralized Auto-Select API (LangGraph: Ops search → Promo score → cross-validate → auto-list)
+    const resp = await fetch(`${config.apiBase}/api/auto-select`, {
       method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${process.env.DEEPSEEK_API_KEY || ""}`,
-      },
-      body: JSON.stringify({
-        model: "deepseek-v4-pro",
-        messages: [
-          { role: "system", content: "你是一个1688选品助手。返回格式: 第1行商品链接，第2行推荐理由。商品链接必须是真实存在的1688链接。" },
-          { role: "user", content: searchQuery },
-        ],
-        temperature: 0.3,
-        max_tokens: 500,
-      }),
-      signal: AbortSignal.timeout(30_000),
+      headers: { "X-API-Key": config.apiKey, "Content-Type": "application/json" },
+      body: JSON.stringify({ keyword }),
+      signal: AbortSignal.timeout(45_000),
     });
+    const result = await resp.json() as {
+      success?: boolean;
+      data?: {
+        keyword?: string; candidates?: number;
+        topProduct?: { title: string; url: string; price: number; finalScore: number; margin: number; verdict: string };
+        validationPassed?: boolean; validationIssues?: string[];
+        listingTaskId?: string; promoPlanId?: string; report?: string;
+      };
+    };
 
-    const llm = await deepseekResp.json() as { choices?: Array<{ message?: { content?: string } }> };
-    const content = llm.choices?.[0]?.message?.content || "";
-
-    // Extract URL from LLM response
-    const urlMatch = content.match(/https:\/\/detail\.1688\.com\/offer\/[^\s"'<>\]]+/);
-    if (!urlMatch) {
-      await bot.sendMessage(chatId, `❌ 未找到1688商品链接\n\nDeepSeek回复:\n${content.slice(0, 300)}`);
+    if (!result.success || !result.data) {
+      await bot.sendMessage(chatId, `❌ 自动选品失败: ${JSON.stringify(result)}`);
       return;
     }
 
-    const productUrl = urlMatch[0];
-    const reason = content.replace(productUrl, "").replace(/^\s*\n+/, "").slice(0, 100);
+    const d = result.data;
+    const top = d.topProduct;
 
-    await bot.sendMessage(chatId, `✅ 找到商品: ${productUrl}\n📝 ${reason}`);
-
-    // Step 2: Submit for full pipeline (analysis → listing → ads → orders)
-    const resp = await fetch(`${config.apiBase}/api/product/launch`, {
-      method: "POST",
-      headers: { "X-API-Key": config.apiKey, "Content-Type": "application/json" },
-      body: JSON.stringify({ sourceUrl: productUrl, storeId: "store_1" }),
-      signal: AbortSignal.timeout(15_000),
-    });
-    const launch = await resp.json() as { success?: boolean; data?: { taskId?: string } };
-
-    if (launch.success) {
+    if (d.validationPassed && top) {
       await bot.sendMessage(chatId, [
-        `🚀 全流程已启动！`,
+        `✅ **自动选品上架完成**`,
         ``,
-        `🔗 ${productUrl}`,
-        `🆔 ${launch.data?.taskId || "unknown"}`,
+        `🛍 商品: ${top.title}`,
+        `💰 价格: ¥${top.price}`,
+        `📊 评分: ${top.finalScore}/100 (利润率 ${top.margin}%)`,
+        `🔗 ${top.url}`,
         ``,
-        `流程: 选品分析 → Ozon上架 → 推广投放 → 订单同步 → 利润核算`,
+        `📦 上架任务: \`${d.listingTaskId || "已提交"}\``,
+        `📢 推广计划: \`${d.promoPlanId || "已创建"}\``,
+        ``,
+        `🔍 交叉验证: ✅ 通过 (Ops + Promo 双重确认)`,
+      ].join("\n"));
+    } else if (top) {
+      await bot.sendMessage(chatId, [
+        `⚠️ **选品完成，但交叉验证未通过 — 未自动上架**`,
+        ``,
+        `🛍 最佳候选: ${top.title} (¥${top.price}, ${top.finalScore}分)`,
+        `🔗 ${top.url}`,
+        ``,
+        `❌ 验证问题:`,
+        ...(d.validationIssues || []).map((i: string) => `  • ${i}`),
+        ``,
+        `📋 共找到 ${d.candidates || 0} 个候选商品，可手动选择上架`,
       ].join("\n"));
     } else {
-      await bot.sendMessage(chatId, `⚠️ 全流程启动失败，仅提交上架\n\n正在提交备用上架...`);
-      await apiClient.submitListing(config, productUrl);
-      await bot.sendMessage(chatId, `✅ 已通过备用通道提交上架: ${productUrl}`);
+      await bot.sendMessage(chatId, `❌ 未找到匹配商品，请尝试其他关键词`);
     }
   } catch (err) {
     await bot.sendMessage(chatId, `❌ 自动选品失败: ${(err as Error).message}`);

@@ -8,6 +8,7 @@ import { Router } from "express";
 import { logger } from "@onzo/logger";
 import { executeFullPipeline } from "../langgraph/pipeline-graph.js";
 import { deepseekHealthCheck } from "../langgraph/client/deepseek-client.js";
+import { executeAutoSelect } from "../langgraph/auto-select-graph.js";
 
 export function createPipelineRouter(): Router {
   const router = Router();
@@ -94,6 +95,33 @@ export function createPipelineRouter(): Router {
       });
     }
     res.json({ success: true, data: status, correlationId: req.correlationId });
+  });
+
+  // ---- POST /api/auto-select — keyword → search → score → cross-validate → auto-list ----
+  router.post("/auto-select", async (req, res) => {
+    try {
+      const { keyword } = (req.body || {}) as { keyword?: string };
+      if (!keyword || keyword.length < 2) {
+        return res.status(400).json({ success: false, error: { code: "MISSING", message: "keyword is required (min 2 chars)" }, correlationId: req.correlationId });
+      }
+      const result = await executeAutoSelect(keyword);
+      res.json({
+        success: true,
+        data: {
+          keyword,
+          candidates: result.scored.length,
+          topProduct: result.scored[0] || null,
+          validationPassed: result.validationPassed,
+          validationIssues: result.validationIssues,
+          listingTaskId: result.listingTaskId || null,
+          promoPlanId: result.promoPlanId || null,
+          report: result.report,
+        },
+        correlationId: req.correlationId,
+      });
+    } catch (err) {
+      res.status(500).json({ success: false, error: { code: "AUTO_SELECT_ERROR", message: (err as Error).message }, correlationId: req.correlationId });
+    }
   });
 
   // ---- GET /api/health (extended) ----
