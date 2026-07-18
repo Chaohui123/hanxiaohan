@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Card, Input, Button, Table, Tag, message, Space, Upload, Modal, Divider } from "antd";
-import { UploadOutlined, LinkOutlined, RocketOutlined, SearchOutlined } from "@ant-design/icons";
+import { Card, Input, Button, Table, Tag, message, Space, Upload, Modal, Divider, Tabs } from "antd";
+import { UploadOutlined, LinkOutlined, RocketOutlined, SearchOutlined, ChromeOutlined, ScheduleOutlined } from "@ant-design/icons";
 import { listingApi, taskApi } from "../api/client";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
@@ -12,6 +12,13 @@ export default function Listing() {
   const [autoSelecting, setAutoSelecting] = useState(false);
   const [selectResult, setSelectResult] = useState<Record<string, unknown> | null>(null);
   const { data: listings, refetch } = useQuery({ queryKey: ["listings-full"], queryFn: () => taskApi.listings() });
+  const [dataSource, setDataSource] = useState("scheduled");
+  const { data: pluginData } = useQuery({
+    queryKey: ["plugin-products"],
+    queryFn: () => api.get("/api/crawl/plugin-list") as Promise<{ data?: Array<Record<string, string>> }>,
+    refetchInterval: 15000,
+  });
+  const pluginProducts = pluginData?.data || [];
 
   // Manual URL listing
   const submitUrl = async () => {

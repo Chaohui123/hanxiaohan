@@ -1,0 +1,134 @@
+// ============================================================
+// Direct Listing Route — AI translate + Ozon API v3
+// Uses SQLite category tree (refreshed from Ozon)
+// ============================================================
+
+import { Router } from "express";
+import { logger } from "@onzo/logger";
+import { deepseekComplete } from "../langgraph/client/deepseek-client.js";
+import { resolveCategory } from "../services/category-resolver.js";
+
+const OZON_API = "https://api-seller.ozon.ru";
+const CLIENT_ID = process.env.OZON_CLIENT_IDS || "";
+const API_KEY = (process.env.OZON_API_KEYS || "").split(",")[0] || "";
+
+interface DirectListingInput {
+  titleCn: string;
+  category?: string;
+  priceCny: number;
+  weightG: number;
+  ozonPriceRub: number;
+  features?: string;
+}
+
+export function createDirectListRouter(): Router {
+  const router = Router();
+
+  router.post("/direct-list", async (req, res) => {
+    try {
+      const input = req.body as DirectListingInput;
+      if (!input.titleCn || !input.ozonPriceRub) {
+        return res.status(400).json({ success: false, error: { code: "MISSING", message: "titleCn, ozonPriceRub required" } });
+      }
+
+      // Step 1: Resolve category. Use category field for Russian search term, or fall back to Электроника
+      const keyword = input.category || "Электроника";
+      let cat = await resolveCategory(keyword);
+      // If no match, try broader search
+      if (!cat) {
+        cat = await resolveCategory("Электроника");
+      }
+      if (!cat) {
+        return res.status(400).json({ success: false, error: { code: "NO_CATEGORY", message: `Category not found. Please specify a valid Russian category name.` } });
+      }
+      logger.info({ catId: cat.id, catName: cat.name, path: cat.path }, "Category resolved");
+
+      // Step 2: AI translate
+      const titleRu = await deepseekComplete(
+        "你是俄罗斯电商翻译专家。把中文商品名翻译成俄语Ozon标题，突出卖点。只返回俄语。",
+        input.titleCn,
+      );
+
+      // Step 3: Call Ozon API v3
+      const offerId = `SKU-${Date.now().toString(36)}`;
+      const body: Record<string, unknown> = {
+        items: [{
+          offer_id: offerId,
+          name: titleRu.slice(0, 500),
+          description_category_id: cat.id,
+          price: String(input.ozonPriceRub),
+          vat: "0",
+          currency_code: "CNY",
+          depth: 100, height: 100, width: 100,
+          weight: input.weightG || 500,
+          dimension_unit: "mm",
+          weight_unit: "g",
+        }],
+      };
+      // Add type_id if available (required by Ozon for most categories)
+      if (cat.typeId) {
+        (body.items as Array<Record<string, unknown>>)[0]!["type_id"] = cat.typeId;
+      }
+
+      const ozonResp = await fetch(`${OZON_API}/v3/product/import`, {
+        method: "POST",
+        headers: { "Client-Id": CLIENT_ID, "Api-Key": API_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      });
+      const ozonResult = await ozonResp.json() as { result?: { task_id?: string }; error?: string };
+
+      if (!ozonResp.ok || ozonResult.error) {
+        return res.status(422).json({ success: false, error: { code: "OZON_ERROR", message: JSON.stringify(ozonResult) } });
+      }
+
+      // Step 4: Check task status after 3s
+      const taskId = (ozonResult.result as { task_id?: string })?.task_id || "";
+      await new Promise(r => setTimeout(r, 3000));
+      const statusResp = await fetch(`${OZON_API}/v1/product/import/info`, {
+        method: "POST",
+        headers: { "Client-Id": CLIENT_ID, "Api-Key": API_KEY, "Content-Type": "application/json" },
+        body: JSON.stringify({ task_id: taskId }),
+      });
+      const statusResult = await statusResp.json() as { result?: { items?: Array<{ status: string; product_id?: number; errors?: unknown[] }> } };
+      const taskStatus = statusResult.result?.items?.[0];
+      const productId = taskStatus?.product_id || 0;
+
+      res.json({
+        success: taskStatus?.status === "success" || productId > 0,
+        data: {
+          taskId,
+          offerId,
+          titleRu: titleRu.slice(0, 80),
+          categoryId: cat.id,
+          categoryName: cat.name,
+          productId,
+          status: taskStatus?.status || "pending",
+        },
+      });
+    } catch (err) {
+      res.status(500).json({ success: false, error: { code: "LIST_ERROR", message: (err as Error).message } });
+    }
+  });
+
+  // GET /api/categories/search?q=keyword
+  router.get("/categories/search", async (req, res) => {
+    const q = (req.query.q as string) || "";
+    if (q.length < 2) return res.json({ success: true, data: [] });
+    const { searchCategories } = await import("../services/category-resolver.js");
+    const results = await searchCategories(q);
+    res.json({ success: true, data: results.slice(0, 10) });
+  });
+
+  // POST /api/categories/refresh — refresh tree from Ozon
+  router.post("/categories/refresh", async (_req, res) => {
+    try {
+      const { refreshCategoryTree } = await import("../services/category-resolver.js");
+      const count = await refreshCategoryTree();
+      res.json({ success: true, data: { count }, message: `Refreshed ${count} categories` });
+    } catch (err) {
+      res.status(500).json({ success: false, error: { code: "REFRESH_ERROR", message: (err as Error).message } });
+    }
+  });
+
+  return router;
+}

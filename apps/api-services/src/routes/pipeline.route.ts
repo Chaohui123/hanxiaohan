@@ -6,6 +6,7 @@
 
 import { Router } from "express";
 import { logger } from "@onzo/logger";
+import { getDb } from "../db/connection.js";
 import { executeFullPipeline } from "../langgraph/pipeline-graph.js";
 import { deepseekHealthCheck } from "../langgraph/client/deepseek-client.js";
 import { executeAutoSelect } from "../langgraph/auto-select-graph.js";
@@ -111,6 +112,10 @@ export function createPipelineRouter(): Router {
           keyword,
           candidates: result.scored.length,
           topProduct: result.scored[0] || null,
+          topScore: result.topScore,
+          topScoreProducts: result.topScoreProducts || [],
+          secondarySort: result.secondarySort || [],
+          validateFailType: result.validateFailType || "none",
           validationPassed: result.validationPassed,
           validationIssues: result.validationIssues,
           listingTaskId: result.listingTaskId || null,
@@ -121,6 +126,35 @@ export function createPipelineRouter(): Router {
       });
     } catch (err) {
       res.status(500).json({ success: false, error: { code: "AUTO_SELECT_ERROR", message: (err as Error).message }, correlationId: req.correlationId });
+    }
+  });
+
+  // ---- POST /api/market/manual-publish — bypass auto-select, publish specific URL ----
+  router.post("/market/manual-publish", async (req, res) => {
+    try {
+      const { url, storeId } = (req.body || {}) as { url?: string; storeId?: string };
+      if (!url) return res.status(400).json({ success: false, error: { code: "MISSING", message: "url required" }, correlationId: req.correlationId });
+      const { manualPublish } = await import("../langgraph/auto-select-graph.js");
+      const taskId = await manualPublish(url, storeId || "store_1");
+      res.json({ success: true, data: { taskId }, correlationId: req.correlationId });
+    } catch (err) {
+      res.status(500).json({ success: false, error: { code: "PUBLISH_ERROR", message: (err as Error).message }, correlationId: req.correlationId });
+    }
+  });
+
+  // ---- GET /api/market/diagnosis/:taskId ----
+  router.get("/market/diagnosis/:taskId", async (req, res) => {
+    try {
+      const db = await getDb().catch(() => null);
+      const rows = db ? await db.all<Record<string, string>>("SELECT * FROM auto_select_diagnosis WHERE task_id = ? OR keyword = ? ORDER BY created_at DESC LIMIT 5", [req.params.taskId, req.params.taskId]) : [];
+      const data = rows.map(r => ({
+        id: r.id, topScore: parseInt(r.top_score || "0"), failType: r.fail_type,
+        products: JSON.parse(r.top_products_json || "[]"), issues: JSON.parse(r.issues_json || "[]"),
+        createdAt: r.created_at,
+      }));
+      res.json({ success: true, data, correlationId: req.correlationId });
+    } catch (err) {
+      res.status(500).json({ success: false, error: { code: "DB_ERROR", message: (err as Error).message }, correlationId: req.correlationId });
     }
   });
 

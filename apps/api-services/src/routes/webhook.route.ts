@@ -60,6 +60,23 @@ function isIpAllowed(clientIp: string): boolean {
 export function createWebhookRouter(): Router {
   const router = Router();
 
+  // Strip deprecation headers that interfere with Ozon validation
+  function stripDeprecationHeaders(res: import("express").Response) {
+    res.removeHeader("X-API-Deprecated");
+    res.removeHeader("X-API-Deprecation-Date");
+    res.removeHeader("Sunset");
+  }
+
+  // HEAD/GET: Ozon URL verification test → always 200
+  router.use("/webhook/ozon", (req, res, next) => {
+    stripDeprecationHeaders(res);
+    if (req.method === "HEAD" || req.method === "GET") {
+      res.status(200).end();
+      return;
+    }
+    next();
+  });
+
   // Webhook-specific body size guard — Ozon payloads are < 10KB, 100KB is generous
   router.post("/webhook/ozon", (req, res, next) => {
     const contentLength = parseInt(req.headers["content-length"] || "0", 10);
@@ -80,6 +97,9 @@ export function createWebhookRouter(): Router {
     const signature = req.headers["x-ozon-signature"] as string | undefined;
     const clientIp = (req.headers["x-forwarded-for"] as string || req.socket.remoteAddress || "").split(",")[0].trim();
 
+    // Log full body for debugging Ozon registration
+    logger.info({ body: rawBody.slice(0, 500) }, "Webhook raw body");
+
     // Log every incoming webhook event for audit
     logger.info({
       clientIp,
@@ -99,11 +119,21 @@ export function createWebhookRouter(): Router {
       return;
     }
 
-    // Ozon registration test ping: no body/payload → always return 200
-    // Ozon sends a minimal POST when registering the webhook URL
+    // Parse request body
     const rawJson = rawBody.length > 0 ? (() => { try { return JSON.parse(rawBody); } catch { return null; } })() : null;
-    if (!rawJson || Object.keys(rawJson).length === 0) {
-      res.json({ success: true, message: "Webhook endpoint active", correlationId: req.correlationId });
+
+    // Ozon TYPE_PING: return current server time (not echo)
+    if (rawJson && (rawJson as Record<string,unknown>).message_type === "TYPE_PING") {
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      // Ozon API template: result is always an object, not boolean
+      const now = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
+      res.status(200).send(JSON.stringify({ result: {}, time: now }));
+      return;
+    }
+
+    // Empty body / no signature → return minimal 200
+    if (!rawJson || Object.keys(rawJson).length === 0 || !signature) {
+      res.status(200).send('{"result":{}}');
       return;
     }
 
@@ -171,7 +201,9 @@ export function createWebhookRouter(): Router {
     }, "Webhook event processing");
 
     // Respond immediately (Ozon expects fast 200) — process async
-    res.json({ success: true, eventId: payload.eventId, correlationId: req.correlationId });
+    // Ozon expects exactly {"result":true} — no extra fields
+    res.setHeader("Content-Type", "application/json; charset=utf-8");
+    res.status(200).send('{"result":{}}');
     recordWebhookReceived();
 
     // Background processing

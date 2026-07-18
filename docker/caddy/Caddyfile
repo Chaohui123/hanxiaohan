@@ -22,7 +22,7 @@ http://{$CADDY_DOMAIN:localhost} {
 	header Access-Control-Allow-Methods "GET, POST, OPTIONS"
 	header Access-Control-Allow-Headers "Content-Type, X-API-Key, Authorization"
 
-	# Webhook — must return 200 to Ozon registration test (HTTP+HTTPS)
+	# Webhook
 	handle /api/webhook/ozon {
 		reverse_proxy api-services:3000
 	}
