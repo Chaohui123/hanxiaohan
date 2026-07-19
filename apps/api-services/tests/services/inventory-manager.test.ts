@@ -6,13 +6,13 @@ const mockDb = vi.hoisted(() => ({
   all: vi.fn().mockResolvedValue([] as Record<string, unknown>[]),
 }));
 
-vi.mock("../../db/connection.js", () => ({
+vi.mock("../../src/db/connection.js", () => ({
   getDb: vi.fn().mockResolvedValue(mockDb),
   serializedWrite: vi.fn((fn: () => Promise<unknown>) => fn()),
 }));
-vi.mock("../notification-events.js", () => ({ emitEvent: vi.fn().mockResolvedValue(undefined), EVENT_KEYS: { STOCK_OUT: "STOCK_OUT" } }));
+vi.mock("../../src/services/notification-events.js", () => ({ emitEvent: vi.fn().mockResolvedValue(undefined), EVENT_KEYS: { STOCK_OUT: "STOCK_OUT" } }));
 
-import { InventoryManager } from "../inventory-manager.js";
+import { InventoryManager } from "../../src/services/inventory-manager.js";
 
 describe("InventoryManager", () => {
   let mgr: InventoryManager;

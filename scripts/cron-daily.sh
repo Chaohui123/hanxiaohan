@@ -4,7 +4,10 @@
 # Run: 0 3 * * * bash /root/onzo/scripts/cron-daily.sh >> /var/log/onzo-cron.log 2>&1
 # ============================================================
 set -e
-API_KEY="${API_KEY:-9e5b520d53c815006d0a4cfaea6557f5aae1e54d4bde68a13d2a96eed913ca2b}"
+if [ -z "${API_KEY:-}" ]; then
+  echo "ERROR: API_KEY environment variable is required (no default; set it in crontab or /etc/environment)" >&2
+  exit 1
+fi
 BASE="${API_BASE:-http://localhost:3000}"
 HDR="X-API-Key: $API_KEY"
 

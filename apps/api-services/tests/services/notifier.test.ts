@@ -1,5 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
-import { Notifier } from "../notifier.js";
+import { Notifier } from "../../src/services/notifier.js";
 
 describe("Notifier", () => {
   let notifier: Notifier;

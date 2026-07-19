@@ -102,11 +102,24 @@ vi.mock("@onzo/cache", () => ({
   TTL: { DEDUP_LOCK: 300, DIST_LOCK: 120, DASHBOARD_STATS: 60, STORE_CONFIG: 3600, CATEGORY_MATCH: 1800, LLM_TRANSLATION: 900, EXCHANGE_RATE: 3600, RATE_LIMIT: 60, SESSION: 86400 },
 }));
 
+// Exchange rate hits real external APIs (open.er-api.com, frankfurter.app) with
+// 10s timeouts when uncached — mock it so /api/process/manual stays offline-fast.
+vi.mock("../src/services/exchange-rate.js", () => ({
+  getExchangeRate: vi.fn().mockResolvedValue({ rate: 11.5, cached: false, stale: false, reliable: true, source: "test-mock" }),
+  forceRefreshRate: vi.fn(),
+}));
+
 process.env.OZON_CLIENT_IDS = "test";
 process.env.OZON_API_KEYS = "test";
-process.env.GLM_API_KEY = "test";
+process.env.KIMI_API_KEY = "test";
 process.env.DEEPSEEK_API_KEY = "test";
 process.env.ENV = "dev";
+
+// No real network in tests: route handlers / health checks call bare fetch()
+// against DeepSeek, ops-agent, exchange-rate APIs etc. — with multi-second
+// abort timeouts that blow the 5s test budget. Reject instantly instead.
+// (supertest itself uses Node http, not fetch, so this is safe.)
+global.fetch = vi.fn().mockRejectedValue(new Error("network disabled in tests"));
 
 import { app } from "../src/index.js";
 
@@ -162,11 +175,17 @@ describe("Pipeline E2E", () => {
     }
   });
 
-  // Health
-  it("GET /health — returns ok", async () => {
+  // Health — /health always returns 200; status is "ok" only when DeepSeek,
+  // Chromium and DB are ALL healthy (see src/utils/health-check.ts). In the test
+  // environment external deps are unreachable, so "degraded" is correct behavior.
+  it("GET /health — returns 200 with status consistent with dependency details", async () => {
     const res = await request(app).get("/health");
     expect(res.status).toBe(200);
-    expect(res.body.status).toBe("ok");
+    expect(["ok", "degraded"]).toContain(res.body.status);
+    const d = res.body.details;
+    expect(d).toBeDefined();
+    const allHealthy = d.deepseek === "connected" && d.chromium === "available" && d.database === "connected";
+    expect(res.body.status).toBe(allHealthy ? "ok" : "degraded");
   });
 
   // Dashboard

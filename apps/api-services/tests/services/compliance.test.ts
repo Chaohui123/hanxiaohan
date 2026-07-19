@@ -13,8 +13,20 @@ describe("checkCategoryCompliance", () => {
     expect(r.blocked).toBe(true);
   });
 
-  it("warns on restricted but not blocked", () => {
+  it("blocks medicinal category (hard block — requires registration)", () => {
+    // "лекарственн" was promoted to the high-risk hard-block list
+    // (compliance.ts: "Medical without registration"), so medicinal herbs
+    // are now blocked outright instead of warned.
     const r = checkCategoryCompliance(1, "Лекарственные травы", ["Здоровье"]);
+    expect(r.blocked).toBe(true);
+    expect(r.blockedReason).toBeDefined();
+  });
+
+  it("warns on restricted but not blocked", () => {
+    // "биологически активн" (dietary supplements) is a medium-risk keyword:
+    // restricted → warning, but not on the high-risk hard-block list.
+    const r = checkCategoryCompliance(1, "Биологически активные добавки", ["Здоровье"]);
+    expect(r.blocked).toBe(false);
     expect(r.warnings.length).toBeGreaterThan(0);
   });
 

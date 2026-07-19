@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { PricingEngine } from "../pricing-engine.js";
+import { PricingEngine } from "../../src/services/pricing-engine.js";
 
 describe("PricingEngine", () => {
   const engine = new PricingEngine();

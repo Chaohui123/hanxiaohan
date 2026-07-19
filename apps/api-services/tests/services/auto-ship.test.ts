@@ -4,16 +4,16 @@ const mockDb = vi.hoisted(() => ({
   exec: vi.fn(), run: vi.fn().mockResolvedValue({ changes: 1 }), all: vi.fn().mockResolvedValue([] as Record<string, unknown>[]),
 }));
 
-vi.mock("../../db/connection.js", () => ({
+vi.mock("../../src/db/connection.js", () => ({
   getDb: vi.fn().mockResolvedValue(mockDb),
   serializedWrite: vi.fn((fn: () => Promise<unknown>) => fn()),
 }));
 vi.mock("@onzo/ozon-order", () => ({ OzonOrderClient: vi.fn(() => ({ shipOrder: vi.fn() })) }));
 vi.mock("@onzo/logistics", () => ({ getLogisticsProvider: vi.fn().mockResolvedValue(null), selectBestProvider: vi.fn().mockResolvedValue(null) }));
-vi.mock("../notifier.js", () => ({ notifier: { notify: vi.fn() } }));
-vi.mock("../notification-events.js", () => ({ emitEvent: vi.fn().mockResolvedValue(undefined), EVENT_KEYS: { SHIPMENT_FAILED: "SF", ORDER_SHIPPED: "OS" } }));
+vi.mock("../../src/services/notifier.js", () => ({ notifier: { notify: vi.fn() } }));
+vi.mock("../../src/services/notification-events.js", () => ({ emitEvent: vi.fn().mockResolvedValue(undefined), EVENT_KEYS: { SHIPMENT_FAILED: "SF", ORDER_SHIPPED: "OS" } }));
 
-import { batchShipOrders } from "../auto-ship.js";
+import { batchShipOrders } from "../../src/services/auto-ship.js";
 const mockClient = {} as Parameters<typeof batchShipOrders>[0];
 
 describe("batchShipOrders", () => {

@@ -1,4 +1,4 @@
-﻿#!/bin/bash
+#!/bin/bash
 set -e
 echo "========================================="
 echo "  ONZO 一键部署脚本"
@@ -37,34 +37,7 @@ mkdir -p /data/onzo/caddy/data
 mkdir -p /data/onzo/app
 
 echo ""
-echo ">>> [5/8] 创建Caddy配置..."
-mkdir -p /data/onzo/caddy
-cat > /data/onzo/caddy/Caddyfile << 'CEOF'
-124-221-11-222.nip.io {
-    encode gzip zstd
-    reverse_proxy /api/* api-services:3000
-    reverse_proxy /tmp-images/* api-services:3000
-    reverse_proxy /health api-services:3000
-    reverse_proxy /metrics api-services:3000
-    reverse_proxy /dashboard api-services:3000
-    reverse_proxy api-services:3000
-    log {
-        output file /data/caddy/access.log
-        level INFO
-    }
-}
-
-http://124.221.11.222 {
-    redir https://124-221-11-222.nip.io{uri} permanent
-}
-CEOF
-
-echo ""
-echo ">>> [6/8] 创建环境变量..."
-cp /data/onzo/app/.env.production /data/onzo/app/.env 2>/dev/null || echo "将使用项目自带.env.production"
-
-echo ""
-echo ">>> [7/8] 解压代码..."
+echo ">>> [5/7] 解压代码..."
 if [ -f /data/onzo/onzo.zip ]; then
     rm -rf /data/onzo/app/*
     unzip -o /data/onzo/onzo.zip -d /data/onzo/app/
@@ -75,15 +48,27 @@ else
 fi
 
 echo ""
-echo ">>> [8/8] 启动服务..."
+echo ">>> [6/7] 创建环境变量..."
 cd /data/onzo/app
-docker compose up -d --build
+# 首次部署：以模板生成 .env.production，填入真实密钥后再启动
+if [ ! -f .env.production ]; then
+    cp .env.example .env.production
+    echo "已生成 .env.production，请先编辑填入真实密钥后重新运行本脚本"
+    exit 1
+fi
+cp .env.production .env
+
+echo ""
+echo ">>> [7/7] 启动服务..."
+# compose 中所有服务都声明了 profiles，必须显式指定 profile，否则启动 0 个容器
+docker compose --profile production --env-file .env.production up -d --build
 sleep 30
 docker compose ps
 
 echo ""
 echo "========================================="
 echo "  部署完成！"
-echo "  访问: https://124-221-11-222.nip.io"
+echo "  访问: https://${CADDY_DOMAIN:-<你的域名>}  (Caddy 配置: docker/caddy/Caddyfile)"
+echo "  n8n: http://124.221.11.222:5678"
 echo "  日志: docker compose logs -f api-services"
 echo "========================================="

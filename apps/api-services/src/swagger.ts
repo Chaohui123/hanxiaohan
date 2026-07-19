@@ -87,14 +87,53 @@ export const swaggerSpec = {
     "/api/task/queue/stats": {
       get: { summary: "Task queue statistics", responses: { "200": { description: "Queue stats JSON" } } },
     },
+    "/api/task/queue": {
+      get: {
+        summary: "List queued tasks (optional ?status=&storeId=&type=&limit=)",
+        parameters: [
+          { name: "status", in: "query", schema: { type: "string", enum: ["all", "queued", "processing", "done", "failed"] } },
+          { name: "storeId", in: "query", schema: { type: "string" } },
+          { name: "type", in: "query", schema: { type: "string" } },
+          { name: "limit", in: "query", schema: { type: "integer", default: 50, maximum: 500 } },
+        ],
+        responses: { "200": { description: "Array of tasks" } },
+      },
+    },
     "/api/task/failed": {
-      get: { summary: "List failed tasks (dead letter queue)", responses: { "200": { description: "Array of failed tasks" } } },
+      get: {
+        summary: "List failed tasks (dead letter queue; ?status=&storeId=&limit=)",
+        parameters: [
+          { name: "status", in: "query", schema: { type: "string", enum: ["actionable", "pending_retry", "retrying", "permanent_failure", "retried", "all"], default: "actionable" } },
+          { name: "storeId", in: "query", schema: { type: "string" } },
+          { name: "limit", in: "query", schema: { type: "integer", default: 50, maximum: 500 } },
+        ],
+        responses: { "200": { description: "Array of failed tasks" } },
+      },
+      post: {
+        summary: "Record an external failure notification into the dead letter queue (n8n)",
+        requestBody: {
+          required: true,
+          content: { "application/json": { schema: { type: "object", required: ["error"], properties: { error: { oneOf: [{ type: "string" }, { type: "object" }] }, source: { type: "string" }, taskType: { type: "string" }, storeId: { type: "string" } } } } },
+        },
+        responses: { "201": { description: "Dead letter entry created" }, "400": { description: "Validation failed" } },
+      },
+    },
+    "/api/task/retry/{id}": {
+      post: {
+        summary: "Re-queue a single task by id (task_queue or failed_tasks)",
+        parameters: [{ name: "id", in: "path", required: true, schema: { type: "string" } }],
+        responses: {
+          "200": { description: "Task re-queued" },
+          "400": { description: "Task not retryable" },
+          "404": { description: "Task not found" },
+        },
+      },
     },
     "/api/task/deadletter/retry-batch": {
       post: {
-        summary: "Batch retry failed tasks",
-        requestBody: { content: { "application/json": { schema: { type: "object", properties: { taskIds: { type: "array", items: { type: "string" } } } } } } },
-        responses: { "200": { description: "Retry results" } },
+        summary: "Batch retry failed tasks (by taskIds, or by filterType category)",
+        requestBody: { content: { "application/json": { schema: { type: "object", properties: { taskIds: { type: "array", items: { type: "string" } }, filterType: { type: "string", enum: ["all", "all_retryable", "api_error", "validation", "network", "rate_limit", "circuit_breaker", "unknown"] }, storeId: { type: "string" }, limit: { type: "integer", default: 50 } } } } } },
+        responses: { "200": { description: "Retry results { retried, failed, total }" } },
       },
     },
     "/api/db/backup": {
@@ -104,7 +143,15 @@ export const swaggerSpec = {
       },
     },
     "/api/task/listings": {
-      get: { summary: "Listing history", responses: { "200": { description: "Array of listing records" } } },
+      get: {
+        summary: "Listing history (optional ?status=&limit=)",
+        parameters: [
+          { name: "status", in: "query", schema: { type: "string" } },
+          { name: "limit", in: "query", schema: { type: "integer", default: 20, maximum: 200 } },
+        ],
+        responses: { "200": { description: "Array of listing records" } },
+      },
+      post: { summary: "Listing history (POST alias for n8n auto-publish workflow)", responses: { "200": { description: "Array of listing records" } } },
     },
   },
 };

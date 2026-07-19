@@ -24,7 +24,7 @@ jobs:
             echo "=== Appending procurement + logistics config ==="
             cat >> .env.production << 'ENVEOF'
             # ====================== 货代中转仓收货地址 ======================
-            FREIGHT_ADDRESS=广东省东莞市常平镇土塘港建路45号7号楼放兔喜240247室 韩小寒 18928225650
+            FREIGHT_ADDRESS=${{ secrets.FREIGHT_ADDRESS }}
 
             # ====================== 物流配送模块 ======================
             LOGISTICS_ENABLE=false
@@ -32,9 +32,9 @@ jobs:
             LOGISTICS_PROVIDER=auto
 
             # ====================== 1688 开放平台（采购）======================
-            ALIBABA_APP_KEY=1390512
-            ALIBABA_APP_SECRET=88CGgcf4v9m
-            ALIBABA_ACCESS_TOKEN=06a9b42a-4290-4c48-bcc7-a41986724016
+            ALIBABA_APP_KEY=${{ secrets.ALIBABA_APP_KEY }}
+            ALIBABA_APP_SECRET=${{ secrets.ALIBABA_APP_SECRET }}
+            ALIBABA_ACCESS_TOKEN=${{ secrets.ALIBABA_ACCESS_TOKEN }}
             ALIBABA_GATEWAY=https://gw.open.1688.com/openapi/
 
             # ====================== 1688 采购模式 ======================
@@ -47,7 +47,9 @@ jobs:
             ENVEOF
 
             echo "=== Config appended ==="
-            grep "MANUAL_PAY_MODE\|FREIGHT_ADDRESS\|ALIBABA_APP_KEY" .env.production
+            for k in MANUAL_PAY_MODE FREIGHT_ADDRESS ALIBABA_APP_KEY; do
+              grep -q "^${k}=" .env.production && echo "${k}: present" || { echo "${k}: MISSING"; exit 1; }
+            done
 
             echo "=== Restarting services ==="
             docker compose --profile production --env-file .env.production up -d
