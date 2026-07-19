@@ -1,7 +1,8 @@
 import type { OcrResult } from "@onzo/shared-types";
 
 /**
- * GLM-4.6V-Flash OCR prompt — Extract visible text from product images.
+ * Kimi K3 vision OCR prompt — Extract visible text from product images.
+ * (Migrated from GLM-4.6V-Flash; message format is OpenAI-compatible.)
  */
 
 export const OCR_SYSTEM_PROMPT = `You are a product image OCR assistant for cross-border e-commerce.

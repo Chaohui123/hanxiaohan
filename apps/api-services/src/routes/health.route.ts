@@ -166,9 +166,9 @@ export function createHealthRouter(ozonClient?: OzonClient): Router {
     }
 
     // 5. Model API keys present
-    checks.glmKey = process.env.GLM_API_KEY && !process.env.GLM_API_KEY.includes("CHANGE_ME")
+    checks.kimiKey = process.env.KIMI_API_KEY && !process.env.KIMI_API_KEY.includes("CHANGE_ME")
       ? { status: "ok" }
-      : { status: "unavailable", message: "GLM_API_KEY not configured" };
+      : { status: "unavailable", message: "KIMI_API_KEY not configured" };
     checks.deepseekKey = process.env.DEEPSEEK_API_KEY && !process.env.DEEPSEEK_API_KEY.includes("CHANGE_ME")
       ? { status: "ok" }
       : { status: "unavailable", message: "DEEPSEEK_API_KEY not configured" };

@@ -2,27 +2,53 @@
   "name": "ONZO — Order Sync (every 30 min)",
   "nodes": [
     {
-      "parameters": { "rule": { "interval": [{ "field": "minutes", "minutesInterval": 30 }] } },
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 30
+            }
+          ]
+        }
+      },
       "id": "schedule",
       "name": "Every 30 min",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.1,
-      "position": [250, 300]
+      "position": [
+        250,
+        300
+      ]
     },
     {
       "parameters": {
-        "url": "http://host.docker.internal:3000/api/orders/sync",
+        "url": "={{ $env.ONZO_API_BASE }}/api/orders/sync",
         "method": "POST",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "{}",
-        "options": { "timeout": 120000 }
+        "options": {
+          "timeout": 120000
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.ONZO_API_KEY }}"
+            }
+          ]
+        }
       },
       "id": "sync",
       "name": "POST /api/orders/sync",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [450, 300]
+      "position": [
+        450,
+        300
+      ]
     },
     {
       "parameters": {
@@ -33,14 +59,39 @@
       "name": "Sync Result",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [650, 300]
+      "position": [
+        650,
+        300
+      ]
     }
   ],
   "connections": {
-    "Every 30 min": { "main": [[{ "node": "POST /api/orders/sync", "type": "main", "index": 0 }]] },
-    "POST /api/orders/sync": { "main": [[{ "node": "Sync Result", "type": "main", "index": 0 }]] }
+    "Every 30 min": {
+      "main": [
+        [
+          {
+            "node": "POST /api/orders/sync",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST /api/orders/sync": {
+      "main": [
+        [
+          {
+            "node": "Sync Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
-  "settings": { "callerPolicy": "workflowsFromSameOwner" },
+  "settings": {
+    "callerPolicy": "workflowsFromSameOwner"
+  },
   "versionId": "1.0.0",
   "active": true
 }

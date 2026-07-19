@@ -3,7 +3,7 @@
 ## 导入步骤
 
 1. 打开 n8n: `http://localhost:5678`
-2. 登录 (默认: `admin` / `onzo2026`)
+2. 登录（账号密码取 `.env` 的 `N8N_USER` / `N8N_PASSWORD`，生产环境必须改为强密码）
 3. 点击右上角 **Import from File**
 4. 选择 `n8n/workflows/` 中的 JSON 文件
 5. 点击 **Activate** 激活

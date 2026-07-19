@@ -6,19 +6,15 @@
 import { Router } from "express";
 import type { TaskQueue } from "../db/task-queue.js";
 import type { AppConfig } from "../config.js";
-import { ProductScraper, BrowserPool } from "@onzo/scraper-1688";
-import { GlmVisionClient, DeepSeekClient, GlmRateLimiter, TokenTracker, estimateCost } from "@onzo/glm-integration";
-import { DeepSeekTranslator } from "../pipelines/deepseek-translator.js";
 import { getExchangeRate } from "../services/exchange-rate.js";
 import { notifier } from "../services/notifier.js";
 import { writeToDeadLetter } from "../services/dead-letter.js";
 import { getCategoryTree } from "../services/category-cache.js";
-import { fullComplianceCheck } from "../services/compliance.js";
+import { fullComplianceCheck, checkChineseProductCompliance } from "../services/compliance.js";
 import { validateBody } from "../middleware/validate.js";
 import { logger } from "@onzo/logger";
-import { ProductValidator } from "@onzo/validation-layer";
-import { OzonClient, AuthManager } from "@onzo/ozon-api-wrapper";
-import { registerCleanup } from "../middleware/shutdown.js";
+import type { OzonClient } from "@onzo/ozon-api-wrapper";
+import { runListingPipeline, type ListingInfra } from "../services/listing-runner.js";
 import {
   createPipelineContext,
   stepScrape,
@@ -35,90 +31,11 @@ import {
   findNearestAncestorWithAttributes,
 } from "../pipelines/listing-pipeline.js";
 
-export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Router {
+export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue, listingInfra: ListingInfra): Router {
   const router = Router();
 
-  // Shared instances — created once at startup
-  const browserPool = new BrowserPool({ maxBrowsers: config.scraper.maxBrowserPool });
-  const scraper = new ProductScraper({
-    headless: true,
-    dataDir: "./data/browser",
-    minDelayMs: config.scraper.requestDelayMin,
-    maxDelayMs: config.scraper.requestDelayMax,
-  });
-
-  // Wire captcha notifications
-  scraper.onCaptcha(async (event) => {
-    await notifier.notify({
-      level: "warn",
-      event: "1688验证码",
-      message: `${event.captchaType} captcha at ${event.url}. Scraper cooldown active.`,
-      correlationId: `captcha-${Date.now()}`,
-      metadata: { captchaType: event.captchaType, url: event.url },
-    }).catch(() => {});
-  });
-
-  // Register cleanup for graceful shutdown
-  registerCleanup(async () => {
-    await scraper.close();
-    logger.info("Browser scraper closed");
-  });
-
-  const validator = new ProductValidator();
-  const ozonClient = new OzonClient({
-    auth: new AuthManager({
-      clients: [{ clientId: config.ozon.clientId, apiKey: config.ozon.apiKey }],
-    }),
-    baseUrl: config.ozon.baseUrl,
-  });
-
-  // AI rate limiter
-  const glmLimiter = new GlmRateLimiter({
-    maxConcurrent: config.maxAiConcurrency,
-    tokensPerMinute: 60,
-  });
-
-  // Token tracker — must be created BEFORE AI clients
-  const dailyLimit = parseInt(process.env.LLM_DAILY_TOKEN_LIMIT || "0", 10);
-  const tokenTracker = new TokenTracker({
-    dailyLimit,
-    onLimitExceeded: (usage) => {
-      logger.error({ dailyLimit, totalTokens: usage.totalTokens }, "Token limit exceeded");
-    },
-    persistFn: async (usage) => {
-      const { getDb } = await import("../db/connection.js");
-      const db = await getDb().catch(() => null);
-      if (!db) {
-        logger.warn("Token usage not persisted — DB unavailable");
-        return;
-      }
-      const cost = estimateCost(usage);
-      await db.run(
-        "INSERT INTO token_usage (model, prompt_tokens, completion_tokens, total_tokens, provider, cost_estimate) VALUES (?, ?, ?, ?, ?, ?)",
-        [usage.model, usage.promptTokens, usage.completionTokens, usage.totalTokens, usage.provider, cost]
-      ).catch((err) => {
-        logger.error({ err, model: usage.model, tokens: usage.totalTokens }, "Failed to persist token usage — cost data lost");
-      });
-    },
-  });
-
-  // Vision OCR → GLM-4.6V-Flash (per rules.md)
-  const visionClient = new GlmVisionClient({
-    apiKey: config.glm.apiKey,
-    baseUrl: `${config.glm.baseUrl}/chat/completions`,
-    model: config.glm.visionModel,
-    tokenTracker,
-  });
-
-  // Text tasks → DeepSeek V4 Flash (per rules.md: P0 listing = deepseek-v4-flash)
-  const deepseekClient = new DeepSeekClient({
-    apiKey: config.deepseek.apiKey,
-    baseUrl: config.deepseek.baseUrl,
-    flashModel: config.deepseek.flashModel,
-    proModel: config.deepseek.proModel,
-    tokenTracker,
-  });
-  const deepseekTranslator = new DeepSeekTranslator(deepseekClient);
+  // Shared instances — created once at startup (see services/listing-runner.ts)
+  const { browserPool, scraper, validator, ozonClient, visionClient, deepseekTranslator } = listingInfra;
 
   // POST /api/process
   router.post("/process", async (req, res) => {
@@ -149,107 +66,11 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
       correlationId: req.correlationId,
     });
 
-    // Execute pipeline asynchronously (with browser pool + GLM rate limiting)
-    const ctx = createPipelineContext(sourceUrl, store);
+    // Execute pipeline asynchronously (shared runner — services/listing-runner.ts)
     await taskQueue.markProcessing(queued.id);
+    const { ctx, outcome } = await runListingPipeline(listingInfra, { url: sourceUrl, storeId: store });
 
-    try {
-      // Step 1: Scrape (browser-pooled)
-      await browserPool.acquire();
-      let scraped;
-      try {
-        scraped = await stepScrape(ctx, scraper, sourceUrl);
-      } finally {
-        browserPool.release();
-      }
-
-      // Step 2: OCR (rate-limited)
-      const ocrTexts = await glmLimiter.call(() =>
-        stepOcr(ctx, visionClient, scraped.specImages)
-      );
-
-      // Step 3: Translate (DeepSeek Flash)
-      const translated = await glmLimiter.call(() =>
-        stepTranslate(ctx, deepseekTranslator, scraped)
-      );
-
-      // Step 4: Match category (DeepSeek Flash)
-      const categoryTree = await getCategoryTree(ozonClient, { ttlHours: 24 });
-      const category = await glmLimiter.call(() =>
-        stepMatchCategory(ctx, deepseekTranslator, scraped, categoryTree)
-      );
-
-      // Step 5: Fill attributes (DeepSeek Flash)
-      let requiredAttributes: Awaited<ReturnType<OzonClient["getCategoryAttributes"]>> = [];
-      if (category.categoryId > 0) {
-        const attrCategoryId = category.attributeCategoryId ?? category.categoryId;
-        requiredAttributes = await ozonClient.getCategoryAttributes(attrCategoryId).catch(() => []);
-      }
-      if (requiredAttributes.length > 0) {
-        await glmLimiter.call(() =>
-          stepFillAttributes(ctx, deepseekTranslator, translated, category.categoryId, requiredAttributes)
-        );
-      }
-
-      // Step 5.5: Download images locally + upload to Ozon CDN
-      const allDetailImages = scraped.detailImages ?? [];
-      await stepDownloadAndUploadImages(ctx, ozonClient, scraper, scraped.specImages, allDetailImages);
-
-      // Step 6: Build + validate
-      const fx = await getExchangeRate();
-      if (!fx.reliable) {
-        taskQueue.markFailed(queued.id, `Exchange rate unreliable: source=${fx.source}, rate=${fx.rate}. Blocked to prevent pricing errors.`)
-          .catch((dbErr) => logger.error({ correlationId: ctx.correlationId, err: dbErr }, "Failed to mark rate-blocked task"));
-        return;
-      }
-      const processed = buildProcessedProduct(ctx, {
-        exchangeRate: fx.rate,
-        defaultLength: 20,
-        defaultWidth: 15,
-        defaultHeight: 5,
-        defaultWeight: 0.5,
-      });
-      ctx.processed = processed;
-
-      const validation = validator.validate(processed);
-      if (!validation.valid) {
-        taskQueue.markFailed(queued.id, `Validation: ${validation.errors.map((e) => e.message).join("; ")}`)
-          .catch((dbErr) => logger.error({ correlationId: ctx.correlationId, err: dbErr }, "Failed to mark validation failure"));
-        return;
-      }
-
-      // Compliance check — block sanctioned categories before hitting Ozon
-      const compliance = fullComplianceCheck({
-        categoryId: processed.categoryId,
-        categoryName: processed.categoryName,
-        categoryPath: processed.categoryPath,
-        titleRu: processed.titleRu,
-        descriptionRu: processed.descriptionRu,
-      });
-      if (compliance.blocked) {
-        const reason = compliance.blockedReason ?? "Category prohibited";
-        taskQueue.markFailed(queued.id, `Compliance: ${reason}`)
-          .catch((dbErr) => logger.error({ correlationId: ctx.correlationId, err: dbErr }, "Failed to mark compliance block"));
-        return;
-      }
-      if (compliance.warnings.length > 0) {
-        logger.warn({ warnings: compliance.warnings, correlationId: ctx.correlationId }, "Compliance warnings");
-      }
-
-      // Step 7: Create draft with image IDs (Ozon CDN)
-      // Ops-agent review before publishing to Ozon
-      const review = await stepOpsReview(ctx, processed);
-      if (!review.approved) {
-        logger.warn({ taskId: ctx.taskId, reason: review.reason }, "Ops-agent rejected listing");
-        return;
-      }
-      if (review.riskLevel === "high") {
-        logger.warn({ taskId: ctx.taskId, suggestions: review.suggestions }, "Ops-agent high risk — proceeding with caution");
-      }
-
-      const draftResult = await stepCreateDraft(ctx, ozonClient, processed);
-
-      // Success
+    if (outcome.kind === "success") {
       recordPipelineSuccess(ctx).catch((dbErr) =>
         logger.error({ correlationId: ctx.correlationId, err: dbErr }, "Failed to record success")
       );
@@ -257,32 +78,53 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
         logger.error({ correlationId: ctx.correlationId, err: dbErr }, "Failed to mark done")
       );
 
-      logger.info({ correlationId: ctx.correlationId, productId: draftResult.productId }, "Draft created");
-      notifier.notifySuccess(ctx.correlationId, processed.titleRu, draftResult.offerId, draftResult.productId).catch(() => {});
-    } catch (err) {
-      const error = err instanceof Error ? err : new Error(String(err));
-      logger.error({ correlationId: ctx.correlationId, err: error }, "Pipeline failed");
-
-      // Write to dead letter queue for smart retry
-      writeToDeadLetter({
-        taskType: "listing",
-        errorMessage: error.message,
-        payload: { url: sourceUrl },
-        storeId: store,
-        correlationId: ctx.correlationId,
-      }).catch(() => {});
-
-      // Notify failure
-      notifier.notifyFailure(ctx.correlationId, "pipeline", error.message, sourceUrl).catch(() => {});
-
-      // Fire-and-forget error recording — don't let DB errors crash the handler
-      recordPipelineFailure(ctx, error).catch((dbErr) =>
-        logger.error({ correlationId: ctx.correlationId, err: dbErr }, "Failed to record pipeline failure")
-      );
-      taskQueue.markFailed(queued.id, error.message).catch((dbErr) =>
-        logger.error({ correlationId: ctx.correlationId, err: dbErr }, "Failed to mark task as failed")
-      );
+      logger.info({ correlationId: ctx.correlationId, productId: outcome.productId }, "Draft created");
+      notifier.notifySuccess(ctx.correlationId, outcome.titleRu, outcome.offerId, outcome.productId).catch(() => {});
+      return;
     }
+
+    if (outcome.kind === "blocked") {
+      if (outcome.blockKind === "cn_compliance") {
+        // Stop pipeline — don't waste API calls on blocked products
+        await taskQueue.markFailed(queued.id, outcome.reason);
+        await recordPipelineFailure(ctx, new Error(outcome.reason));
+      } else if (outcome.blockKind === "fx_unreliable") {
+        taskQueue.markFailed(queued.id, outcome.reason)
+          .catch((dbErr) => logger.error({ correlationId: ctx.correlationId, err: dbErr }, "Failed to mark rate-blocked task"));
+      } else if (outcome.blockKind === "validation") {
+        taskQueue.markFailed(queued.id, outcome.reason)
+          .catch((dbErr) => logger.error({ correlationId: ctx.correlationId, err: dbErr }, "Failed to mark validation failure"));
+      } else if (outcome.blockKind === "compliance") {
+        taskQueue.markFailed(queued.id, outcome.reason)
+          .catch((dbErr) => logger.error({ correlationId: ctx.correlationId, err: dbErr }, "Failed to mark compliance block"));
+      }
+      // ops_review rejections are already logged by the runner — nothing else to do
+      return;
+    }
+
+    // outcome.kind === "error"
+    const error = outcome.error;
+    logger.error({ correlationId: ctx.correlationId, err: error }, "Pipeline failed");
+
+    // Write to dead letter queue for smart retry
+    writeToDeadLetter({
+      taskType: "listing",
+      errorMessage: error.message,
+      payload: { url: sourceUrl },
+      storeId: store,
+      correlationId: ctx.correlationId,
+    }).catch(() => {});
+
+    // Notify failure
+    notifier.notifyFailure(ctx.correlationId, "pipeline", error.message, sourceUrl).catch(() => {});
+
+    // Fire-and-forget error recording — don't let DB errors crash the handler
+    recordPipelineFailure(ctx, error).catch((dbErr) =>
+      logger.error({ correlationId: ctx.correlationId, err: dbErr }, "Failed to record pipeline failure")
+    );
+    taskQueue.markFailed(queued.id, error.message).catch((dbErr) =>
+      logger.error({ correlationId: ctx.correlationId, err: dbErr }, "Failed to mark task as failed")
+    );
   });
 
   // POST /api/process/sync — synchronous version (for direct testing)
@@ -308,6 +150,16 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
       let scraped;
       try { scraped = await stepScrape(ctx, scraper, sourceUrl); }
       finally { browserPool.release(); }
+
+      // P6: Chinese compliance pre-check (before OCR/translate)
+      const cnCompSync = checkChineseProductCompliance(scraped.title, scraped.descriptionText);
+      if (cnCompSync.blocked) {
+        return res.status(422).json({
+          success: false,
+          error: { code: "COMPLIANCE_BLOCKED", message: cnCompSync.blockedReason || "Product requires certification", requiredCerts: cnCompSync.requiredCerts, retryable: false },
+          correlationId: req.correlationId,
+        });
+      }
 
       const ocrTexts = await stepOcr(ctx, visionClient, scraped.specImages);
       const translated = await stepTranslate(ctx, deepseekTranslator, scraped);
@@ -464,6 +316,17 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue): Ro
 
     const ctx = createPipelineContext("manual-input");
     ctx.scraped = scraped; // Set directly since we skip stepScrape
+
+    // P6: Chinese compliance pre-check
+    const cnCompManual = checkChineseProductCompliance(scraped.title, scraped.descriptionText);
+    if (cnCompManual.blocked) {
+      return res.status(422).json({
+        success: false,
+        error: { code: "COMPLIANCE_BLOCKED", message: cnCompManual.blockedReason || "Product requires certification", requiredCerts: cnCompManual.requiredCerts, retryable: false },
+        correlationId: req.correlationId,
+      });
+    }
+
     try {
       const ocrTexts = await stepOcr(ctx, visionClient, scraped.specImages.slice(0, 5));
       const translated = await stepTranslate(ctx, deepseekTranslator, scraped);

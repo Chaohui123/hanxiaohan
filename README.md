@@ -10,7 +10,7 @@ pnpm install
 
 # 2. 配置环境变量
 cp .env.example .env
-# 编辑 .env 填入 Ozon/GLM/DeepSeek 密钥
+# 编辑 .env 填入 Ozon/Kimi/DeepSeek 密钥
 
 # 3. 启动服务
 pnpm --filter @onzo/api-services dev
@@ -18,8 +18,8 @@ pnpm --filter @onzo/api-services dev
 # → 运营看板: http://localhost:3000/
 # → API 文档: http://localhost:3000/api/docs
 
-# 4. Docker 部署
-docker compose up -d
+# 4. Docker 部署（compose 所有服务都带 profile，必须显式指定）
+docker compose --profile standalone --env-file .env.production up -d
 # → n8n: http://localhost:5678
 # → api: http://localhost:3000
 ```
@@ -30,7 +30,8 @@ docker compose up -d
 |---|---|---|
 | OZON_CLIENT_IDS | Ozon Client-ID | ✅ |
 | OZON_API_KEYS | Ozon API Key | ✅ |
-| GLM_API_KEY | 智谱 API Key (OCR) | ✅ |
+| GLM_API_KEY | 智谱 API Key (embedding/生图，视觉已迁 K3) | - |
+| KIMI_API_KEY | Kimi API Key (K3 视觉OCR) | ✅ |
 | DEEPSEEK_API_KEY | DeepSeek API Key (翻译) | ✅ |
 | LLM_DAILY_TOKEN_LIMIT | 单日 Token 上限 | - |
 | ENV | `dev` Mock / `production` 真实 | - |
@@ -102,7 +103,7 @@ curl http://localhost:3000/api/stores/summary
 | 框架 | Express 4 |
 | 数据库 | SQLite (node:sqlite + Drizzle ORM) |
 | 爬虫 | Playwright |
-| AI | GLM-4.6V (OCR) + DeepSeek-V4 (文本) |
+| AI | K3 (视觉OCR) + DeepSeek-V4 (文本) |
 | 工作流 | n8n |
 | 部署 | Docker + docker-compose |
 | 包管理 | pnpm monorepo |
@@ -111,7 +112,7 @@ curl http://localhost:3000/api/stores/summary
 
 ```
 packages/
-  ai/              → @onzo/glm-integration     GLM + DeepSeek 统一封装
+  ai/              → @onzo/glm-integration     K3/GLM + DeepSeek 统一封装
   logger/          → @onzo/logger              结构化日志
   ozon-api-wrapper/→ @onzo/ozon-api-wrapper    Ozon API SDK (限流/熔断)
   ozon-order/      → @onzo/ozon-order          订单同步 + 库存 + Webhook

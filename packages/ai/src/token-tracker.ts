@@ -9,7 +9,7 @@ export interface TokenUsage {
   completionTokens: number;
   totalTokens: number;
   timestamp: string;
-  provider: "glm" | "deepseek";
+  provider: "kimi" | "deepseek";
 }
 
 export interface TokenTrackerConfig {
@@ -97,7 +97,8 @@ export class TokenLimitExceededError extends Error {
 
 /** Cost estimation per 1M tokens (approximate, for reporting). */
 export const TOKEN_COST_PER_M = {
-  "glm-4.6v-flash": { prompt: 0, completion: 0 }, // free tier
+  "kimi-k3": { prompt: 3.00, completion: 15.00 }, // USD per 1M (launch pricing; cache-hit input $0.30 not modeled)
+  "moonshot-v1-8k-vision": { prompt: 0, completion: 0 }, // free tier
   "deepseek-v4-flash": { prompt: 0.14, completion: 0.28 }, // USD
   "deepseek-v4-pro": { prompt: 0.55, completion: 1.10 },
 } as Record<string, { prompt: number; completion: number }>;

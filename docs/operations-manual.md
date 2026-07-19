@@ -320,21 +320,21 @@ curl https://api.deepseek.com/v1/chat/completions \
 | `500/503` | DeepSeek 服务异常 | 等待 5 分钟自动恢复 |
 | `timeout` | 网络超时 | 检查服务器能否访问 api.deepseek.com |
 
-### 5.3 GLM Vision 报错
+### 5.3 K3 Vision 报错
 
-**现象**：`"OCR failed: GLM API error: 429"`
+**现象**：`"OCR failed: K3 API error: 429"`
 
 **排查**：
 ```bash
 # 检查密钥
-grep GLM /root/onzo/.env
+grep KIMI /root/onzo/.env
 
-# GLM-4.6V-Flash 免费额度检查
-# 登录 open.bigmodel.cn → 控制台 → 查看剩余额度
+# K3 额度检查
+# 登录 platform.moonshot.cn → 控制台 → 查看剩余额度
 ```
 
 **解决**：
-- GLM-4.6V-Flash 完全免费，429 通常是并发限流
+- K3 按量计费，429 为并发限流或额度不足
 - 自动重试最多 2 次，间隔 1s/2s
 - 降低 `MAX_AI_CONCURRENCY` 可减少触发
 

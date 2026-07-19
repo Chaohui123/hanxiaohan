@@ -2,8 +2,17 @@ version: '3.8'
 
 # ============================================================
 # ONZO Production Docker Compose
+#
+# Profiles:
+#   standalone  — API + agents only, no PG/Redis (SQLite fallback)
+#   production  — Full stack: PG + Redis + API + Caddy + agents
+#   full        — production + monitoring (Prometheus + Grafana + Alertmanager)
+#   monitoring  — Prometheus + Grafana + Alertmanager only
+#   tracing     — Jaeger only
+#
 # Start (full stack):  docker compose --profile production --env-file .env.production up -d
 # Start (standalone):  docker compose --profile standalone --env-file .env.production up -d
+# Start (everything):  docker compose --profile full --env-file .env.production up -d
 # Dev (hot reload):    docker compose -f docker-compose.yml -f docker-compose.dev.yml --profile standalone up -d
 # Stop:                docker compose down
 # Logs:                docker compose logs -f api-services
@@ -238,6 +247,62 @@ services:
       - full
       - standalone
 
+  # ---- n8n Workflow Automation (OPTIONAL — 内建 scheduler 已覆盖全部定时职责) ----
+  # 默认不启动（独立 profile）。仅在需要可视化编排时启用:
+  #   docker compose --profile production --profile n8n up -d
+  n8n:
+    image: n8nio/n8n:latest
+    container_name: onzo-n8n
+    restart: always
+    env_file:
+      - .env.production
+    environment:
+      - N8N_BASIC_AUTH_ACTIVE=true
+      - N8N_BASIC_AUTH_USER=${N8N_USER:-admin}
+      - N8N_BASIC_AUTH_PASSWORD=${N8N_PASSWORD}
+      - N8N_ENCRYPTION_KEY=${N8N_ENCRYPTION_KEY}
+      - N8N_HOST=${N8N_HOST:-0.0.0.0}
+      - N8N_PORT=5678
+      - N8N_PROTOCOL=${N8N_PROTOCOL:-http}
+      - N8N_SECURE_COOKIE=${N8N_SECURE_COOKIE:-false}
+      - WEBHOOK_URL=${N8N_WEBHOOK_URL:-http://localhost:5678/}
+      - GENERIC_TIMEZONE=${GENERIC_TIMEZONE:-Europe/Moscow}
+      # 工作流 HTTP 节点统一通过 $env 注入调用 api-services
+      - ONZO_API_BASE=http://api-services:3000
+      - ONZO_API_KEY=${API_KEY}
+      # 桥接：工作流里用 $env.TELEGRAM_*，.env 里统一叫 NOTIFY_TELEGRAM_*
+      - TELEGRAM_BOT_TOKEN=${NOTIFY_TELEGRAM_BOT_TOKEN:-}
+      - TELEGRAM_CHAT_ID=${NOTIFY_TELEGRAM_CHAT_ID:-}
+    ports:
+      - "5678:5678"
+    volumes:
+      - n8n_data:/home/node/.n8n
+    depends_on:
+      api-services:
+        condition: service_healthy
+        required: false
+    healthcheck:
+      test: ["CMD-SHELL", "wget -qO- http://localhost:5678/healthz || exit 1"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+        reservations:
+          memory: 128M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "20m"
+        max-file: "5"
+    networks:
+      - onzo-network
+    profiles:
+      - n8n
+
   # ---- Caddy HTTPS Reverse Proxy (production) ----
   caddy:
     image: caddy:2-alpine
@@ -338,7 +403,7 @@ services:
           memory: 128M
     environment:
       - GF_SECURITY_ADMIN_USER=admin
-      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:-onzo2026}
+      - GF_SECURITY_ADMIN_PASSWORD=${GRAFANA_PASSWORD:?GRAFANA_PASSWORD must be set in .env.production}
       - GF_INSTALL_PLUGINS=grafana-piechart-panel
     volumes:
       - ./docker/grafana/datasources.yml:/etc/grafana/provisioning/datasources/datasources.yml:ro
@@ -404,6 +469,8 @@ volumes:
   prometheus_data:
     driver: local
   grafana_data:
+    driver: local
+  n8n_data:
     driver: local
 
 networks:

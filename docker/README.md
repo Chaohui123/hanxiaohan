@@ -38,7 +38,7 @@ docker compose --profile full --profile production up -d
 |------|------|------|
 | `ENCRYPTION_KEY` | ✅ | AES-256 加密主密钥，64 字符 hex |
 | `ENCRYPTION_SALT` | ✅ | 加密盐值，64 字符 hex |
-| `GLM_API_KEY` | ✅ | 智谱 AI 密钥 |
+| `KIMI_API_KEY` | ✅ | Kimi K3 视觉模型密钥 |
 | `DEEPSEEK_API_KEY` | ✅ | DeepSeek AI 密钥 |
 | `OZON_CLIENT_IDS` | ✅ | Ozon 卖家 Client ID |
 | `OZON_API_KEYS` | ✅ | Ozon API 密钥 |

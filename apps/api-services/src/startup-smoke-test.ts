@@ -76,24 +76,26 @@ export async function runSmokeTests(ozonClient: OzonClient): Promise<SmokeResult
     record("redis", "ok", 0, "not configured — skipped");
   }
 
-  // ---- 4. GLM API Key validity ----
-  const glmStart = Date.now();
-  const glmKey = process.env.GLM_API_KEY;
-  if (glmKey && !glmKey.includes("CHANGE_ME")) {
+  // ---- 4. Kimi K3 vision API key validity ----
+  const kimiStart = Date.now();
+  const kimiKey = process.env.KIMI_API_KEY;
+  if (kimiKey && !kimiKey.includes("CHANGE_ME")) {
     try {
-      const resp = await fetch("https://open.bigmodel.cn/api/paas/v4/chat/completions", {
+      const kimiBase = process.env.KIMI_BASE_URL || "https://api.moonshot.cn/v1";
+      const kimiModel = process.env.KIMI_VISION_MODEL || "kimi-k3";
+      const resp = await fetch(`${kimiBase}/chat/completions`, {
         method: "POST",
-        headers: { "Authorization": `Bearer ${glmKey}`, "Content-Type": "application/json" },
-        body: JSON.stringify({ model: "glm-4.6v-flash", messages: [{ role: "user", content: "ping" }], max_tokens: 1 }),
+        headers: { "Authorization": `Bearer ${kimiKey}`, "Content-Type": "application/json" },
+        body: JSON.stringify({ model: kimiModel, messages: [{ role: "user", content: "ping" }], max_tokens: 1 }),
         signal: AbortSignal.timeout(10_000),
       });
-      record("glm_api", resp.ok || resp.status === 429 ? "ok" : "fail", Date.now() - glmStart,
+      record("kimi_api", resp.ok || resp.status === 429 ? "ok" : "fail", Date.now() - kimiStart,
         resp.status === 429 ? "Rate limited but reachable" : resp.ok ? undefined : `HTTP ${resp.status}`);
     } catch (err) {
-      record("glm_api", "fail", Date.now() - glmStart, (err as Error).message);
+      record("kimi_api", "fail", Date.now() - kimiStart, (err as Error).message);
     }
   } else {
-    record("glm_api", "fail", 0, "GLM_API_KEY not configured");
+    record("kimi_api", "fail", 0, "KIMI_API_KEY not configured");
   }
 
   // ---- 5. DeepSeek API Key validity ----

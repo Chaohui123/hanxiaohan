@@ -2,27 +2,53 @@
   "name": "ONZO — Price Monitor (daily competitor scan)",
   "nodes": [
     {
-      "parameters": { "rule": { "interval": [{ "field": "hours", "hoursInterval": 24 }] } },
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 24
+            }
+          ]
+        }
+      },
       "id": "schedule",
       "name": "Every 24h",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.1,
-      "position": [250, 300]
+      "position": [
+        250,
+        300
+      ]
     },
     {
       "parameters": {
-        "url": "http://host.docker.internal:3000/api/price/scan",
+        "url": "={{ $env.ONZO_API_BASE }}/api/price/scan",
         "method": "POST",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "{\n  \"prices\": []\n}",
-        "options": { "timeout": 120000 }
+        "options": {
+          "timeout": 120000
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.ONZO_API_KEY }}"
+            }
+          ]
+        }
       },
       "id": "scan",
       "name": "POST /api/price/scan",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [450, 300]
+      "position": [
+        450,
+        300
+      ]
     },
     {
       "parameters": {
@@ -33,14 +59,39 @@
       "name": "Scan Report",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [650, 300]
+      "position": [
+        650,
+        300
+      ]
     }
   ],
   "connections": {
-    "Every 24h": { "main": [[{ "node": "POST /api/price/scan", "type": "main", "index": 0 }]] },
-    "POST /api/price/scan": { "main": [[{ "node": "Scan Report", "type": "main", "index": 0 }]] }
+    "Every 24h": {
+      "main": [
+        [
+          {
+            "node": "POST /api/price/scan",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST /api/price/scan": {
+      "main": [
+        [
+          {
+            "node": "Scan Report",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
-  "settings": { "callerPolicy": "workflowsFromSameOwner" },
+  "settings": {
+    "callerPolicy": "workflowsFromSameOwner"
+  },
   "versionId": "1.0.0",
   "active": true
 }

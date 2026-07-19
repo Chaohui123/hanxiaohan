@@ -27,7 +27,7 @@ export interface AppConfig {
     baseUrl: string;
   };
 
-  glm: {
+  kimi: {
     apiKey: string;
     baseUrl: string;
     visionModel: string;
@@ -47,6 +47,22 @@ export interface AppConfig {
   };
 
   orderSyncPageSize: number;
+
+  autoPublish: {
+    /** AUTO_PUBLISH_ENABLED — master switch for the auto-publish-queue job (default true) */
+    enabled: boolean;
+    /** AUTO_PUBLISH_INTERVAL_MIN — job interval in minutes (default 10) */
+    intervalMin: number;
+    /** AUTO_PUBLISH_BATCH_SIZE — listing tasks dequeued per run (default 5) */
+    batchSize: number;
+  };
+
+  deadletterAutoRetry: {
+    /** DEADLETTER_AUTO_RETRY_ENABLED — master switch for the deadletter-auto-retry job (default true) */
+    enabled: boolean;
+    /** DEADLETTER_RETRY_INTERVAL_MIN — job interval in minutes (default 30) */
+    intervalMin: number;
+  };
 }
 
 function requireEnv(key: string): string {
@@ -87,10 +103,10 @@ export function loadConfig(): AppConfig {
       baseUrl: optionalEnv("OZON_API_BASE", "https://api.ozon.ru/v3"),
     },
 
-    glm: {
-      apiKey: requireEnv("GLM_API_KEY"),
-      baseUrl: optionalEnv("GLM_BASE_URL", "https://open.bigmodel.cn/api/paas/v4"),
-      visionModel: optionalEnv("GLM_VISION_MODEL", "glm-4.6v-flash"),
+    kimi: {
+      apiKey: requireEnv("KIMI_API_KEY"),
+      baseUrl: optionalEnv("KIMI_BASE_URL", "https://api.moonshot.cn/v1"),
+      visionModel: optionalEnv("KIMI_VISION_MODEL", "kimi-k3"),
     },
 
     deepseek: {
@@ -107,5 +123,16 @@ export function loadConfig(): AppConfig {
       requestDelayMax: Math.max(5000, parseInt(optionalEnv("SCRAPER_REQUEST_DELAY_MAX", "5000"), 10)),
     },
     orderSyncPageSize: parseInt(optionalEnv("ORDER_SYNC_PAGE_SIZE", "50"), 10),
+
+    autoPublish: {
+      enabled: optionalEnv("AUTO_PUBLISH_ENABLED", "true") !== "false",
+      intervalMin: Math.max(1, parseInt(optionalEnv("AUTO_PUBLISH_INTERVAL_MIN", "10"), 10)),
+      batchSize: Math.max(1, parseInt(optionalEnv("AUTO_PUBLISH_BATCH_SIZE", "5"), 10)),
+    },
+
+    deadletterAutoRetry: {
+      enabled: optionalEnv("DEADLETTER_AUTO_RETRY_ENABLED", "true") !== "false",
+      intervalMin: Math.max(1, parseInt(optionalEnv("DEADLETTER_RETRY_INTERVAL_MIN", "30"), 10)),
+    },
   };
 }

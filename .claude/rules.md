@@ -22,13 +22,13 @@
 
 2\. HTTP服务：Express；爬虫：Playwright；数据库：better-sqlite3 + Drizzle ORM
 
-3\. 模型调用：仅GLM-4.6V-Flash（主视觉OCR）、GLM-5.2（文本翻译/类目），GLM-5V-Turbo仅作为复杂比价可选补充
+3\. 模型调用：仅K3（主视觉OCR/图片/视频理解）、GLM-5.2（文本翻译/类目），GLM-Image仅用于营销图生成
 
 4\. 电商接口：Ozon Seller API v3，基于自研 ozon-api-wrapper（令牌桶限流+熔断+指数退避）
 
-5\. 部署：Docker + docker-compose，仅启动 api-services + n8n 两个容器
+5\. 部署：Docker + docker-compose，Phase1 仅启动 api-services 容器（n8n 为可选 profile，默认不启动）
 
-6\. 流程编排：仅使用n8n固定线性工作流，不做自主动态推理Agent
+6\. 流程编排：定时任务统一使用 api-services 内建 scheduler（apps/api-services/src/services/scheduler.ts + jobs/setup.ts）；n8n 降级为可选可视化编排（docker compose --profile n8n 启用），不做自主动态推理Agent
 
 
 
@@ -38,7 +38,7 @@
 
 - Phase1 (必须遵守，当前开发优先级):
   - 禁止：Python、LangGraph/LangChain、Qdrant独立向量库（已有pgvector替代）、Redis/MQ/Kafka、未经审计的影刀RPA、分布式多机部署
-  - 允许：TypeScript/Node.js、pnpm monorepo、Express、Playwright、better-sqlite3 + Drizzle、单机 Docker + n8n、PostgreSQL + pgvector（RAG知识库已上线）
+  - 允许：TypeScript/Node.js、pnpm monorepo、Express、Playwright、better-sqlite3 + Drizzle、单机 Docker（n8n 可选）、PostgreSQL + pgvector（RAG知识库已上线）
 
 - Phase2 (受控评估后可引入):
   - 允许（受审批）：影刀RPA 兜底通道（仅在 API 熔断情形并经安全审计）、RAG 知识库深度集成（强制所有 Agent 引用，详见 docs/rag-mandatory-reference.md）、多店铺风控策略的配置框架
@@ -56,7 +56,7 @@
 
 │ ├── ozon-api-wrapper/ # Ozon 底层 SDK，优先开发
 
-│ ├── ai/ # GLM 模型统一封装
+│ ├── ai/ # K3/GLM/DeepSeek 模型统一封装
 
 │ ├── scraper/ # Playwright 1688 爬虫
 
@@ -89,7 +89,7 @@
 
 1\. 所有代码必须带完整TS类型，复用 shared-types 内定义，禁止any
 
-2\. 所有外部API（Ozon/GLM/爬虫）必须增加错误捕获、重试、限流逻辑
+2\. 所有外部API（Ozon/Kimi/GLM/爬虫）必须增加错误捕获、重试、限流逻辑
 
 3\. 所有数据库操作使用事务，处理SQLite并发写入锁冲突
 
@@ -98,7 +98,7 @@
 5\. 关键函数附带Vitest单元测试示例
 
 ## 模型调用规范
-1. 商品图片OCR、图文卖点提取固定使用 glm-4.6v-flash（智谱免费视觉模型，不可替换）
+1. 商品图片OCR、图文卖点提取固定使用 K3（Kimi 视觉模型，支持图片/视频输入，不可替换）
 2. P0商品上架标准文本任务（翻译、属性填充、四级类目匹配）统一 deepseek-v4-flash，替代原GLM-5.2
 3. P2多竞品长截图比价、市场深度趋势推理，允许使用 deepseek-v4-pro，其余场景禁用Pro控成本
 4. 所有大模型请求统一封装至 packages/ai，业务层禁止直接调用模型原始接口
@@ -106,14 +106,14 @@
 
 ## 环境变量规范
 1. 项目根目录必须存在 .env 文件，所有密钥、模型名称、端口、数据库路径统一在此配置，由 packages/ai/src/config.ts 统一导出；；
-2. AI模型密钥分为 GLM_API_KEY、DEEPSEEK_API_KEY 两套，禁止硬编码密钥至代码；
+2. AI模型密钥分为 KIMI_API_KEY（K3 视觉）、DEEPSEEK_API_KEY（文本）两套，GLM_API_KEY 仅 embedding/生图备用，禁止硬编码密钥至代码；
 3. 文本模型区分 deepseek-v4-flash（主力上架）、deepseek-v4-pro（比价专用），通过环境变量统一管控；
 4. .env 文件加入 .gitignore，禁止提交至代码仓库，提供 .env.example 模板供部署使用。
-5. 所有第三方密钥（GLM、DeepSeek、Ozon）统一存放在项目根 .env 文件，
+5. 所有第三方密钥（Kimi、GLM、DeepSeek、Ozon）统一存放在项目根 .env 文件，
 7. 不允许在业务代码直接读取 process.env，必须导入 config.ts 封装后的配置对象。
 
 ## Claude Code 代码生成强制规范
-1. 调用大模型分层规则：视觉OCR固定 glm-4.6v-flash；上架翻译/类目匹配使用 deepseek-v4-flash；仅多竞品深度比价允许 deepseek-v4-pro；
+1. 调用大模型分层规则：视觉OCR固定 K3；上架翻译/类目匹配使用 deepseek-v4-flash；仅多竞品深度比价允许 deepseek-v4-pro；
 2. 所有密钥、接口地址、模型名称、并发参数统一读取项目根.env，通过packages/ai/src/config.ts统一导出，禁止硬编码sk密钥、URL、模型名；
 3. 代码必须完整TS类型，复用shared-types内定义，拒绝any；全部外部API增加重试、异常捕获、限流逻辑；
 4. 严格遵守约束：不引入Python、LangGraph、Qdrant、Redis、影刀RPA、分布式集群；仅单机Docker+SQLite/PostgreSQL单店架构；所有Agent决策前必须查询RAG知识库；
@@ -127,7 +127,7 @@
    - .env加入.gitignore，仅可提交空白.env.example模板。
 
 2. 大模型成本边界管控
-   - GLM-4.6V-Flash、DeepSeek独立令牌桶并发限流，数值由.env配置；
+   - K3、DeepSeek独立令牌桶并发限流，数值由.env配置；
    - 标准上架流水线代码层拦截deepseek-v4-pro，仅复杂比价任务允许启用；
    - 自动统计每日Token消耗存入SQLite，超阈值输出告警日志；
    - 超长图文输入自动截断，避免无意义高额Token损耗。
@@ -237,7 +237,7 @@
 
 ## Phase1 P0 遗留优化强制规范
 1. LLM Token 统计
-   - 所有 DeepSeek/GLM 调用必须写入 token_usage 统计表（model, prompt_tokens, completion_tokens, timestamp）
+   - 所有 DeepSeek/K3/GLM 调用必须写入 token_usage 统计表（model, prompt_tokens, completion_tokens, timestamp）
    - .env 配置 LLM_DAILY_TOKEN_LIMIT，超出阈值自动拦截并告警
    - 提供 /api/stats/llm 接口导出每日消耗
 2. SQLite 自动备份
@@ -248,7 +248,7 @@
    - POST /api/task/deadletter/retry-batch 批量重跑失败任务
    - n8n 失败分支增加批量重试节点
 4. 开发环境 Mock 隔离
-   - ENV=dev 时 Mock 全部外部接口（Ozon/DeepSeek/GLM）
+   - ENV=dev 时 Mock 全部外部接口（Ozon/DeepSeek/K3/GLM）
    - 不消耗线上 API 额度，不真实创建草稿
 
 ## RAG 向量知识库强制引用规范（Phase2 已上线）

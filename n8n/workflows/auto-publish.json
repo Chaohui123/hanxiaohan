@@ -4,26 +4,46 @@
     {
       "parameters": {
         "rule": {
-          "interval": [{ "field": "minutes", "minutesInterval": 10 }]
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 10
+            }
+          ]
         }
       },
       "id": "schedule-trigger",
       "name": "Schedule (every 10 min)",
       "type": "n8n-nodes-base.scheduleTrigger",
       "typeVersion": 1.1,
-      "position": [250, 300]
+      "position": [
+        250,
+        300
+      ]
     },
     {
       "parameters": {
         "httpMethod": "POST",
-        "url": "http://host.docker.internal:3000/api/task/listings",
-        "options": {}
+        "url": "={{ $env.ONZO_API_BASE }}/api/task/listings",
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.ONZO_API_KEY }}"
+            }
+          ]
+        }
       },
       "id": "fetch-queue-stats",
       "name": "Fetch Queue Stats",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [450, 300]
+      "position": [
+        450,
+        300
+      ]
     },
     {
       "parameters": {
@@ -34,7 +54,10 @@
       "name": "Queue Status Card",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [650, 300]
+      "position": [
+        650,
+        300
+      ]
     },
     {
       "parameters": {
@@ -43,13 +66,27 @@
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "{\n  \"url\": \"={{ $json['1688_url'] }}\"\n}",
-        "options": { "timeout": 300000 }
+        "options": {
+          "timeout": 300000
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.ONZO_API_KEY }}"
+            }
+          ]
+        }
       },
       "id": "call-process-sync",
       "name": "POST /api/process/sync",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [250, 500]
+      "position": [
+        250,
+        500
+      ]
     },
     {
       "parameters": {
@@ -60,7 +97,10 @@
       "name": "Manual input →",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [50, 490]
+      "position": [
+        50,
+        490
+      ]
     },
     {
       "parameters": {
@@ -71,7 +111,10 @@
                 {
                   "leftValue": "={{ $json.success }}",
                   "rightValue": true,
-                  "operator": { "type": "boolean", "operation": "equals" }
+                  "operator": {
+                    "type": "boolean",
+                    "operation": "equals"
+                  }
                 }
               ],
               "renameOutput": true,
@@ -84,7 +127,10 @@
       "name": "Success?",
       "type": "n8n-nodes-base.if",
       "typeVersion": 2,
-      "position": [450, 500]
+      "position": [
+        450,
+        500
+      ]
     },
     {
       "parameters": {
@@ -94,7 +140,10 @@
       "name": "Record Success",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [650, 420]
+      "position": [
+        650,
+        420
+      ]
     },
     {
       "parameters": {
@@ -104,22 +153,37 @@
       "name": "Record Failure",
       "type": "n8n-nodes-base.code",
       "typeVersion": 2,
-      "position": [650, 600]
+      "position": [
+        650,
+        600
+      ]
     },
     {
       "parameters": {
-        "url": "http://host.docker.internal:3000/api/task/failed",
+        "url": "={{ $env.ONZO_API_BASE }}/api/task/failed",
         "method": "POST",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "{\n  \"error\": \"={{ $json }}\",\n  \"source\": \"n8n-auto-publish\"\n}",
-        "options": {}
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.ONZO_API_KEY }}"
+            }
+          ]
+        }
       },
       "id": "notify-failure-service",
       "name": "Notify Failure Service",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [850, 600]
+      "position": [
+        850,
+        600
+      ]
     },
     {
       "parameters": {
@@ -130,30 +194,85 @@
       "name": "Success Card",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [850, 420]
+      "position": [
+        850,
+        420
+      ]
     }
   ],
   "connections": {
     "Schedule (every 10 min)": {
-      "main": [[{ "node": "Fetch Queue Stats", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Fetch Queue Stats",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Fetch Queue Stats": {
-      "main": [[{ "node": "Queue Status Card", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Queue Status Card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "POST /api/process/sync": {
-      "main": [[{ "node": "Success?", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Success?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Success?": {
       "main": [
-        [{ "node": "Record Success", "type": "main", "index": 0 }],
-        [{ "node": "Record Failure", "type": "main", "index": 0 }]
+        [
+          {
+            "node": "Record Success",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Record Failure",
+            "type": "main",
+            "index": 0
+          }
+        ]
       ]
     },
     "Record Success": {
-      "main": [[{ "node": "Success Card", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Success Card",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     },
     "Record Failure": {
-      "main": [[{ "node": "Notify Failure Service", "type": "main", "index": 0 }]]
+      "main": [
+        [
+          {
+            "node": "Notify Failure Service",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
     }
   },
   "settings": {

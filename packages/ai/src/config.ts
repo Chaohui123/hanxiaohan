@@ -12,9 +12,19 @@ function requireEnv(key: string): string {
   return value;
 }
 
-/** GLM vision model — fixed OCR pipeline (glm-4.6v-flash) */
+/** Kimi K3 vision model — primary OCR / image-understanding pipeline (1M context) */
+export const KIMI_CONFIG = {
+  apiKey: requireEnv("KIMI_API_KEY"),
+  baseUrl: process.env.KIMI_BASE_URL || "https://api.kimi.com/coding/v1",
+  visionModel: process.env.KIMI_VISION_MODEL || "kimi-k3",
+};
+
+/**
+ * GLM (Zhipu) — backup only: embedding + image generation.
+ * Vision OCR has migrated to Kimi K3. Optional: never throws at module load.
+ */
 export const GLM_CONFIG = {
-  apiKey: requireEnv("GLM_API_KEY"),
+  apiKey: process.env.GLM_API_KEY || "",
   baseUrl: process.env.GLM_BASE_URL || "https://open.bigmodel.cn/api/paas/v4",
   model: process.env.GLM_VISION_MODEL || "glm-4.6v-flash",
 };

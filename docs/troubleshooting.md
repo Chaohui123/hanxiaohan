@@ -16,7 +16,7 @@
 `grep "SQLITE_BUSY" /tmp/onzo.log` → `systemctl restart onzo-api`
 
 ## LLM 报错
-检查 `DEEPSEEK_API_KEY`/`GLM_API_KEY` → 查看 token 配额 `GET /api/stats/llm`
+检查 `DEEPSEEK_API_KEY`/`KIMI_API_KEY` → 查看 token 配额 `GET /api/stats/llm`
 
 ## Redis 断连
 `docker exec onzo-redis redis-cli -a $REDIS_PASSWORD PING` → `docker compose restart redis`

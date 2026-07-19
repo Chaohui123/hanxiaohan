@@ -1,5 +1,6 @@
 // ============================================================
-// Base GLM API Client — shared by vision and text models
+// Base GLM API Client — Zhipu text/embedding/image-gen backup
+// (Vision OCR migrated to Kimi K3 — see kimi-vision-client.ts)
 // ============================================================
 
 const ZHIPU_BASE_URL = "https://open.bigmodel.cn/api/paas/v4/chat/completions";
@@ -110,7 +111,7 @@ export class GlmClient {
           promptTokens: tokensUsed.prompt,
           completionTokens: tokensUsed.completion,
           totalTokens: tokensUsed.total,
-          provider: "glm",
+          provider: "kimi",
         });
 
         return {

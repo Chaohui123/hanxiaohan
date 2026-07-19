@@ -64,26 +64,26 @@ export async function checkPipelineHealth(): Promise<PipelineHealth> {
     components.push({ name: "deepseek-api", status: "down", latencyMs: 0, message: (err as Error).message });
   }
 
-  // 3. GLM API
+  // 3. Kimi K3 vision API
   try {
     const t0 = Date.now();
-    const res = await fetch(`${process.env.GLM_BASE_URL || "https://open.bigmodel.cn/api/paas/v4"}/chat/completions`, {
+    const res = await fetch(`${process.env.KIMI_BASE_URL || "https://api.moonshot.cn/v1"}/chat/completions`, {
       method: "POST",
       headers: {
-        "Authorization": `Bearer ${process.env.GLM_API_KEY || ""}`,
+        "Authorization": `Bearer ${process.env.KIMI_API_KEY || ""}`,
         "Content-Type": "application/json",
       },
-      body: JSON.stringify({ model: "glm-4.6v-flash", messages: [{ role: "user", content: "ping" }], max_tokens: 1 }),
+      body: JSON.stringify({ model: process.env.KIMI_VISION_MODEL || "kimi-k3", messages: [{ role: "user", content: "ping" }], max_tokens: 1 }),
       signal: AbortSignal.timeout(10_000),
     });
     components.push({
-      name: "glm-api",
+      name: "kimi-api",
       status: res.ok || res.status === 429 ? "ok" : "degraded",
       latencyMs: Date.now() - t0,
       message: res.status === 429 ? "Rate limited but reachable" : undefined,
     });
   } catch (err) {
-    components.push({ name: "glm-api", status: "down", latencyMs: 0, message: (err as Error).message });
+    components.push({ name: "kimi-api", status: "down", latencyMs: 0, message: (err as Error).message });
   }
 
   // 4. Proxy Pool (if configured)

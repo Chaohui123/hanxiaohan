@@ -7,34 +7,63 @@
       "name": "Manual Trigger (product JSON)",
       "type": "n8n-nodes-base.manualTrigger",
       "typeVersion": 1,
-      "position": [250, 300]
+      "position": [
+        250,
+        300
+      ]
     },
     {
       "parameters": {
-        "url": "http://host.docker.internal:3000/api/stores",
+        "url": "={{ $env.ONZO_API_BASE }}/api/stores",
         "method": "GET",
-        "options": {}
+        "options": {},
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.ONZO_API_KEY }}"
+            }
+          ]
+        }
       },
       "id": "get-stores",
       "name": "GET /api/stores",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [450, 300]
+      "position": [
+        450,
+        300
+      ]
     },
     {
       "parameters": {
-        "url": "http://host.docker.internal:3000/api/stores/batch/listing",
+        "url": "={{ $env.ONZO_API_BASE }}/api/stores/batch/listing",
         "method": "POST",
         "sendBody": true,
         "specifyBody": "json",
         "jsonBody": "{\n  \"storeIds\": [\"store-1\",\"store-2\"],\n  \"product\": {}\n}",
-        "options": { "timeout": 120000 }
+        "options": {
+          "timeout": 120000
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "X-API-Key",
+              "value": "={{ $env.ONZO_API_KEY }}"
+            }
+          ]
+        }
       },
       "id": "batch-publish",
       "name": "POST /api/stores/batch/listing",
       "type": "n8n-nodes-base.httpRequest",
       "typeVersion": 4,
-      "position": [650, 300]
+      "position": [
+        650,
+        300
+      ]
     },
     {
       "parameters": {
@@ -45,15 +74,50 @@
       "name": "Publish Result",
       "type": "n8n-nodes-base.stickyNote",
       "typeVersion": 1,
-      "position": [850, 300]
+      "position": [
+        850,
+        300
+      ]
     }
   ],
   "connections": {
-    "Manual Trigger (product JSON)": { "main": [[{ "node": "GET /api/stores", "type": "main", "index": 0 }]] },
-    "GET /api/stores": { "main": [[{ "node": "POST /api/stores/batch/listing", "type": "main", "index": 0 }]] },
-    "POST /api/stores/batch/listing": { "main": [[{ "node": "Publish Result", "type": "main", "index": 0 }]] }
+    "Manual Trigger (product JSON)": {
+      "main": [
+        [
+          {
+            "node": "GET /api/stores",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "GET /api/stores": {
+      "main": [
+        [
+          {
+            "node": "POST /api/stores/batch/listing",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "POST /api/stores/batch/listing": {
+      "main": [
+        [
+          {
+            "node": "Publish Result",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
   },
-  "settings": { "callerPolicy": "workflowsFromSameOwner" },
+  "settings": {
+    "callerPolicy": "workflowsFromSameOwner"
+  },
   "versionId": "1.0.0",
   "active": false
 }

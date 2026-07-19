@@ -17,7 +17,7 @@ describe("TokenTracker", () => {
 
   it("resets block after resetToday", async () => {
     const tracker = new TokenTracker({ dailyLimit: 100 });
-    await tracker.record({ model: "x", promptTokens: 200, completionTokens: 0, totalTokens: 200, provider: "glm" });
+    await tracker.record({ model: "x", promptTokens: 200, completionTokens: 0, totalTokens: 200, provider: "kimi" });
     expect(() => tracker.checkLimit()).toThrow(TokenLimitExceededError);
 
     // resetToday resets the daily counter + unblocks
@@ -32,6 +32,6 @@ describe("TokenTracker", () => {
   });
 
   it("estimateCost returns 0 for unknown model", () => {
-    expect(estimateCost({ model: "unknown", promptTokens: 1000, completionTokens: 0, totalTokens: 1000, timestamp: "", provider: "glm" })).toBe(0);
+    expect(estimateCost({ model: "unknown", promptTokens: 1000, completionTokens: 0, totalTokens: 1000, timestamp: "", provider: "kimi" })).toBe(0);
   });
 });

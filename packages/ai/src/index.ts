@@ -1,9 +1,12 @@
 export { GlmClient, GlmApiError, type GlmClientConfig, type GlmRequestOptions } from "./glm-client.js";
-export { GlmVisionClient, type ImageInput } from "./ocr.js";
+export { KimiVisionClient, KimiApiError, type KimiVisionClientConfig, type KimiVisionRequestOptions, type KimiMessageContent } from "./kimi-vision-client.js";
+export { KimiOcrClient, GlmVisionClient, type ImageInput } from "./ocr.js";
 export { GlmTextClient } from "./translator.js";
 export { GlmRateLimiter, type GlmRateLimiterConfig } from "./rate-limiter.js";
 export { TokenTracker, estimateCost, TOKEN_COST_PER_M, type TokenTrackerConfig, type TokenUsage } from "./token-tracker.js";
 export { DeepSeekClient, DeepSeekApiError, type DeepSeekConfig, type DeepSeekRequestOptions, type DeepSeekModelTier } from "./deepseek-client.js";
+export { countTokens, estimateTokensFast, isWithinLimit, validateTokenLimit, getMaxInputTokens, MODEL_CONTEXT_WINDOWS } from "./token-counter.js";
+export { splitByTokenLimit, truncateToTokenLimit, prepareForLLM, type SplitResult } from "./text-splitter.js";
 export * from "./prompts/ocr.js";
 export * from "./prompts/translate.js";
 export { CATEGORY_SYSTEM_PROMPT, buildCategoryPrompt, formatCategoryTree, filterCategoryTree, type CategoryTreeNode } from "./prompts/category.js";
