@@ -7,6 +7,10 @@
 # ---- Stage 1: Build ----
 FROM node:22-alpine AS builder
 
+# China npm mirror — avoids registry.npmjs.org timeouts on CN servers
+ENV npm_config_registry=https://registry.npmmirror.com \
+    COREPACK_NPM_REGISTRY=https://registry.npmmirror.com
+
 # Replace Alpine source with Aliyun mirror (fast in China, avoids download timeouts)
 RUN sed -i 's|dl-cdn.alpinelinux.org|mirrors.aliyun.com|g' /etc/apk/repositories
 

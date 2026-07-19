@@ -1,5 +1,8 @@
 FROM node:22-alpine AS builder
+ENV npm_config_registry=https://registry.npmmirror.com \
+    COREPACK_NPM_REGISTRY=https://registry.npmmirror.com
 WORKDIR /app
+RUN sed -i 's|dl-cdn.alpinelinux.org|mirrors.aliyun.com|g' /etc/apk/repositories
 RUN apk add --no-cache python3 make g++
 RUN corepack enable && corepack prepare pnpm@latest --activate
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./

@@ -32,10 +32,11 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             set -e
-            cd /root/onzo
+            cd /home/ubuntu/onzo
 
-            echo "=== Pulling latest code ==="
-            git pull origin main
+            echo "=== Syncing latest code (history was rewritten — hard reset, never pull) ==="
+            git fetch origin
+            git reset --hard origin/main
 
             echo "=== Checking procurement config ==="
             if ! grep -q "MANUAL_PAY_MODE" .env.production; then
@@ -101,5 +102,5 @@ jobs:
           key: ${{ secrets.SSH_PRIVATE_KEY }}
           script: |
             echo "DEPLOY FAILED — attempting rollback"
-            cd /root/onzo
+            cd /home/ubuntu/onzo
             bash scripts/deploy/deploy.sh rollback

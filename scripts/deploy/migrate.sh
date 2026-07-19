@@ -12,6 +12,13 @@ SCRIPT_DIR="$(cd "$(dirname "$0")" && pwd)"
 PROJECT_DIR="$(dirname "$SCRIPT_DIR")"
 BACKUP_DIR="$PROJECT_DIR/data/backups"
 
+# Docker-only servers have no node runtime on the host — the api-services
+# container manages its own schema at startup, so migrations are a no-op there.
+if ! command -v npx &>/dev/null; then
+  echo "SKIP: npx not available on host — schema is managed by the api-services container at startup"
+  exit 0
+fi
+
 up() {
   echo "=== Running Migrations (up) ==="
   cd "$PROJECT_DIR/apps/api-services"

@@ -1,4 +1,6 @@
 FROM node:22-alpine AS builder
+ENV npm_config_registry=https://registry.npmmirror.com \
+    COREPACK_NPM_REGISTRY=https://registry.npmmirror.com
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@latest --activate
 RUN echo "ignore-scripts=true" >> .npmrc && echo "verify-deps-before-run=false" >> .npmrc

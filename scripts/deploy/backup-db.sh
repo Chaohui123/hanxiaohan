@@ -33,8 +33,8 @@ elif command -v pg_dump &>/dev/null; then
   echo "Backup saved: $BACKUP_FILE ($(du -h "$BACKUP_FILE" | cut -f1))"
 
 else
-  echo "ERROR: No PostgreSQL client available — cannot backup"
-  exit 1
+  echo "SKIP: PostgreSQL not available on this host — SQLite backups are handled by api-services auto-backup"
+  exit 0
 fi
 
 # Cleanup old backups
