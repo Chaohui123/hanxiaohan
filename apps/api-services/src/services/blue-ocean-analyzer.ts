@@ -7,6 +7,9 @@ import { getDb } from "../db/connection.js";
 import { getCategoryTree } from "./category-cache.js";
 import { calculateProfit } from "./profit-calc.js";
 import { getHighDemandCategoriesForCurrentSeason } from "./russia-market-rules.js";
+import { getCurrentSeasonDemand } from "./russia-seasonality.js";
+import { scanCategory } from "./ozon-market-scanner.js";
+import { checkChineseProductCompliance } from "./compliance.js";
 import type { OzonCategoryNode } from "@onzo/shared-types";
 import type { OzonClient } from "@onzo/ozon-api-wrapper";
 import { logger } from "@onzo/logger";
@@ -74,13 +77,17 @@ export async function analyzeBlueOcean(
         ) as Array<{ category_id: number; cnt: number; avgPrice: number }>
       : [];
 
-    // 4. Get static market rules as prior knowledge
+    // 4. Get seasonal demand for current month (Russia-specific)
+    const seasonDemand = getCurrentSeasonDemand();
+    const seasonalCategories = seasonDemand.categories.map(c => c.keyword.toLowerCase());
+
+    // 5. Get static market rules as prior knowledge
     const highDemandCategories = getHighDemandCategoriesForCurrentSeason();
     const fx = exchangeRate || 12;
 
     if (categoryTree.length > 0) {
       // Dynamic analysis from category tree
-      await analyzeCategories(categoryTree, [], snapshotMap, orderData, highDemandCategories, fx, results);
+      await analyzeCategories(categoryTree, [], snapshotMap, orderData, highDemandCategories, seasonalCategories, fx, ozonClient, results);
     }
 
     // 5. If dynamic analysis failed or too few results, use static fallback
@@ -123,8 +130,10 @@ async function analyzeCategories(
   snapshots: Map<number, Record<string, unknown>>,
   orderData: Array<{ category_id: number; cnt: number; avgPrice: number }>,
   highDemand: ReturnType<typeof getHighDemandCategoriesForCurrentSeason>,
+  seasonalKeywords: string[],
   fx: number,
-  results: BlueOceanAnalysis[]
+  ozonClient?: OzonClient,
+  results: BlueOceanAnalysis[] = []
 ): Promise<void> {
   for (const node of nodes) {
     const currentPath = [...path, node.title];
@@ -144,9 +153,15 @@ async function analyzeCategories(
       const profitMargin = calculateProfit({ costCny: avgPrice / fx / 1.3, sellingPriceRub: avgPrice, exchangeRate: fx, weightKg: 0.3 });
       const profitScore = Math.min(100, Math.max(0, profitMargin.marginPercent));
       const growthScore = monthOrders > 0 ? Math.min(100, 50 + (monthOrders - 10) * 2) : 30;
-      const demandScore = highDemand.some((d) =>
+
+      // Enhanced demand score: static rules + seasonal keywords
+      const staticMatch = highDemand.some((d) =>
         currentPath.some((p) => d.category.toLowerCase().includes(p.toLowerCase()) || d.keywords.some((kw) => p.toLowerCase().includes(kw.toLowerCase())))
-      ) ? 80 : 40;
+      );
+      const seasonalMatch = seasonalKeywords.some((kw) =>
+        currentPath.some((p) => p.toLowerCase().includes(kw))
+      );
+      const demandScore = staticMatch ? 80 : seasonalMatch ? 65 : 40;
 
       // Weighted overall
       const overallScore = Math.round(
@@ -173,7 +188,7 @@ async function analyzeCategories(
     }
 
     if (node.children?.length > 0) {
-      await analyzeCategories(node.children, currentPath, snapshots, orderData, highDemand, fx, results);
+      await analyzeCategories(node.children, currentPath, snapshots, orderData, highDemand, seasonalKeywords, fx, ozonClient, results);
     }
   }
 }

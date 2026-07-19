@@ -16,7 +16,7 @@ export function getEmbeddingConfig(): EmbeddingConfig {
     model: process.env.EMBEDDING_MODEL || "embedding-3",
     dimensions: parseInt(process.env.EMBEDDING_DIMENSIONS || "2048", 10),
     baseUrl: process.env.EMBEDDING_BASE_URL || "https://open.bigmodel.cn/api/paas/v4",
-    apiKey: process.env.EMBEDDING_API_KEY || process.env.GLM_API_KEY || "",
+    apiKey: process.env.EMBEDDING_API_KEY || process.env.KIMI_API_KEY || "",
     maxBatchSize: parseInt(process.env.EMBEDDING_BATCH_SIZE || "16", 10),
     maxRetries: 3,
     requestTimeoutMs: parseInt(process.env.EMBEDDING_TIMEOUT_MS || "30000", 10),

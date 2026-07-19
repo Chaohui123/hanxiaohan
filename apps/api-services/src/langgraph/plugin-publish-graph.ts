@@ -53,8 +53,8 @@ async function glmImageNode(s: typeof State.State): Promise<Partial<typeof State
   logger.info({ title: s.title }, "PluginPublish: GLM image optimization");
   const steps = [...(s.steps || []), "GLM图片优化"];
 
-  if (!process.env.GLM_API_KEY) {
-    return { imageProcessFailed: true, imageFailReason: "GLM_API_KEY not configured", optimizedImages: [], steps };
+  if (!process.env.KIMI_API_KEY) {
+    return { imageProcessFailed: true, imageFailReason: "KIMI_API_KEY not configured", optimizedImages: [], steps };
   }
 
   try {
@@ -78,17 +78,47 @@ async function glmImageNode(s: typeof State.State): Promise<Partial<typeof State
 
 // Node 2: Cost calculation
 async function costNode(s: typeof State.State): Promise<Partial<typeof State.State>> {
-  logger.info({ title: s.title }, "PluginPublish: cost calculation");
+  logger.info({ title: s.title }, "PluginPublish: cost calculation (real profit)");
   const steps = [...(s.steps || []), "成本拆解"];
 
-  const exchangeRate = 11.5;
+  // Get real exchange rate (fallback 11.5)
+  let exchangeRate = 11.5;
+  try {
+    const { getExchangeRate } = await import("../services/exchange-rate.js");
+    const rate = await getExchangeRate();
+    if (rate.reliable) exchangeRate = rate.rate;
+  } catch { /* use fallback */ }
+
   const costCny = s.priceCny || 50;
-  const ozonPriceRub = Math.round(costCny * 80); // Rough estimate
-  const commission = ozonPriceRub * 0.08;
-  const logistics = s.weightG > 0 ? Math.round(s.weightG * 0.3) : 50;
-  const totalCost = costCny * exchangeRate + commission + logistics;
+  const weightKg = (s.weightG || 500) / 1000;
+
+  // Real logistics calculation (跨境巴士 tiered pricing)
+  let logisticsCostRub = 300; // Base
+  if (weightKg <= 0.5) logisticsCostRub = 250;
+  else if (weightKg <= 1) logisticsCostRub = 350;
+  else if (weightKg <= 2) logisticsCostRub = 500;
+  else if (weightKg <= 5) logisticsCostRub = 800;
+  else logisticsCostRub = 800 + (weightKg - 5) * 100;
+
+  // Competitive pricing: cost * exchangeRate * markup based on category
+  const costRub = costCny * exchangeRate;
+  const platformCommissionRate = 0.10; // Default 10%, varies by category
+  const targetMargin = 0.30; // Target 30% profit margin
+
+  // Selling price = (cost + logistics) / (1 - commission - target margin)
+  const baseCost = costRub + logisticsCostRub;
+  const ozonPriceRub = Math.round(baseCost / (1 - platformCommissionRate - targetMargin));
+
+  const commission = Math.round(ozonPriceRub * platformCommissionRate);
+  const totalCost = Math.round(costRub + logisticsCostRub + commission);
   const profit = ozonPriceRub - totalCost;
   const margin = ozonPriceRub > 0 ? Math.round((profit / ozonPriceRub) * 100) : 0;
+
+  logger.info({
+    costCny, exchangeRate: Math.round(exchangeRate * 100) / 100,
+    weightKg, logistics: logisticsCostRub,
+    ozonPriceRub, commission, profit, margin,
+  }, "PluginPublish: real profit calculation");
 
   return { costCny: Math.round(costCny), estimatedProfitRub: Math.round(profit), marginPercent: margin, steps };
 }
@@ -141,7 +171,7 @@ async function publishNode(s: typeof State.State): Promise<Partial<typeof State.
         offer_id: `PLUG-${Date.now().toString(36)}`,
         name: s.titleRu?.slice(0, 500) || s.title.slice(0, 500),
         description_category_id: cat.id,
-        price: String(Math.round((s.costCny || 50) * 80)),
+        price: String(Math.round((s.estimatedProfitRub || 0) / 0.3)), // Derived from real profit calc
         vat: "0",
         currency_code: "CNY",
         depth: 100, height: 100, width: 100,

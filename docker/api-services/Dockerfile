@@ -104,9 +104,13 @@ COPY assets/ /app/assets/
 
 EXPOSE 3000
 
+# Chromium remote debugging port (P2: chrome-remote-interface)
+ENV CHROMIUM_DEBUG_PORT=9222
+ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
+
 # Healthcheck: confirms the process is alive and serving
 HEALTHCHECK --interval=30s --timeout=5s --start-period=30s --retries=5 \
   CMD wget -qO- http://localhost:3000/health || exit 1
 
-# Start with symlink repair, then launch API
-CMD ["sh", "-c", "/app/scripts/fix-symlinks.sh && exec node apps/api-services/dist/index.js"]
+# Start: launch headless Chromium + symlink repair + API server
+CMD ["sh", "-c", "chromium-browser --headless=new --no-sandbox --disable-gpu --disable-dev-shm-usage --remote-debugging-port=9222 --remote-debugging-address=0.0.0.0 & /app/scripts/fix-symlinks.sh && exec node apps/api-services/dist/index.js"]

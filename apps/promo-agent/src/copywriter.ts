@@ -28,8 +28,8 @@ export interface ImageAnalysis {
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || "";
 const DEEPSEEK_BASE = process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com";
 
-const GLM_API_KEY = process.env.GLM_API_KEY || "";
-const GLM_BASE = process.env.GLM_BASE_URL || "https://open.bigmodel.cn/api/paas/v4";
+const KIMI_API_KEY = process.env.KIMI_API_KEY || "";
+const GLM_BASE = process.env.KIMI_BASE_URL || "https://open.bigmodel.cn/api/paas/v4";
 
 // ---- 待确认文案缓存 ----
 
@@ -268,8 +268,8 @@ export async function analyzeImage(
   config: ApiConfig,
   offerId: string,
 ): Promise<ImageAnalysis | null> {
-  if (!GLM_API_KEY) {
-    throw new Error("未配置 GLM_API_KEY");
+  if (!KIMI_API_KEY) {
+    throw new Error("未配置 KIMI_API_KEY");
   }
 
   // 1. 获取商品图片
@@ -292,7 +292,7 @@ export async function analyzeImage(
   const resp = await fetch(`${GLM_BASE}/chat/completions`, {
     method: "POST",
     headers: {
-      Authorization: `Bearer ${GLM_API_KEY}`,
+      Authorization: `Bearer ${KIMI_API_KEY}`,
       "Content-Type": "application/json",
     },
     body: JSON.stringify({

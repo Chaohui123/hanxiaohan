@@ -5,4 +5,6 @@ allowBuilds:
   '@scarf/scarf': set this to true or false
   better-sqlite3: true
   esbuild: true
+  onnxruntime-node: set this to true or false
   protobufjs: set this to true or false
+  sharp: set this to true or false

@@ -1,5 +1,22 @@
 // ============================================================
-// Drizzle ORM Schema — SQLite fallback (promo tables)
+// Drizzle ORM Schema — SQLite fallback (subset of drizzle-schema.ts)
+// ============================================================
+//
+// IMPORTANT: This is a SUBSET of the PostgreSQL schema in drizzle-schema.ts.
+// It only contains tables needed in standalone/SQLite mode (no PG available).
+//
+// When adding a new table:
+//  1. Define it in drizzle-schema.ts (PostgreSQL) first — that is the source of truth
+//  2. Only mirror to this file if the table is REQUIRED in standalone/SQLite mode
+//  3. Keep table names and column names IDENTICAL between the two files
+//
+// Tables intentionally OMITTED from SQLite (PG-only):
+//  - task_queue, failed_tasks, listing_records, price_history
+//  - store_configs, stock_alerts, aftersales_cases
+//  - market_snapshots, category_opportunities
+//  - images, reconciliation_results
+//  - rag_aftersales_scripts, rag_competitor_reports
+//  - rag_product_knowledge, rag_copy_templates, rag_operations_playbook
 // ============================================================
 
 import { sqliteTable, text, integer, real } from "drizzle-orm/sqlite-core";

@@ -122,6 +122,14 @@ export const NOTIFICATION_EVENTS: NotificationEvent[] = [
     rateLimit: 5,
   },
   {
+    key: "DEAD_LETTER_RETRY",
+    level: "info",
+    label: "死信自动重试",
+    template: "死信自动重试完成: {{retried}}条已重置重试, {{failed}}条转永久失败 (本次扫描{{total}}条).",
+    force: false,
+    rateLimit: 5,
+  },
+  {
     key: "EXCHANGE_RATE_STALE",
     level: "warn",
     label: "汇率过期",
@@ -326,6 +334,7 @@ export const EVENT_KEYS = {
   CIRCUIT_BREAKER_OPEN: "CIRCUIT_BREAKER_OPEN",
   TOKEN_LIMIT_REACHED: "TOKEN_LIMIT_REACHED",
   DEAD_LETTER_FULL: "DEAD_LETTER_FULL",
+  DEAD_LETTER_RETRY: "DEAD_LETTER_RETRY",
   EXCHANGE_RATE_STALE: "EXCHANGE_RATE_STALE",
   REVIEW_DECLINED: "REVIEW_DECLINED",
   SHIPMENT_FAILED: "SHIPMENT_FAILED",

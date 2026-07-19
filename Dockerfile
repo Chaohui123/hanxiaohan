@@ -27,6 +27,9 @@ COPY packages/ozon-order/package.json packages/ozon-order/tsconfig.json packages
 COPY packages/ozon-api-wrapper/package.json packages/ozon-api-wrapper/tsconfig.json packages/ozon-api-wrapper/
 COPY packages/logger/package.json packages/logger/tsconfig.json packages/logger/
 COPY packages/ai/package.json packages/ai/tsconfig.json packages/ai/
+COPY packages/cache/package.json packages/cache/tsconfig.json packages/cache/
+COPY packages/embedding/package.json packages/embedding/tsconfig.json packages/embedding/
+COPY packages/logistics/package.json packages/logistics/tsconfig.json packages/logistics/
 
 # Install dependencies (pnpm handles workspace linking)
 RUN pnpm install --frozen-lockfile

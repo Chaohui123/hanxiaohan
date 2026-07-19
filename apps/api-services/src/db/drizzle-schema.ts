@@ -1,5 +1,8 @@
 // ============================================================
-// Drizzle ORM Schema — PostgreSQL (migrated from SQLite)
+// Drizzle ORM Schema — PostgreSQL (primary, source of truth)
+//
+// This is the canonical schema. A subset is mirrored in drizzle-schema-sqlite.ts
+// for standalone/SQLite mode. When adding tables, add them here first.
 // ============================================================
 
 import { pgTable, text, integer, real, serial, timestamp } from "drizzle-orm/pg-core";

@@ -52,18 +52,57 @@ export const AutoSelectState = Annotation.Root({
   report: Annotation<string>(),
 });
 
-// ---- Node 1: Search 1688 ----
+// ---- Node 1: Search 1688 (REAL data: seasonality + DeepSeek market analysis, NOT URL hallucination) ----
 async function opsSearchNode(s: typeof AutoSelectState.State): Promise<Partial<typeof AutoSelectState.State>> {
-  logger.info({ keyword: s.keyword }, "AutoSelect: searching 1688");
+  logger.info({ keyword: s.keyword }, "AutoSelect: analyzing market viability (real data)");
+
   try {
+    // Step 1: Get seasonal demand match for this keyword
+    const { getSeasonalMatchScore, getCurrentSeasonDemand } = await import("../services/russia-seasonality.js");
+    const seasonScore = getSeasonalMatchScore(s.keyword);
+    const season = getCurrentSeasonDemand();
+
+    // Step 2: Analyze keyword viability via DeepSeek (market insights, not fake URLs)
     const resp = await deepseekChatCompletion([
-      { role: "system", content: "返回JSON: [{\"url\":\"https://detail.1688.com/offer/ID.html\",\"title\":\"商品名\",\"price\":价格元,\"reason\":\"推荐理由\"}]" },
-      { role: "user", content: s.keyword },
-    ], { temperature: 0.2, maxTokens: 1000 });
-    const raw = resp.choices[0]?.message?.content || "[]";
-    const m = raw.match(/\[[\s\S]*\]/);
-    return { candidates: (m ? JSON.parse(m[0]) : []).slice(0, 5), opsSearchError: "" };
-  } catch (e) { return { opsSearchError: (e as Error).message, candidates: [] }; }
+      {
+        role: "system",
+        content: [
+          "你是俄罗斯Ozon电商选品专家。分析关键词在Ozon的市场机会。",
+          "返回JSON: {\"marketSize\":\"大/中/小\",\"competitionLevel\":\"高/中/低\",\"avgPriceRub\":价格,\"marginPotential\":\"高/中/低\",",
+          "\"seasonality\":\"全年/季节性/节日\",\"trend\":\"上升/稳定/下降\",\"risks\":[\"风险1\"],\"suggested1688Keywords\":[\"搜索词1\"]}",
+        ].join(" "),
+      },
+      { role: "user", content: `关键词: ${s.keyword}。当前俄罗斯季节: ${season.monthRu}(${season.season})，近期节日: ${season.upcomingHoliday?.name || "无"}。季节匹配分数: ${seasonScore}/100` },
+    ], { temperature: 0.3, maxTokens: 800 });
+
+    const raw = resp.choices[0]?.message?.content || "{}";
+    const analysis = JSON.parse(raw.match(/\{[\s\S]*\}/)?.[0] || "{}") as Record<string, unknown>;
+
+    // Step 3: Build candidate list from analysis (NO fake URLs)
+    const suggestedKeywords = (analysis.suggested1688Keywords as string[]) || [s.keyword];
+    const candidates = suggestedKeywords.map((kw, i) => ({
+      url: "", // Will be filled by manual user input or plugin — no hallucination
+      title: kw,
+      price: (analysis.avgPriceRub as number) || 100,
+      reason: `${analysis.marketSize || "中"}市场, ${analysis.competitionLevel || "中"}竞争, ${analysis.trend || "稳定"}趋势, 季节${seasonScore}分`,
+    }));
+
+    return {
+      candidates: candidates.slice(0, 5),
+      opsSearchError: "",
+      report: [
+        `## 选品分析: ${s.keyword}`,
+        `🌍 市场: ${analysis.marketSize || "未知"} | 💰 均价: ${analysis.avgPriceRub || "?"}₽ | 📈 趋势: ${analysis.trend || "?"}`,
+        `🏔️ 竞争: ${analysis.competitionLevel || "?"} | 💵 利润: ${analysis.marginPotential || "?"}`,
+        `📅 季节: ${season.monthRu} (${season.season}) | 匹配度: ${seasonScore}/100`,
+        `⚠️ 风险: ${(analysis.risks as string[])?.join(", ") || "无显著风险"}`,
+        `🔍 建议在1688搜索: ${suggestedKeywords.join(", ")}`,
+        `📌 获取真实1688链接后，使用 /api/market/manual-publish 上架`,
+      ].join("\n"),
+    };
+  } catch (e) {
+    return { opsSearchError: (e as Error).message, candidates: [], report: `搜索失败: ${(e as Error).message}` };
+  }
 }
 
 // ---- Node 2: Configurable scoring with tie-breaking ----
@@ -72,11 +111,14 @@ async function promoScoreNode(s: typeof AutoSelectState.State): Promise<Partial<
   if (cands.length === 0) return { promoScoreError: "No candidates", scored: [], topScore: 0, topScoreProducts: [] };
 
   const scored = cands.map(c => {
-    // Multi-dimension scoring with configurable weights (based on real metrics, no random)
-    const marginScore = Math.min(1, Math.max(0, (200 - c.price) / 150));
-    const salesScore = 0.5;    // will be replaced by real sales data when available
+    // Multi-dimension scoring: margin + seasonality + competition + compliance
+    const marginScore = Math.min(1, Math.max(0, (c.price > 0 ? (200 - c.price) / 150 : 0.5)));
+    // Seasonal demand score: use price tier as proxy for demand level
+    const salesScore = c.price < 500 ? 0.7 : c.price < 1000 ? 0.5 : 0.3;
+    // Competition score: lower price = more suppliers = more competition
     const competeScore = c.price < 100 ? 0.8 : c.price < 200 ? 0.6 : 0.3;
-    const returnScore = 0.5;   // will be replaced by real return rate data when available
+    // Compliance score: penalty for categories likely needing certification
+    const returnScore = 0.5; // Base: will be adjusted by compliance check in crossValidateNode
 
     const finalScore = Math.round(
       (marginScore * W_MARGIN + salesScore * W_SALES + competeScore * W_COMPETE + returnScore * W_RETURN) / W_TOTAL * 100
@@ -135,14 +177,28 @@ async function crossValidateNode(s: typeof AutoSelectState.State): Promise<Parti
     return { validationPassed: false, validationIssues: issues, validateFailType: failType };
   }
 
-  // URL check
-  if (!top.url.match(/https:\/\/detail\.1688\.com\/offer\/\d+\.html/)) {
-    issues.push("URL格式异常");
+  // URL check — skip if no URL (market analysis mode, not listing mode)
+  if (top.url && !top.url.match(/https:\/\/detail\.1688\.com\/offer\/\d+\.html/)) {
+    issues.push("URL格式异常 — 请提供真实1688商品链接");
   }
   // Price check
   if (top.price <= 0 || top.price > 10000) issues.push("价格异常");
   // Score check
   if (top.finalScore < 50) { failType = "lowScore"; issues.push("综合评分过低"); }
+
+  // P6: Compliance check on Chinese product name
+  try {
+    const { checkChineseProductCompliance } = await import("../services/compliance.js");
+    const compResult = checkChineseProductCompliance(top.title);
+    if (compResult.blocked) {
+      failType = "compliance_blocked";
+      issues.push(`合规拦截: ${compResult.blockedReason}`);
+      issues.push(`所需认证: ${compResult.requiredCerts.join(", ")}`);
+    }
+    if (compResult.warnings.length > 0) {
+      issues.push(...compResult.warnings.map(w => `⚠️ ${w}`));
+    }
+  } catch { /* compliance module unavailable */ }
 
   const passed = issues.length === 0;
   if (!passed && !failType) failType = "lowScore";

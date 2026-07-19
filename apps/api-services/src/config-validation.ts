@@ -18,7 +18,7 @@ const SECURITY_RULES: ValidationRule[] = [
   { key: "ENCRYPTION_KEY", required: true, minLength: 32, blockedSubstrings: ["change_me", "CHANGE_ME", "your_", "YOUR_", "placeholder"] },
   { key: "OZON_API_KEYS", required: true, minLength: 10, blockedSubstrings: ["CHANGE_ME", "YOUR_"] },
   { key: "OZON_CLIENT_IDS", required: true, minLength: 3, blockedSubstrings: ["CHANGE_ME", "YOUR_"] },
-  { key: "GLM_API_KEY", required: true, minLength: 10, blockedSubstrings: ["CHANGE_ME", "YOUR_"] },
+  { key: "KIMI_API_KEY", required: true, minLength: 10, blockedSubstrings: ["CHANGE_ME", "YOUR_"] },
   { key: "DEEPSEEK_API_KEY", required: true, minLength: 10, blockedSubstrings: ["CHANGE_ME", "YOUR_"] },
   { key: "API_KEY", required: true, minLength: 16, blockedSubstrings: ["CHANGE_ME", "YOUR_"] },
   { key: "N8N_PASSWORD", required: true, minLength: 8, blockedSubstrings: ["CHANGE_ME", "change_me"] },

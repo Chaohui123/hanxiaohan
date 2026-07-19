@@ -127,8 +127,10 @@ export async function retryDeadLetters(options?: {
 
 /**
  * Categorize error message into DeadLetterCategory for smart filtering.
+ * Exported for the auto-publish job's retry grading — keep in sync with
+ * the retryable category set in jobs/auto-publish.ts and jobs/deadletter-retry.ts.
  */
-function categorizeError(msg: string): DeadLetterCategory {
+export function categorizeError(msg: string): DeadLetterCategory {
   const lower = msg.toLowerCase();
   if (lower.includes("validation") || lower.includes("invalid") || lower.includes("missing")) return "validation";
   if (lower.includes("429") || lower.includes("rate limit") || lower.includes("too many")) return "rate_limit";
