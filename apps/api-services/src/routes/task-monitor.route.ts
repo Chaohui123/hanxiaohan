@@ -3,7 +3,7 @@
 // Data sources: task_queue / failed_tasks / listing_records tables + TaskQueue
 // ============================================================
 
-import { Router, type Request, type Response } from "express";
+import { Router, type NextFunction, type Request, type Response } from "express";
 import { z } from "zod";
 import { logger } from "@onzo/logger";
 import { getDb, serializedWrite } from "../db/connection.js";
@@ -14,6 +14,8 @@ import {
   type DeadLetterCategory,
   type DeadLetterStatus,
 } from "../services/dead-letter.js";
+import { AppError, ValidationError } from "../errors/index.js";
+import { errorHandler } from "../middleware/error-handler.js";
 
 // failed_tasks has no max_retries column — expose the system-wide default
 // (same fallback as writeToDeadLetter / TaskQueue).
@@ -223,25 +225,8 @@ export function createTaskMonitorRouter(taskQueue: TaskQueue): Router {
     }
   }
 
-  function validationError(res: Response, req: Request, issues: string): void {
-    res.status(400).json({
-      success: false,
-      error: { code: "VALIDATION_ERROR", message: issues, retryable: false },
-      correlationId: req.correlationId,
-    });
-  }
-
-  function serverError(res: Response, req: Request, code: string, err: unknown): void {
-    logger.error({ err: (err as Error).message, code, correlationId: req.correlationId }, "Task monitor endpoint failed");
-    res.status(500).json({
-      success: false,
-      error: { code, message: (err as Error).message },
-      correlationId: req.correlationId,
-    });
-  }
-
   /** GET /queue/stats — queue statistics (DB-backed, memory fallback) */
-  router.get("/queue/stats", async (req, res) => {
+  router.get("/queue/stats", async (req, res, next) => {
     try {
       const memory = memoryStats();
       const stats: QueueStatsDto = { ...memory, deadLetterPending: 0 };
@@ -267,15 +252,15 @@ export function createTaskMonitorRouter(taskQueue: TaskQueue): Router {
 
       res.json({ success: true, data: stats, correlationId: req.correlationId });
     } catch (err) {
-      serverError(res, req, "QUEUE_STATS_ERROR", err);
+      next(err);
     }
   });
 
   /** GET /queue — list tasks with optional status/storeId/type filters */
-  router.get("/queue", async (req, res) => {
+  router.get("/queue", async (req, res, next) => {
     const parsed = QueueQuerySchema.safeParse(req.query);
     if (!parsed.success) {
-      validationError(res, req, parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join(", "));
+      next(new ValidationError(parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join(", ")));
       return;
     }
 
@@ -331,15 +316,15 @@ export function createTaskMonitorRouter(taskQueue: TaskQueue): Router {
 
       res.json({ success: true, data, count: data.length, correlationId: req.correlationId });
     } catch (err) {
-      serverError(res, req, "QUEUE_LIST_ERROR", err);
+      next(err);
     }
   });
 
   /** GET /failed — list dead-letter tasks (default: actionable, i.e. not yet retried) */
-  router.get("/failed", async (req, res) => {
+  router.get("/failed", async (req, res, next) => {
     const parsed = FailedQuerySchema.safeParse(req.query);
     if (!parsed.success) {
-      validationError(res, req, parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join(", "));
+      next(new ValidationError(parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join(", ")));
       return;
     }
 
@@ -373,15 +358,15 @@ export function createTaskMonitorRouter(taskQueue: TaskQueue): Router {
       const data = rows.map(rowToFailedTaskDto);
       res.json({ success: true, data, count: data.length, correlationId: req.correlationId });
     } catch (err) {
-      serverError(res, req, "FAILED_LIST_ERROR", err);
+      next(err);
     }
   });
 
   /** POST /failed — external failure notification → dead letter */
-  router.post("/failed", async (req, res) => {
+  router.post("/failed", async (req, res, next) => {
     const parsed = FailedNotifySchema.safeParse(req.body);
     if (!parsed.success) {
-      validationError(res, req, parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join(", "));
+      next(new ValidationError(parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join(", ")));
       return;
     }
 
@@ -405,15 +390,15 @@ export function createTaskMonitorRouter(taskQueue: TaskQueue): Router {
       logger.info({ id, taskType: taskType ?? source, correlationId: req.correlationId }, "External failure recorded to dead letter");
       res.status(201).json({ success: true, data: { id }, correlationId: req.correlationId });
     } catch (err) {
-      serverError(res, req, "FAILED_NOTIFY_ERROR", err);
+      next(err);
     }
   });
 
   /** POST /retry/:id — re-queue a single task (task_queue or failed_tasks) */
-  router.post("/retry/:id", async (req, res) => {
+  router.post("/retry/:id", async (req, res, next) => {
     const parsed = TaskIdParamSchema.safeParse(req.params.id);
     if (!parsed.success) {
-      validationError(res, req, "id: must be a non-empty string");
+      next(new ValidationError("id: must be a non-empty string"));
       return;
     }
     const id = parsed.data;
@@ -432,12 +417,7 @@ export function createTaskMonitorRouter(taskQueue: TaskQueue): Router {
           });
           return;
         }
-        res.status(400).json({
-          success: false,
-          error: { code: "TASK_NOT_RETRYABLE", message: `Task ${id} exceeded max retries`, retryable: false },
-          correlationId: req.correlationId,
-        });
-        return;
+        throw new AppError("TASK_NOT_RETRYABLE", `Task ${id} exceeded max retries`, false, 400);
       }
 
       // 2) DB fallback — task_queue first, then failed_tasks
@@ -447,12 +427,7 @@ export function createTaskMonitorRouter(taskQueue: TaskQueue): Router {
         if (tqRows.length > 0) {
           const row = tqRows[0];
           if (row.status === "done") {
-            res.status(400).json({
-              success: false,
-              error: { code: "TASK_NOT_RETRYABLE", message: `Task ${id} is already done`, retryable: false },
-              correlationId: req.correlationId,
-            });
-            return;
+            throw new AppError("TASK_NOT_RETRYABLE", `Task ${id} is already done`, false, 400);
           }
           await serializedWrite(() =>
             db.run(
@@ -489,21 +464,17 @@ export function createTaskMonitorRouter(taskQueue: TaskQueue): Router {
         }
       }
 
-      res.status(404).json({
-        success: false,
-        error: { code: "TASK_NOT_FOUND", message: `Task ${id} not found`, retryable: false },
-        correlationId: req.correlationId,
-      });
+      throw new AppError("TASK_NOT_FOUND", `Task ${id} not found`, false, 404);
     } catch (err) {
-      serverError(res, req, "TASK_RETRY_ERROR", err);
+      next(err);
     }
   });
 
   /** POST /deadletter/retry-batch — batch retry dead letters (all / by category / by ids) */
-  router.post("/deadletter/retry-batch", async (req, res) => {
+  router.post("/deadletter/retry-batch", async (req, res, next) => {
     const parsed = RetryBatchSchema.safeParse(req.body ?? {});
     if (!parsed.success) {
-      validationError(res, req, parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join(", "));
+      next(new ValidationError(parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join(", ")));
       return;
     }
 
@@ -513,12 +484,7 @@ export function createTaskMonitorRouter(taskQueue: TaskQueue): Router {
       if (taskIds && taskIds.length > 0) {
         const db = await getDb().catch(() => null);
         if (!db) {
-          res.status(503).json({
-            success: false,
-            error: { code: "DB_UNAVAILABLE", message: "Database unavailable", retryable: true },
-            correlationId: req.correlationId,
-          });
-          return;
+          throw new AppError("DB_UNAVAILABLE", "Database unavailable", true, 503);
         }
         let retried = 0;
         let failed = 0;
@@ -542,15 +508,15 @@ export function createTaskMonitorRouter(taskQueue: TaskQueue): Router {
       const data = await retryDeadLetters({ filterCategory, storeId, limit });
       res.json({ success: true, data, correlationId: req.correlationId });
     } catch (err) {
-      serverError(res, req, "DEADLETTER_RETRY_ERROR", err);
+      next(err);
     }
   });
 
   /** GET|POST /listings — listing history (POST kept for batch tooling compatibility) */
-  const listingsHandler = async (req: Request, res: Response): Promise<void> => {
+  const listingsHandler = async (req: Request, res: Response, next: NextFunction): Promise<void> => {
     const parsed = ListingsQuerySchema.safeParse(req.query);
     if (!parsed.success) {
-      validationError(res, req, parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join(", "));
+      next(new ValidationError(parsed.error.issues.map((i) => `${i.path.join(".")}: ${i.message}`).join(", ")));
       return;
     }
 
@@ -577,11 +543,15 @@ export function createTaskMonitorRouter(taskQueue: TaskQueue): Router {
         correlationId: req.correlationId,
       });
     } catch (err) {
-      serverError(res, req, "LISTINGS_ERROR", err);
+      next(err);
     }
   };
   router.get("/listings", listingsHandler);
   router.post("/listings", listingsHandler);
+
+  // Route-local error middleware: delegates to the global errorHandler so this
+  // router produces the unified error shape even when mounted standalone (tests).
+  router.use(errorHandler);
 
   return router;
 }
