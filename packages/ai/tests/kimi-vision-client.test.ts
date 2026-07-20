@@ -35,7 +35,7 @@ describe("KimiVisionClient", () => {
 
     expect(mockFetch).toHaveBeenCalledTimes(1);
     const [url, opts] = mockFetch.mock.calls[0];
-    expect(url).toBe("https://api.moonshot.cn/v1/chat/completions");
+    expect(url).toBe("https://api.kimi.com/coding/v1/chat/completions");
     expect(opts.headers["Authorization"]).toBe("Bearer test-key");
     expect(opts.headers["Content-Type"]).toBe("application/json");
     const body = JSON.parse(opts.body as string) as {
@@ -183,7 +183,7 @@ describe("KimiOcrClient (GlmVisionClient backward-compat alias)", () => {
     // Business layer passes baseUrl as the full chat/completions endpoint
     const client = new GlmVisionClient({
       apiKey: "test-key",
-      baseUrl: "https://api.moonshot.cn/v1/chat/completions",
+      baseUrl: "https://api.kimi.com/coding/v1/chat/completions",
       model: "kimi-k3",
     });
     const result = await client.extractTextFromImage({ url: "https://example.com/p.jpg" });
@@ -194,7 +194,7 @@ describe("KimiOcrClient (GlmVisionClient backward-compat alias)", () => {
     expect((dlOpts.headers as Record<string, string>).Referer).toBeTruthy();
     // calls[1] is the API request with the downloaded image inlined as base64
     const [url, opts] = mockFetch.mock.calls[1];
-    expect(url).toBe("https://api.moonshot.cn/v1/chat/completions");
+    expect(url).toBe("https://api.kimi.com/coding/v1/chat/completions");
     const body = JSON.parse(opts.body as string) as { model: string; response_format?: { type: string } };
     expect(body.model).toBe("kimi-k3");
     expect(body.response_format).toEqual({ type: "json_object" });

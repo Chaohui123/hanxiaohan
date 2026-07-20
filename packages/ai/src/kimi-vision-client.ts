@@ -1,5 +1,5 @@
 // ============================================================
-// Kimi K3 Vision Client — OpenAI-compatible endpoint (api.moonshot.cn)
+// Kimi K3 Vision Client — OpenAI-compatible endpoint (api.kimi.com/coding/v1)
 // Primary vision pipeline: product image OCR / visual understanding.
 // Native image_url input, 1M context. GLM retained only for
 // embedding / image-generation backup (see glm-client.ts).
@@ -7,12 +7,12 @@
 
 import type { TokenTracker, TokenUsage } from "./token-tracker.js";
 
-const DEFAULT_BASE_URL = "https://api.moonshot.cn/v1";
+const DEFAULT_BASE_URL = "https://api.kimi.com/coding/v1";
 const DEFAULT_MODEL = "kimi-k3";
 
 export interface KimiVisionClientConfig {
   apiKey: string;
-  /** API root, e.g. https://api.moonshot.cn/v1 — /chat/completions is appended */
+  /** API root, e.g. https://api.kimi.com/coding/v1 — /chat/completions is appended */
   baseUrl?: string;
   /** Vision model ID — defaults to kimi-k3 */
   model?: string;
