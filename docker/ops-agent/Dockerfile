@@ -3,7 +3,8 @@ ENV npm_config_registry=https://registry.npmmirror.com \
     COREPACK_NPM_REGISTRY=https://registry.npmmirror.com
 WORKDIR /app
 RUN corepack enable && corepack prepare pnpm@latest --activate
-RUN echo "ignore-scripts=true" >> .npmrc && echo "verify-deps-before-run=false" >> .npmrc
+RUN echo "ignore-scripts=true" >> .npmrc && echo "verify-deps-before-run=false" >> .npmrc \
+    && echo "registry=https://registry.npmmirror.com" >> .npmrc
 COPY pnpm-lock.yaml pnpm-workspace.yaml ./
 COPY package.json tsconfig.base.json ./
 COPY packages/logger/package.json packages/logger/tsconfig.json packages/logger/

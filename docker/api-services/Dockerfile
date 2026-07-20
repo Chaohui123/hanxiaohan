@@ -19,9 +19,12 @@ RUN apk add --no-cache gcc g++ make python3 python3-dev
 
 # Enable pnpm
 RUN corepack enable pnpm
-RUN echo "ignore-scripts=true" >> .npmrc && echo "verify-deps-before-run=false" >> .npmrc
 
 WORKDIR /app
+
+# Project-level .npmrc (must live under /app so pnpm reads it at install time)
+RUN echo "ignore-scripts=true" >> .npmrc && echo "verify-deps-before-run=false" >> .npmrc \
+    && echo "registry=https://registry.npmmirror.com" >> .npmrc
 
 # Step 1: Copy dependency manifests (maximizes layer cache — only invalidates when packages change)
 COPY pnpm-lock.yaml pnpm-workspace.yaml ./
