@@ -1,10 +1,14 @@
 packages:
   - "packages/*"
   - "apps/*"
-onlyBuiltDependencies:
-  - better-sqlite3
-  - esbuild
-  - msgpackr-extract
-  - onnxruntime-node
-  - protobufjs
-  - sharp
+# pnpm 11 build approvals — all explicitly disabled to keep installs
+# deterministic (no ERR_PNPM_IGNORED_BUILDS) and toolchain-free.
+# better-sqlite3 native binding is rebuilt in the api-services image
+# (docker/api-services/Dockerfile runs `npm rebuild better-sqlite3`).
+allowBuilds:
+  better-sqlite3: false
+  esbuild: false
+  msgpackr-extract: false
+  onnxruntime-node: false
+  protobufjs: false
+  sharp: false
