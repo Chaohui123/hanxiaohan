@@ -37,6 +37,25 @@ if ! command -v docker &> /dev/null; then
 fi
 apt install -y docker-compose-plugin
 
+# BuildKit GC：构建缓存自动回收，防止小磁盘被 docker 缓存打满
+mkdir -p /etc/buildkit
+cat > /etc/buildkit/buildkitd.toml << 'BKEOF'
+[worker.oci]
+  gc = true
+  gckeepstorage = 6000
+
+  # 每日清理 24h 前的未使用缓存（保留最近 2GB）
+  [[worker.oci.gcpolicy]]
+    keepBytes = 2000000000
+    keepDuration = 86400
+
+  # 硬上限：构建缓存总计不超过 6GB
+  [[worker.oci.gcpolicy]]
+    all = true
+    keepBytes = 6000000000
+BKEOF
+systemctl restart docker
+
 echo ""
 echo ">>> [4/7] 创建目录..."
 mkdir -p /data/onzo/{uploads,dead-letter,logs,postgres,redis,caddy}/data
