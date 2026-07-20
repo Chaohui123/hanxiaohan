@@ -154,6 +154,7 @@ services:
     depends_on:
       api-services:
         condition: service_healthy
+        required: false
     deploy:
       resources:
         limits:
@@ -311,6 +312,7 @@ services:
     depends_on:
       api-services:
         condition: service_healthy
+        required: false
     ports:
       - "80:80"
       - "443:443"
