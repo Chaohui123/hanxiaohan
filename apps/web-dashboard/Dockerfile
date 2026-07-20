@@ -5,7 +5,7 @@ WORKDIR /app
 RUN sed -i 's|dl-cdn.alpinelinux.org|mirrors.aliyun.com|g' /etc/apk/repositories
 RUN apk add --no-cache python3 make g++
 RUN corepack enable && corepack prepare pnpm@latest --activate
-RUN echo "ignore-scripts=true" >> .npmrc && echo "registry=https://registry.npmmirror.com" >> .npmrc
+RUN echo "registry=https://registry.npmmirror.com" >> .npmrc
 COPY pnpm-lock.yaml pnpm-workspace.yaml package.json ./
 COPY apps/web-dashboard/package.json ./apps/web-dashboard/
 RUN pnpm install --frozen-lockfile
