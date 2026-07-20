@@ -3,6 +3,20 @@
 // Primary vision pipeline: product image OCR / visual understanding.
 // Native image_url input, 1M context. GLM retained only for
 // embedding / image-generation backup (see glm-client.ts).
+//
+// Endpoint behavior contract (verified against the live endpoint):
+//   • Auth:   Authorization: Bearer <KIMI_API_KEY> — keys issued for
+//             api.kimi.com/coding/v1 are NOT valid on api.moonshot.cn
+//             or api.moonshot.ai (they return 401). Do not "upgrade"
+//             this default to the Moonshot open-platform URL.
+//   • Scope:  POST /chat/completions only, incl. vision (image_url) input.
+//   • Images: external URLs are rejected ("unsupported image url") —
+//             callers must send base64 data URIs (see ocr.ts download step).
+//   • Params: temperature must be exactly 1 (others are rejected);
+//             response_format {type:"json_object"} is supported.
+//   • Output: always-thinking model — small max_tokens may leave
+//             content empty with the answer in reasoning_content;
+//             this client falls back to reasoning_content automatically.
 // ============================================================
 
 import type { TokenTracker, TokenUsage } from "./token-tracker.js";

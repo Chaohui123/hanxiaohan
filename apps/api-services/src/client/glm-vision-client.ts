@@ -8,7 +8,7 @@
 import { logger } from "@onzo/logger";
 
 const KIMI_KEY = process.env.KIMI_API_KEY || "";
-const KIMI_BASE = process.env.KIMI_BASE_URL || "https://api.moonshot.cn/v1";
+const KIMI_BASE = process.env.KIMI_BASE_URL || "https://api.kimi.com/coding/v1";
 const KIMI_VISION = process.env.KIMI_VISION_MODEL || "kimi-k3";
 
 export interface ImageOptimizeResult {

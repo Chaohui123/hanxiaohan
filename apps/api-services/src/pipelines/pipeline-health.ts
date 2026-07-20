@@ -67,7 +67,7 @@ export async function checkPipelineHealth(): Promise<PipelineHealth> {
   // 3. Kimi K3 vision API
   try {
     const t0 = Date.now();
-    const res = await fetch(`${process.env.KIMI_BASE_URL || "https://api.moonshot.cn/v1"}/chat/completions`, {
+    const res = await fetch(`${process.env.KIMI_BASE_URL || "https://api.kimi.com/coding/v1"}/chat/completions`, {
       method: "POST",
       headers: {
         "Authorization": `Bearer ${process.env.KIMI_API_KEY || ""}`,

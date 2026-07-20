@@ -105,7 +105,7 @@ export function loadConfig(): AppConfig {
 
     kimi: {
       apiKey: requireEnv("KIMI_API_KEY"),
-      baseUrl: optionalEnv("KIMI_BASE_URL", "https://api.moonshot.cn/v1"),
+      baseUrl: optionalEnv("KIMI_BASE_URL", "https://api.kimi.com/coding/v1"),
       visionModel: optionalEnv("KIMI_VISION_MODEL", "kimi-k3"),
     },
 

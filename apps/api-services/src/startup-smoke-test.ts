@@ -81,7 +81,7 @@ export async function runSmokeTests(ozonClient: OzonClient): Promise<SmokeResult
   const kimiKey = process.env.KIMI_API_KEY;
   if (kimiKey && !kimiKey.includes("CHANGE_ME")) {
     try {
-      const kimiBase = process.env.KIMI_BASE_URL || "https://api.moonshot.cn/v1";
+      const kimiBase = process.env.KIMI_BASE_URL || "https://api.kimi.com/coding/v1";
       const kimiModel = process.env.KIMI_VISION_MODEL || "kimi-k3";
       const resp = await fetch(`${kimiBase}/chat/completions`, {
         method: "POST",
