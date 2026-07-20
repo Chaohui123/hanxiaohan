@@ -11,7 +11,7 @@ echo "========================================="
 echo ""
 echo ">>> [1/7] 系统初始化..."
 apt update -y && apt upgrade -y
-apt install -y curl wget vim git htop net-tools ufw unzip
+apt install -y curl wget vim git htop net-tools ufw unzip gnupg
 
 echo ""
 echo ">>> [2/7] 配置防火墙..."
@@ -25,8 +25,13 @@ echo "y" | ufw enable
 echo ""
 echo ">>> [3/7] 安装Docker..."
 if ! command -v docker &> /dev/null; then
-    curl -fsSL https://get.docker.com -o get-docker.sh
-    sh get-docker.sh
+    # 阿里云 docker-ce apt 源（GPG 签名校验；不使用 curl|sh 方式，避免供应链风险）
+    install -m 0755 -d /etc/apt/keyrings
+    curl -fsSL https://mirrors.aliyun.com/docker-ce/linux/ubuntu/gpg | gpg --dearmor -o /etc/apt/keyrings/docker.gpg
+    chmod a+r /etc/apt/keyrings/docker.gpg
+    echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.gpg] https://mirrors.aliyun.com/docker-ce/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" > /etc/apt/sources.list.d/docker.list
+    apt update -y
+    apt install -y docker-ce docker-ce-cli containerd.io
     systemctl start docker
     systemctl enable docker
 fi
@@ -55,7 +60,9 @@ cd /data/onzo/app
 # 首次部署：以模板生成 .env.production，填入真实密钥后再启动
 if [ ! -f .env.production ]; then
     cp .env.example .env.production
-    echo "已生成 .env.production，请先编辑填入真实密钥后重新运行本脚本"
+    echo "已生成 .env.production — 必填: OZON_CLIENT_IDS, OZON_API_KEYS, API_KEY,"
+    echo "  KIMI_API_KEY, DEEPSEEK_API_KEY, GRAFANA_PASSWORD, POSTGRES_PASSWORD,"
+    echo "  REDIS_PASSWORD, N8N_ENCRYPTION_KEY。填写后重新运行本脚本"
     exit 1
 fi
 cp .env.production .env

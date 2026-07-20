@@ -54,5 +54,14 @@
   },
   "optionalDependencies": {
     "@imgly/background-removal-node": "^1.4.0"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "better-sqlite3",
+      "msgpackr-extract",
+      "onnxruntime-node",
+      "protobufjs",
+      "sharp"
+    ]
   }
 }
