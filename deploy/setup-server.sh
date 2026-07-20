@@ -1,18 +1,20 @@
 #!/bin/bash
 set -e
+# 通用服务器初始化 + 部署脚本（与具体服务器无关）
+# 域名通过 .env.production 的 CADDY_DOMAIN 配置，不硬编码
 echo "========================================="
 echo "  ONZO 一键部署脚本"
-echo "  服务器: 124.221.11.222"
-echo "  域名: 124-221-11-222.nip.io"
+echo "  用法: 上传 onzo.zip 到 /data/onzo/ 后运行本脚本"
+echo "  域名: 部署前在 .env.production 配置 CADDY_DOMAIN"
 echo "========================================="
 
 echo ""
-echo ">>> [1/8] 系统初始化..."
+echo ">>> [1/7] 系统初始化..."
 apt update -y && apt upgrade -y
 apt install -y curl wget vim git htop net-tools ufw unzip
 
 echo ""
-echo ">>> [2/8] 配置防火墙..."
+echo ">>> [2/7] 配置防火墙..."
 ufw default deny incoming
 ufw default allow outgoing
 ufw allow 22/tcp
@@ -21,7 +23,7 @@ ufw allow 443/tcp
 echo "y" | ufw enable
 
 echo ""
-echo ">>> [3/8] 安装Docker..."
+echo ">>> [3/7] 安装Docker..."
 if ! command -v docker &> /dev/null; then
     curl -fsSL https://get.docker.com -o get-docker.sh
     sh get-docker.sh
@@ -31,7 +33,7 @@ fi
 apt install -y docker-compose-plugin
 
 echo ""
-echo ">>> [4/8] 创建目录..."
+echo ">>> [4/7] 创建目录..."
 mkdir -p /data/onzo/{uploads,dead-letter,logs,postgres,redis,caddy}/data
 mkdir -p /data/onzo/caddy/data
 mkdir -p /data/onzo/app
@@ -68,7 +70,8 @@ docker compose ps
 echo ""
 echo "========================================="
 echo "  部署完成！"
-echo "  访问: https://${CADDY_DOMAIN:-<你的域名>}  (Caddy 配置: docker/caddy/Caddyfile)"
-echo "  n8n: http://124.221.11.222:5678"
+# 从 .env.production 读域名提示，未配置则提示占位
+DOMAIN=$(grep -E '^CADDY_DOMAIN=' .env.production 2>/dev/null | cut -d= -f2-)
+echo "  访问: https://${DOMAIN:-<未配置 CADDY_DOMAIN>}  (Caddy 配置: docker/caddy/Caddyfile)"
 echo "  日志: docker compose logs -f api-services"
 echo "========================================="
