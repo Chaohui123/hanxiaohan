@@ -377,7 +377,7 @@ export function createTaskMonitorRouter(taskQueue: TaskQueue): Router {
     }
   });
 
-  /** POST /failed — external failure notification (n8n auto-publish) → dead letter */
+  /** POST /failed — external failure notification → dead letter */
   router.post("/failed", async (req, res) => {
     const parsed = FailedNotifySchema.safeParse(req.body);
     if (!parsed.success) {
@@ -546,7 +546,7 @@ export function createTaskMonitorRouter(taskQueue: TaskQueue): Router {
     }
   });
 
-  /** GET|POST /listings — listing history (POST kept for n8n auto-publish workflow) */
+  /** GET|POST /listings — listing history (POST kept for batch tooling compatibility) */
   const listingsHandler = async (req: Request, res: Response): Promise<void> => {
     const parsed = ListingsQuerySchema.safeParse(req.query);
     if (!parsed.success) {
@@ -572,7 +572,7 @@ export function createTaskMonitorRouter(taskQueue: TaskQueue): Router {
         success: true,
         data,
         count: data.length,
-        // Extra summary for n8n canvas monitoring note — `data` stays an array per swagger/frontend.
+        // Extra summary for canvas-style monitoring consumers — `data` stays an array per swagger/frontend.
         stats: memoryStats(),
         correlationId: req.correlationId,
       });

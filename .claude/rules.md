@@ -62,9 +62,7 @@
 
 │ └── validator/ # 商品上架前置校验
 
-├── apps/api-services/ # Express 统一接口服务
-
-├── n8n/workflows/ # n8n 工作流 JSON
+├── apps/api-services/ # Express 统一接口服务（含内建 scheduler）
 
 ├── docker/ # 容器构建配置
 

@@ -20,9 +20,9 @@ curl http://localhost:3000/health
 # 5. （可选）n8n 工作流
 # 定时任务已由 api-services 内建 scheduler 全覆盖（订单同步/自动发货/死信重试/
 # Token 监控/DB 备份/队列上架），正常部署无需 n8n。
-# 如需可视化编排：docker compose --profile production --profile n8n up -d
-# 打开 http://localhost:5678，逐个导入 n8n/workflows/*.json
-# 注意：工作流通过 $env.ONZO_API_BASE / $env.ONZO_API_KEY 调用 api-services，
+# 如需可视化编排可自行启用：docker compose --profile production --profile n8n up -d
+# 打开 http://localhost:5678，自行创建/导入工作流（仓库不再随附工作流 JSON）。
+# 注意：工作流可通过 $env.ONZO_API_BASE / $env.ONZO_API_KEY 调用 api-services，
 #       compose 的 n8n profile 已自动注入；独立部署 n8n 需手动设置这两个环境变量。
 ```
 

@@ -79,14 +79,3 @@ jobs:
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
-
-  validate-n8n:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: actions/checkout@v4
-      - name: Validate n8n Workflows
-        run: |
-          for f in n8n/workflows/*.json; do
-            echo "Validating $f"
-            node -e "JSON.parse(require('fs').readFileSync('$f','utf8')); console.log('  OK')"
-          done

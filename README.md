@@ -120,8 +120,7 @@ packages/
   scraper/         → @onzo/scraper-1688        1688 Playwright 爬虫
   shared-types/    → @onzo/shared-types        全局类型定义
   validator/       → @onzo/validation-layer    上架前置校验
-apps/api-services/  → @onzo/api-services        Express 统一接口服务
-n8n/workflows/                                 8 条自动化工作流
+apps/api-services/  → @onzo/api-services        Express 统一接口服务（含内建 scheduler）
 ```
 
 > **注意**：三个包的目录名与 npm 包名不同，import 时使用右侧 `@onzo/*` 名称。
