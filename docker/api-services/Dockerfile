@@ -46,8 +46,11 @@ COPY apps/api-services/package.json apps/api-services/tsconfig.json apps/api-ser
 # Step 2: Install deps (includes devDeps for TS compilation)
 RUN pnpm install --no-frozen-lockfile --ignore-scripts --config.verify-deps-before-run=false
 
-# Rebuild native modules for Alpine musl (skipped by --ignore-scripts above)
-RUN npm rebuild better-sqlite3 || true
+# Rebuild better-sqlite3 native binding for Alpine musl.
+# (allowBuilds:false skips it at install; npm rebuild can't resolve pnpm's
+# symlinked store layout, so invoke node-gyp inside the package dir directly.)
+RUN cd node_modules/.pnpm/better-sqlite3@*/node_modules/better-sqlite3 \
+    && npx --yes node-gyp rebuild
 
 # Step 3: Copy full source
 COPY packages/ packages/

@@ -104,8 +104,9 @@ export class OzonClient {
   /** Health check — simple ping to verify connectivity */
   async ping(): Promise<boolean> {
     try {
-      // Ozon Seller API requires POST even for read endpoints (GET returns 405)
-      await this.doRequest("POST", "/v1/warehouse/list", {});
+      // /v1/warehouse/list is obsolete (code 9); /v1/seller/info is a live endpoint.
+      // Ozon Seller API requires POST even for read endpoints (GET returns 405).
+      await this.doRequest("POST", "/v1/seller/info", {});
       return true;
     } catch {
       return false;
