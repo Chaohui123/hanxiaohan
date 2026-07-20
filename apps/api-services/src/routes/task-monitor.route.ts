@@ -16,6 +16,7 @@ import {
 } from "../services/dead-letter.js";
 import { AppError, ValidationError } from "../errors/index.js";
 import { errorHandler } from "../middleware/error-handler.js";
+import { nowDb } from "../utils/time.js";
 
 // failed_tasks has no max_retries column — expose the system-wide default
 // (same fallback as writeToDeadLetter / TaskQueue).
@@ -449,8 +450,8 @@ export function createTaskMonitorRouter(taskQueue: TaskQueue): Router {
         if (ftRows.length > 0) {
           await serializedWrite(() =>
             db.run(
-              "UPDATE failed_tasks SET status = 'pending_retry', retry_count = retry_count + 1, updated_at = NOW() WHERE id = ?",
-              [id]
+              "UPDATE failed_tasks SET status = 'pending_retry', retry_count = retry_count + 1, updated_at = ? WHERE id = ?",
+              [nowDb(), id]
             )
           );
           const retryCount = Number(ftRows[0].retry_count ?? 0) + 1;
@@ -491,8 +492,8 @@ export function createTaskMonitorRouter(taskQueue: TaskQueue): Router {
         for (const id of taskIds) {
           const result = await serializedWrite(() =>
             db.run(
-              "UPDATE failed_tasks SET status = 'retrying', retry_count = retry_count + 1, updated_at = NOW() WHERE id = ? AND status IN ('pending_retry', 'permanent_failure')",
-              [id]
+              "UPDATE failed_tasks SET status = 'retrying', retry_count = retry_count + 1, updated_at = ? WHERE id = ? AND status IN ('pending_retry', 'permanent_failure')",
+              [nowDb(), id]
             )
           );
           if (result.changes > 0) retried++;

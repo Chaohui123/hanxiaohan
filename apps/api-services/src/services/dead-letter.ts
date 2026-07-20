@@ -7,6 +7,7 @@ import { randomUUID } from "node:crypto";
 import { getDb, serializedWrite } from "../db/connection.js";
 import { logger } from "@onzo/logger";
 import { emitEvent, EVENT_KEYS } from "./notification-events.js";
+import { nowDb } from "../utils/time.js";
 
 export type DeadLetterStatus = "pending_retry" | "retrying" | "permanent_failure" | "retried";
 export type DeadLetterCategory = "api_error" | "validation" | "network" | "rate_limit" | "circuit_breaker" | "unknown";
@@ -52,8 +53,8 @@ export async function writeToDeadLetter(params: {
   await serializedWrite(() =>
     db.run(
       `INSERT INTO failed_tasks (id, store_id, task_type, payload_json, error_message, status, correlation_id, retry_count, updated_at)
-       VALUES (?, ?, ?, ?, ?, 'pending_retry', ?, 0, NOW())
-       ON CONFLICT(id) DO UPDATE SET error_message=EXCLUDED.error_message, status='pending_retry', retry_count=0, updated_at=NOW()`,
+       VALUES (?, ?, ?, ?, ?, 'pending_retry', ?, 0, ?)
+       ON CONFLICT(id) DO UPDATE SET error_message=EXCLUDED.error_message, status='pending_retry', retry_count=0, updated_at=EXCLUDED.updated_at`,
       [
         id,
         storeId,
@@ -61,6 +62,7 @@ export async function writeToDeadLetter(params: {
         JSON.stringify(params.payload ?? {}),
         `${category}:${params.errorMessage}`,
         correlationId,
+        nowDb(),
       ]
     )
   ).catch((err) => {
@@ -109,13 +111,13 @@ export async function retryDeadLetters(options?: {
 
     try {
       await db.run(
-        "UPDATE failed_tasks SET status = 'retrying', retry_count = retry_count + 1, updated_at = NOW() WHERE id = ?",
-        [id]
+        "UPDATE failed_tasks SET status = 'retrying', retry_count = retry_count + 1, updated_at = ? WHERE id = ?",
+        [nowDb(), id]
       );
       retried++;
     } catch {
       await db
-        .run("UPDATE failed_tasks SET status = 'permanent_failure', updated_at = NOW() WHERE id = ?", [id])
+        .run("UPDATE failed_tasks SET status = 'permanent_failure', updated_at = ? WHERE id = ?", [nowDb(), id])
         .catch(() => {});
       failed++;
     }

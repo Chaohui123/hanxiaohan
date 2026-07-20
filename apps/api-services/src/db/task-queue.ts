@@ -5,6 +5,7 @@
 
 import type { DbAdapter } from "./connection.js";
 import { logger } from "@onzo/logger";
+import { nowDb } from "../utils/time.js";
 
 // ---- Types ----
 
@@ -71,7 +72,7 @@ export class TaskQueue {
       try {
         // Recover stuck "processing" tasks from previous crash
         // Tasks stuck in "processing" for > 15 minutes are reset to "queued"
-        const stuckTimeout = new Date(Date.now() - 15 * 60 * 1000).toISOString();
+        const stuckTimeout = nowDb(-15 * 60 * 1000);
         const stuckResult = await this.db.run(
           "UPDATE task_queue SET status = 'queued', started_at = NULL WHERE status = 'processing' AND started_at < ?",
           [stuckTimeout]
@@ -117,7 +118,7 @@ export class TaskQueue {
       payload: params.payload,
       correlationId: params.correlationId,
       storeId: params.storeId ?? "store_1",
-      createdAt: new Date().toISOString(),
+      createdAt: nowDb(),
       startedAt: null,
       completedAt: null,
       errorMessage: null,
@@ -154,7 +155,7 @@ export class TaskQueue {
 
     this.activeWorkers += candidates.length;
 
-    const now = new Date().toISOString();
+    const now = nowDb();
     for (const task of candidates) {
       task.status = "processing";
       task.startedAt = now;
@@ -177,14 +178,14 @@ export class TaskQueue {
     const task = this.memoryQueue.get(taskId);
     if (task) {
       task.status = "processing";
-      task.startedAt = new Date().toISOString();
+      task.startedAt = nowDb();
       this.processingSet.add(taskId);
     }
 
     if (this.dbAvailable && this.db) {
       await this.db.run(
         "UPDATE task_queue SET status = 'processing', started_at = ? WHERE id = ?",
-        [new Date().toISOString(), taskId]
+        [nowDb(), taskId]
       ).catch(() => {});
     }
   }
@@ -195,7 +196,7 @@ export class TaskQueue {
     const task = this.memoryQueue.get(taskId);
     if (task) {
       task.status = "done";
-      task.completedAt = new Date().toISOString();
+      task.completedAt = nowDb();
     }
     this.processingSet.delete(taskId);
     this.activeWorkers = Math.max(0, this.activeWorkers - 1);
@@ -203,7 +204,7 @@ export class TaskQueue {
     if (this.dbAvailable && this.db) {
       await this.db.run(
         "UPDATE task_queue SET status = 'done', completed_at = ? WHERE id = ?",
-        [new Date().toISOString(), taskId]
+        [nowDb(), taskId]
       ).catch(() => {});
     }
   }
@@ -215,7 +216,7 @@ export class TaskQueue {
     if (task) {
       task.status = "failed";
       task.errorMessage = errorMessage;
-      task.completedAt = new Date().toISOString();
+      task.completedAt = nowDb();
     }
     this.processingSet.delete(taskId);
     this.activeWorkers = Math.max(0, this.activeWorkers - 1);
@@ -223,7 +224,7 @@ export class TaskQueue {
     if (this.dbAvailable && this.db) {
       await this.db.run(
         "UPDATE task_queue SET status = 'failed', error_message = ?, completed_at = ? WHERE id = ?",
-        [errorMessage, new Date().toISOString(), taskId]
+        [errorMessage, nowDb(), taskId]
       ).catch(() => {});
     }
   }
@@ -278,7 +279,7 @@ export class TaskQueue {
   }
 
   prune(olderThanHours = 24): number {
-    const cutoff = new Date(Date.now() - olderThanHours * 3600000).toISOString();
+    const cutoff = nowDb(-olderThanHours * 3600000);
     let pruned = 0;
 
     for (const [id, task] of this.memoryQueue) {
