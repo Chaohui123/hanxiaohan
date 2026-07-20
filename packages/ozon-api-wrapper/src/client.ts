@@ -104,7 +104,8 @@ export class OzonClient {
   /** Health check — simple ping to verify connectivity */
   async ping(): Promise<boolean> {
     try {
-      await this.doRequest("GET", "/v1/warehouse/list", {});
+      // Ozon Seller API requires POST even for read endpoints (GET returns 405)
+      await this.doRequest("POST", "/v1/warehouse/list", {});
       return true;
     } catch {
       return false;
