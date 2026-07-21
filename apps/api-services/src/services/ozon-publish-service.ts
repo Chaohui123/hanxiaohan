@@ -72,26 +72,25 @@ export class OzonPublishService {
     // Generate SKU
     const sku = filled.sku || generateSku(filled.sourceUrl, filled.priceCny);
 
-    // Step 3: Upload images (primary via URL, local base64 as fallback)
+    // Step 3: Prepare image URLs — Ozon's pre-upload endpoints are dead
+    // (upload.ozon.ru NXDOMAIN, /v1/picture/upload 404), so public URLs are
+    // passed straight to createDraft (Ozon fetches server-side); local files
+    // are mirrored to Tencent COS for a public URL.
     const uploadedImageUrls: string[] = [];
+    const { CosUploader } = await import("./cos-uploader.js");
+    const cos = new CosUploader(null);
     for (const imgUrl of filled.images.slice(0, 10)) {
+      if (/^https?:\/\/\S+$/i.test(imgUrl) && !/localhost|127\.0\.0\.1/.test(imgUrl)) {
+        uploadedImageUrls.push(imgUrl);
+        continue;
+      }
+      // Local file path → mirror to COS
       try {
-        const result = await this.client.importImageByUrlSoft(imgUrl);
-        if (result?.url) {
-          uploadedImageUrls.push(result.url);
-        }
+        const result = await cos.uploadImage(imgUrl, filled.sku || "publish");
+        if (result.success && result.url) uploadedImageUrls.push(result.url);
+        else warnings.push(`COS mirror failed: ${imgUrl.slice(0, 50)}`);
       } catch {
-        // Try local upload as fallback
-        try {
-          const { readFileSync } = await import("node:fs");
-          const buf = readFileSync(imgUrl);
-          const base64 = buf.toString("base64");
-          const filename = imgUrl.split(/[/\\]/).pop() || "product.jpg";
-          const result = await this.client.uploadLocalImageFile(filename, base64);
-          if (result?.url) uploadedImageUrls.push(result.url);
-        } catch {
-          warnings.push(`Image upload failed: ${imgUrl.slice(0, 50)}`);
-        }
+        warnings.push(`Image unavailable (not a public URL, COS mirror failed): ${imgUrl.slice(0, 50)}`);
       }
     }
 

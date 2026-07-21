@@ -306,8 +306,10 @@ export class OzonClient {
 
   /**
    * Import product image from external URL.
-   * Primary method for 1688→Ozon listing pipeline.
-   * Endpoint: POST /v1/product/pictures/import
+   * @deprecated Ozon retired the free pre-upload flow: /v1/product/pictures/import
+   * now requires a product_id, /v1/picture/upload is 404, and upload.ozon.ru is
+   * NXDOMAIN. Pass public image URLs directly in createDraft's images array —
+   * Ozon fetches them server-side. Mirror local files to COS for a public URL.
    *
    * Uses soft error handling: failures do NOT count toward circuit breaker
    * (1688 hotlink protection means URL imports are expected to fail often).
@@ -338,6 +340,8 @@ export class OzonClient {
   /**
    * Import image WITHOUT going through circuit breaker.
    * For batch image operations where individual failures are expected.
+   * @deprecated see importImageByUrl — Ozon's free pre-upload flow is retired;
+   * pass public URLs in createDraft's images array instead.
    */
   async importImageByUrlSoft(imageUrl: string): Promise<OzonImageUploadResult | null> {
     try {
@@ -375,8 +379,8 @@ export class OzonClient {
 
   /**
    * Upload local image file (base64-encoded).
-   * Used when Ozon URL import fails (1688 hotlink protection).
-   * Endpoint: POST /v1/product/pictures/upload (same base URL as other API calls)
+   * @deprecated POST /v1/picture/upload returns 404 (endpoint retired).
+   * Pass public URLs in createDraft's images array; mirror local files to COS.
    */
   async uploadLocalImageFile(
     fileName: string,

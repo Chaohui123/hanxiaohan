@@ -211,7 +211,7 @@ export async function stepFillAttributes(
  */
 export async function stepDownloadAndUploadImages(
   ctx: PipelineContext,
-  ozonClient: OzonClient,
+  _ozonClient: OzonClient, // kept for call-site compatibility; Ozon now fetches image URLs server-side
   scraper: ProductScraper,
   specImages: string[],
   detailImages: string[] = []
@@ -226,57 +226,59 @@ export async function stepDownloadAndUploadImages(
 
   logger.info({ filtered: allImages.length, raw: rawImages.length }, "Images — filtering complete");
 
-  const imageIds: string[] = [];
-  const failedUrls: string[] = [];
+  // Ozon's pre-upload endpoints are all dead:
+  //   - upload.ozon.ru → NXDOMAIN (retired)
+  //   - POST /v1/picture/upload → 404
+  //   - POST /v1/product/pictures/import → now requires product_id
+  // v3/product/import (createDraft) accepts public image URLs directly and
+  // Ozon fetches them server-side. Strategy:
+  //   1. Public http(s) URLs (1688 CDN, COS) → passed straight to createDraft
+  //   2. Non-public / browser-downloaded local images → mirrored to Tencent COS
+  const finalUrls: string[] = [];
+  const toMirror: string[] = [];
 
-  // Phase 1: Try Ozon URL import (soft — failures don't trip circuit breaker)
-  const urlResults = await Promise.allSettled(
-    allImages.map((imgUrl: string) => ozonClient.importImageByUrlSoft(imgUrl))
-  );
-
-  for (let i = 0; i < urlResults.length; i++) {
-    const r = urlResults[i];
-    if (r.status === "fulfilled" && r.value !== null) {
-      imageIds.push(String(r.value.id));
+  for (const u of allImages) {
+    if (/^https?:\/\/\S+$/i.test(u) && !/localhost|127\.0\.0\.1/.test(u)) {
+      finalUrls.push(u);
     } else {
-      failedUrls.push(allImages[i]);
+      toMirror.push(u);
     }
   }
 
-  // Reset Ozon circuit breaker — image operations shouldn't be blocked by earlier failures
-  (ozonClient as { resetBreaker?: () => void }).resetBreaker?.();
-
-  // Phase 2: Download via Playwright browser, save locally, import via Express URL
-  if (failedUrls.length > 0) {
-    logger.info({ urlImported: imageIds.length, toRetry: failedUrls.length }, "Images — URL import partial, trying browser download");
-
+  // Mirror non-public images to COS so they get fetchable public URLs
+  if (toMirror.length > 0) {
+    logger.info({ direct: finalUrls.length, toMirror: toMirror.length }, "Images — mirroring non-public images to COS");
     try {
-      const downloaded = await scraper.downloadImagesViaBrowser(failedUrls, { maxImages: failedUrls.length });
+      const downloaded = await scraper.downloadImagesViaBrowser(toMirror, { maxImages: toMirror.length });
+      if (downloaded.length > 0) {
+        const { CosUploader } = await import("../services/cos-uploader.js");
+        const { getDb } = await import("../db/connection.js");
+        const { writeFileSync, mkdirSync, existsSync } = await import("node:fs");
+        const db = await getDb().catch(() => null);
+        const cos = new CosUploader(db as never);
 
-      for (const img of downloaded) {
-        try {
-          const ext = img.contentType.includes("png") ? "png"
-            : img.contentType.includes("webp") ? "webp"
-            : img.contentType.includes("gif") ? "gif"
-            : "jpg";
-          const fileName = `product-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+        for (const img of downloaded) {
+          try {
+            const ext = img.contentType.includes("png") ? "png"
+              : img.contentType.includes("webp") ? "webp"
+              : img.contentType.includes("gif") ? "gif"
+              : "jpg";
+            const fileName = `product-${Date.now()}-${Math.random().toString(36).slice(2, 8)}.${ext}`;
+            const tmpDir = "./data/tmp-images";
+            if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true });
+            const filePath = `${tmpDir}/${fileName}`;
+            writeFileSync(filePath, img.buffer);
 
-          // Save to temp directory served by Express at /tmp-images/
-          const { writeFileSync, mkdirSync, existsSync } = await import("node:fs");
-          const tmpDir = "./data/tmp-images";
-          if (!existsSync(tmpDir)) mkdirSync(tmpDir, { recursive: true });
-          writeFileSync(`${tmpDir}/${fileName}`, img.buffer);
-
-          // Import via local Express URL (Ozon only supports URL-based image import)
-          const port = process.env.API_SERVICE_PORT || process.env.PORT || "3000";
-          const localUrl = `http://localhost:${port}/tmp-images/${fileName}`;
-          const result = await ozonClient.importImageByUrlSoft(localUrl);
-          if (result) {
-            imageIds.push(String(result.id));
-            logger.debug({ fileName, imageId: result.id }, "Browser download → local file → Ozon import success");
+            const result = await cos.uploadImage(filePath, ctx.taskId ?? "listing");
+            if (result.success && result.url) {
+              finalUrls.push(result.url);
+              logger.debug({ fileName, cosUrl: result.url }, "Local image → COS success");
+            } else {
+              logger.warn({ imgUrl: img.url }, "COS upload returned failure — image skipped");
+            }
+          } catch (mirrorErr) {
+            logger.warn({ imgUrl: img.url, err: (mirrorErr as Error).message }, "COS mirror failed");
           }
-        } catch (uploadErr) {
-          logger.warn({ imgUrl: img.url, err: (uploadErr as Error).message }, "Image pipeline failed");
         }
       }
     } catch (downloadErr) {
@@ -284,40 +286,22 @@ export async function stepDownloadAndUploadImages(
     }
   }
 
-  // Phase 3: Last resort — direct fetch (works for non-hotlink-protected URLs)
-  if (imageIds.length === 0 && failedUrls.length > 0) {
-    logger.warn("Images — browser download also failed, trying direct fetch as last resort");
-    try {
-      const downloaded = await scraper.downloadImages(failedUrls.slice(0, 5), 2);
-      for (const img of downloaded) {
-        try {
-          const base64 = img.buffer.toString("base64");
-          const ext = img.contentType.includes("png") ? "png" : "jpg";
-          const result = await ozonClient.uploadLocalImageFile(
-            `product-${Date.now()}-${Math.random().toString(36).slice(2, 6)}.${ext}`, base64
-          );
-          imageIds.push(String(result.id));
-        } catch { /* exhausted */ }
-      }
-    } catch { /* all methods exhausted */ }
-  }
-
-  if (imageIds.length === 0) {
-    const msg = "All image uploads failed — URL import, browser download, and direct fetch all exhausted";
+  if (finalUrls.length === 0) {
+    const msg = "No usable product images — no public URLs available and COS mirror produced nothing";
     ctx.errors.push({ step: "upload_images", message: msg });
     throw new Error(msg);
   }
 
   // Warn if image count is below Ozon's recommended minimum (3+ images)
-  if (imageIds.length < 3) {
-    const msg = `Only ${imageIds.length} image(s) uploaded (${allImages.length} attempted). Ozon recommends 3+ images per product.`;
+  if (finalUrls.length < 3) {
+    const msg = `Only ${finalUrls.length} image(s) available (${allImages.length} candidates). Ozon recommends 3+ images per product.`;
     ctx.errors.push({ step: "upload_images", message: msg });
-    logger.warn({ imageCount: imageIds.length, attempted: allImages.length }, msg);
+    logger.warn({ imageCount: finalUrls.length, candidates: allImages.length }, msg);
   }
 
-  ctx.imageIds = imageIds;
-  logger.info({ uploaded: imageIds.length, total: allImages.length }, "Images — upload complete");
-  return imageIds;
+  ctx.imageIds = finalUrls;
+  logger.info({ usable: finalUrls.length, total: allImages.length }, "Images — URL set ready (Ozon fetches server-side at draft creation)");
+  return finalUrls;
 }
 
 /** @deprecated Use stepDownloadAndUploadImages instead */
