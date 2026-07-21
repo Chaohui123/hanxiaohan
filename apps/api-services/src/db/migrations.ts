@@ -32,7 +32,7 @@ export const MIGRATIONS: Migration[] = [
 
       CREATE TABLE IF NOT EXISTS listing_records (
         id TEXT PRIMARY KEY, source_url TEXT,
-        status TEXT NOT NULL, draft_id TEXT, ozon_product_id INTEGER,
+        status TEXT NOT NULL, draft_id TEXT, ozon_product_id BIGINT,
         correlation_id TEXT, result_json TEXT, created_at TIMESTAMP DEFAULT NOW()
       );
 

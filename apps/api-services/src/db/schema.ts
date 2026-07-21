@@ -35,7 +35,7 @@ export async function initSchema(db: DbAdapter): Promise<void> {
     CREATE TABLE IF NOT EXISTS listing_records (
       id TEXT PRIMARY KEY, source_url TEXT,
       status TEXT NOT NULL, draft_id TEXT,
-      ozon_product_id INTEGER, correlation_id TEXT,
+      ozon_product_id BIGINT, correlation_id TEXT,
       result_json TEXT, created_at TIMESTAMP DEFAULT NOW()
     );
 
@@ -379,7 +379,7 @@ export async function initSchema(db: DbAdapter): Promise<void> {
       id TEXT PRIMARY KEY,
       store_id TEXT NOT NULL DEFAULT 'store_1',
       ozon_offer_id TEXT NOT NULL,
-      ozon_sku INTEGER NOT NULL,
+      ozon_sku BIGINT NOT NULL,
       source_1688_url TEXT NOT NULL,
       offer_1688_id TEXT,
       sku_1688_id TEXT,

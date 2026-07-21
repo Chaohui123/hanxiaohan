@@ -44,7 +44,7 @@ export const listingRecords = pgTable("listing_records", {
   sourceUrl: text("source_url"),
   status: text("status").notNull(),
   draftId: text("draft_id"),
-  ozonProductId: integer("ozon_product_id"),
+  ozonProductId: bigint("ozon_product_id", { mode: "number" }),
   correlationId: text("correlation_id"),
   resultJson: text("result_json"),
   createdAt: timestamp("created_at").defaultNow(),

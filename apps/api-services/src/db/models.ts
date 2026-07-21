@@ -221,7 +221,7 @@ function rowToListingRecord(row: DbRow): ListingRecord {
     sourceUrl: row.source_url as string,
     status: row.status as string,
     draftId: row.draft_id as string | undefined,
-    ozonProductId: row.ozon_product_id as number | undefined,
+    ozonProductId: row.ozon_product_id == null ? undefined : Number(row.ozon_product_id),
     correlationId: row.correlation_id as string,
     resultJson: row.result_json as string | undefined,
     createdAt: row.created_at as string,
