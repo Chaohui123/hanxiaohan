@@ -5,7 +5,7 @@
 // for standalone/SQLite mode. When adding tables, add them here first.
 // ============================================================
 
-import { pgTable, text, integer, real, serial, timestamp } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, real, serial, timestamp, bigint } from "drizzle-orm/pg-core";
 
 // ---- Task Queue ----
 export const taskQueue = pgTable("task_queue", {
