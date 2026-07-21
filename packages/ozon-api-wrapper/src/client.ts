@@ -116,6 +116,9 @@ export class OzonClient {
   /** Create a product draft (single) */
   async createDraft(product: OzonDraftInput): Promise<OzonDraftResult> {
     const item: Record<string, unknown> = {
+      // offer_id is REQUIRED by /v3/product/import (task fails with
+      // offer_id_invalid when missing). Max 50 chars.
+      offer_id: product.offerId ?? `onzo-${Date.now()}`,
       name: product.name,
       description: product.description,
       category_id: product.categoryId,

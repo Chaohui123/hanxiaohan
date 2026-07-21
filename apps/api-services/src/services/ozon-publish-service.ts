@@ -103,6 +103,7 @@ export class OzonPublishService {
     try {
       const draftResult = await breakerFire("ozonApi", () =>
         this.client.createDraft({
+          offerId: (filled.sku || `onzo-${Date.now()}`).slice(0, 50),
           name: filled.titleRu || filled.title,
           description: filled.descriptionRu || "",
           categoryId: filled.categoryId,

@@ -400,6 +400,7 @@ export async function stepCreateDraft(
       || null; // null = Ozon will auto-select type_id
 
     const draftInput = {
+      offerId: `onzo-${ctx.taskId ?? Date.now()}`.slice(0, 50),
       name: processed.titleRu,
       description: processed.descriptionRu,
       categoryId: processed.categoryId,
