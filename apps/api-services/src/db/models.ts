@@ -55,7 +55,7 @@ export async function saveFailedTask(task: Omit<FailedTask, "createdAt" | "updat
   await serializedWrite(() =>
     db.run(
       `INSERT INTO failed_tasks (id, store_id, task_type, payload_json, error_message, status, correlation_id)
-       VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET status=EXCLUDED.status, draft_id=EXCLUDED.draft_id, ozon_product_id=EXCLUDED.ozon_product_id, result_json=EXCLUDED.result_json ON CONFLICT(id) DO UPDATE SET error_message=EXCLUDED.error_message, status=EXCLUDED.status`,
+       VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET error_message=EXCLUDED.error_message, status=EXCLUDED.status`,
       [task.id, task.storeId, task.taskType, task.payloadJson, task.errorMessage, task.status, task.correlationId]
     )
   );
@@ -121,7 +121,7 @@ export async function saveListingRecord(record: Omit<ListingRecord, "createdAt">
   await serializedWrite(() =>
     db.run(
       `INSERT INTO listing_records (id, source_url, status, draft_id, ozon_product_id, correlation_id, result_json)
-       VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET status=EXCLUDED.status, draft_id=EXCLUDED.draft_id, ozon_product_id=EXCLUDED.ozon_product_id, result_json=EXCLUDED.result_json ON CONFLICT(id) DO UPDATE SET error_message=EXCLUDED.error_message, status=EXCLUDED.status`,
+       VALUES (?, ?, ?, ?, ?, ?, ?) ON CONFLICT(id) DO UPDATE SET status=EXCLUDED.status, draft_id=EXCLUDED.draft_id, ozon_product_id=EXCLUDED.ozon_product_id, result_json=EXCLUDED.result_json`,
       [record.id, record.sourceUrl, record.status, record.draftId ?? null, record.ozonProductId ?? null, record.correlationId, record.resultJson ?? null]
     )
   );
