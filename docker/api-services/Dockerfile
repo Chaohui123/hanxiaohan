@@ -48,9 +48,10 @@ RUN pnpm install --no-frozen-lockfile --ignore-scripts --config.verify-deps-befo
 
 # Rebuild better-sqlite3 native binding for Alpine musl.
 # (allowBuilds:false skips it at install; npm rebuild can't resolve pnpm's
-# symlinked store layout, so invoke node-gyp inside the package dir directly.)
+# symlinked store layout. Prefer musl prebuilt download; fall back to
+# source compile with pinned node-gyp@10 — v13 breaks on Python 3.14.)
 RUN cd node_modules/.pnpm/better-sqlite3@*/node_modules/better-sqlite3 \
-    && npx --yes node-gyp rebuild
+    && (npx --yes prebuild-install || npx --yes node-gyp@10 rebuild)
 
 # Step 3: Copy full source
 COPY packages/ packages/
