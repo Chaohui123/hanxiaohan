@@ -180,9 +180,10 @@ export function createWebhookRouter(): Router {
     const parsed = await parseWebhookPayload(rawBody, signature, API_SECRET, { dedupStore });
 
     if (!("eventId" in parsed)) {
-      // VerificationResult
-      res.status(parsed.reason === "Duplicate event" ? 200 : 400).json({
-        success: parsed.valid,
+      // VerificationResult — duplicates must ack 200 so Ozon doesn't retry pointlessly
+      const isDuplicate = (parsed.reason ?? "").startsWith("Duplicate event");
+      res.status(isDuplicate ? 200 : 400).json({
+        success: parsed.valid || isDuplicate,
         reason: parsed.reason,
         correlationId: req.correlationId,
       });
