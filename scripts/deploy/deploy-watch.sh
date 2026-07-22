@@ -28,6 +28,11 @@ git reset --hard origin/main >> "$LOG_FILE" 2>&1
 
 docker compose --profile "$COMPOSE_PROFILE" --env-file .env.production up -d --build >> "$LOG_FILE" 2>&1
 
+# Caddy must be restarted on every deploy: single-file bind mounts pin the
+# OLD inode — git reset replaces the file (new inode), so without a restart
+# Caddy keeps serving the deleted file's config forever.
+docker restart onzo-caddy >> "$LOG_FILE" 2>&1 || true
+
 # Keep build cache bounded (buildkitd GC also applies).
 docker builder prune -f >> "$LOG_FILE" 2>&1 || true
 
