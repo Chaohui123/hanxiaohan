@@ -122,18 +122,18 @@ export function createWebhookRouter(): Router {
     // Parse request body
     const rawJson = rawBody.length > 0 ? (() => { try { return JSON.parse(rawBody); } catch { return null; } })() : null;
 
-    // Ozon TYPE_PING: return current server time (not echo)
+    // Ozon TYPE_PING (URL verification): response MUST match Ozon's template
+    // {version, name, time} — anything else fails with WRONG_RESULT_FIELD.
     if (rawJson && (rawJson as Record<string,unknown>).message_type === "TYPE_PING") {
       res.setHeader("Content-Type", "application/json; charset=utf-8");
-      // Ozon API template: result is always an object, not boolean
       const now = new Date().toISOString().replace(/\.\d{3}Z$/, "Z");
-      res.status(200).send(JSON.stringify({ result: {}, time: now }));
+      res.status(200).send(JSON.stringify({ version: "1.0.0", name: "onzo-api-services", time: now }));
       return;
     }
 
-    // Empty body / no signature → return minimal 200
+    // Empty body / no signature → Ozon template ack: result is the STRING "true"
     if (!rawJson || Object.keys(rawJson).length === 0 || !signature) {
-      res.status(200).send('{"result":{}}');
+      res.status(200).send('{"result":"true"}');
       return;
     }
 
@@ -218,9 +218,10 @@ export function createWebhookRouter(): Router {
       logger.error({ correlationId: req.correlationId }, "DB unavailable — webhook event will not be persisted/queued");
     }
 
-    // Ozon expects exactly {"result":{}} — no extra fields
+    // Ozon ack template — result is the STRING "true" (verified against
+    // muscobytes/laravel-ozon-seller-webhook and Ozon push docs)
     res.setHeader("Content-Type", "application/json; charset=utf-8");
-    res.status(200).send('{"result":{}}');
+    res.status(200).send('{"result":"true"}');
     recordWebhookReceived();
     recordWebhookProcessed(0, true);
   });
