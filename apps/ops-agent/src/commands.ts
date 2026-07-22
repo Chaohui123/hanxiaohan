@@ -272,14 +272,30 @@ async function handleStatus(
     const data = await apiClient.ready(config);
     const checks = (data.checks as Record<string, unknown>) || {};
     const lines = Object.entries(checks).map(([name, c]) => {
-      const st = typeof c === "string" ? c : (c as { status?: string }).status || "unknown";
-      const lat = typeof c === "object" ? (c as { latencyMs?: number }).latencyMs : undefined;
+      let st: string;
+      let lat: number | undefined;
+      if (typeof c === "string") {
+        st = c;
+      } else if (c && typeof c === "object") {
+        const co = c as { status?: string; latencyMs?: number };
+        if (co.status) {
+          st = co.status;
+          lat = co.latencyMs;
+        } else {
+          // Nested structure (e.g. disk: { "./data": {...}, "./data/backups": {...} })
+          // — surface the worst sub-status instead of "unknown"
+          const subs = Object.values(co) as Array<{ status?: string; latencyMs?: number } | undefined>;
+          const bad = subs.find((s) => s && s.status && s.status !== "ok");
+          st = bad?.status ?? "ok";
+        }
+      } else {
+        st = "unknown";
+      }
       return `${statusEmoji(st === "ok")} ${name}: ${st}${lat ? ` (${lat}ms)` : ""}`;
     });
     await bot.sendMessage(
       chatId,
-      `📊 系统状态 — ${data.status}\n\n${lines.join("\n")}` +
-        `\n\n⏱ Uptime: ${fmtDuration((data.uptime as number) || 0)}`,
+      `📊 系统状态 — ${data.status}\n\n${lines.join("\n")}`,
     );
   } catch (err) {
     await bot.sendMessage(chatId, `❌ 无法获取状态: ${(err as Error).message}`);
