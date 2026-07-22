@@ -93,6 +93,25 @@ export async function getDb(): Promise<DbAdapter | null> {
 function initSqliteSchema(db: unknown): void {
   const d = db as { exec: (sql: string) => void };
   d.exec(`
+    CREATE TABLE IF NOT EXISTS ozon_webhook_log (
+      id TEXT PRIMARY KEY,
+      event_id TEXT NOT NULL UNIQUE,
+      event_type TEXT NOT NULL,
+      posting_number TEXT,
+      order_id INTEGER,
+      status TEXT,
+      signature TEXT,
+      client_ip TEXT,
+      payload_json TEXT NOT NULL,
+      process_status TEXT NOT NULL DEFAULT 'queued',
+      error TEXT,
+      received_at TEXT DEFAULT (datetime('now')),
+      processed_at TEXT
+    );
+    CREATE INDEX IF NOT EXISTS idx_owl_posting ON ozon_webhook_log(posting_number);
+    CREATE INDEX IF NOT EXISTS idx_owl_status ON ozon_webhook_log(process_status);
+    CREATE INDEX IF NOT EXISTS idx_owl_received ON ozon_webhook_log(received_at);
+
     CREATE TABLE IF NOT EXISTS promo_watch_list (
       offer_id TEXT PRIMARY KEY, name TEXT NOT NULL,
       added_at TEXT DEFAULT (datetime('now'))
