@@ -100,10 +100,29 @@ export class OzonPublishService {
     }
 
     // Step 4: Create draft via OzonClient (with circuit breaker)
+    // type_id is REQUIRED by /v3/product/import since 2025-05 — resolve from
+    // the category tree leaf before creating.
+    let typeId: number | undefined;
+    try {
+      const tree = await this.client.getCategoryTree(filled.categoryId);
+      const findType = (nodes: typeof tree, target: number): number | null => {
+        for (const n of nodes) {
+          if (n.categoryId === target && n.typeId) return n.typeId;
+          const found = findType(n.children, target);
+          if (found) return found;
+        }
+        return null;
+      };
+      typeId = findType(tree, filled.categoryId) ?? undefined;
+    } catch {
+      warnings.push(`type_id resolution failed for categoryId ${filled.categoryId} — createDraft will reject if unresolved`);
+    }
+
     try {
       const draftResult = await breakerFire("ozonApi", () =>
         this.client.createDraft({
           offerId: (filled.sku || `onzo-${Date.now()}`).slice(0, 50),
+          typeId: typeId as number,
           name: filled.titleRu || filled.title,
           description: filled.descriptionRu || "",
           categoryId: filled.categoryId,

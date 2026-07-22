@@ -395,16 +395,22 @@ export async function stepCreateDraft(
   try {
     // Resolve type_id from category tree leaf nodes.
     // DO NOT fall back to categoryId — type_id is a different concept.
+    // REQUIRED by Ozon since 2025-05: import tasks without type_id are rejected.
     const resolvedTypeId = processed.categoryTypeId
       || (ctx.categoryTree ? findLeafTypeId(ctx.categoryTree, processed.categoryId) : null)
-      || null; // null = Ozon will auto-select type_id
+      || null;
+    if (!resolvedTypeId) {
+      const msg = `type_id unresolved for categoryId ${processed.categoryId} — Ozon requires it since 2025-05; refresh category tree or map the category explicitly`;
+      ctx.errors.push({ step: "create_draft", message: msg });
+      throw new Error(msg);
+    }
 
     const draftInput = {
       offerId: `onzo-${ctx.taskId ?? Date.now()}`.slice(0, 50),
       name: processed.titleRu,
       description: processed.descriptionRu,
       categoryId: processed.categoryId,
-      typeId: resolvedTypeId ?? undefined,
+      typeId: resolvedTypeId,
       price: processed.priceRub,
       vat: "0" as const,
       images: ctx.imageIds ?? processed.specImageUrls, // Ozon image IDs (primary) or raw URLs (fallback)

@@ -231,7 +231,7 @@ describe("stepCreateDraft", () => {
   it("creates Ozon draft successfully", async () => {
     const ctx = createPipelineContext("");
     ctx.imageIds = ["https://cos.example.com/img1.jpg"];
-    ctx.categoryTree = [{ categoryId: 300, title: "Test", children: [] }];
+    ctx.categoryTree = [{ categoryId: 300, title: "Test", typeId: 97110, children: [] }];
 
     const mockOzon = {
       createDraft: vi.fn().mockResolvedValue({ productId: 12345, offerId: "OFFER-001", status: "draft" }),

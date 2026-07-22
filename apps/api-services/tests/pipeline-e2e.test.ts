@@ -62,7 +62,7 @@ vi.mock("@onzo/glm-integration", async (importOriginal) => {
 vi.mock("@onzo/ozon-api-wrapper", () => ({
   OzonClient: vi.fn().mockImplementation(() => ({
     get apiBaseUrl() { return "https://api-seller.ozon.ru"; },
-    getCategoryTree: vi.fn().mockResolvedValue([{ categoryId: 100, title: "Electronics", children: [{ categoryId: 200, title: "Audio", children: [{ categoryId: 300, title: "Bluetooth Earbuds", children: [] }] }] }]),
+    getCategoryTree: vi.fn().mockResolvedValue([{ categoryId: 100, title: "Electronics", children: [{ categoryId: 200, title: "Audio", children: [{ categoryId: 300, title: "Bluetooth Earbuds", typeId: 97110, children: [] }] }] }]),
     getCategoryAttributes: vi.fn().mockResolvedValue([{ id: 1, name: "Color", type: "string", isRequired: true }, { id: 2, name: "Material", type: "string", isRequired: true }]),
     importImageByUrl: vi.fn().mockResolvedValue({ id: "img-001", fileName: "1.jpg", url: "" }),
     importImageByUrlSoft: vi.fn().mockResolvedValue({ id: "img-001", fileName: "1.jpg", url: "" }),
@@ -100,6 +100,18 @@ vi.mock("@onzo/cache", () => ({
     cachedSet: vi.fn().mockResolvedValue(undefined),
   },
   TTL: { DEDUP_LOCK: 300, DIST_LOCK: 120, DASHBOARD_STATS: 60, STORE_CONFIG: 3600, CATEGORY_MATCH: 1800, LLM_TRANSLATION: 900, EXCHANGE_RATE: 3600, RATE_LIMIT: 60, SESSION: 86400 },
+}));
+
+// Category cache reads the REAL dev DB otherwise (stale trees without typeId
+// poison the type_id resolution) — mock it with a typeId-bearing tree.
+vi.mock("../src/services/category-cache.js", () => ({
+  getCategoryTree: vi.fn().mockResolvedValue([
+    { categoryId: 100, title: "Electronics", typeId: undefined, children: [
+      { categoryId: 200, title: "Audio", typeId: undefined, children: [
+        { categoryId: 300, title: "Bluetooth Earbuds", typeId: 97110, children: [] },
+      ] },
+    ] },
+  ]),
 }));
 
 // Exchange rate hits real external APIs (open.er-api.com, frankfurter.app) with

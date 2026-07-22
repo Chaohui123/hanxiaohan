@@ -115,6 +115,11 @@ export class OzonClient {
 
   /** Create a product draft (single) */
   async createDraft(product: OzonDraftInput): Promise<OzonDraftResult> {
+    // type_id is REQUIRED by /v3/product/import since 2025-05 — fail fast
+    // here instead of letting the async import task be rejected by Ozon.
+    if (!product.typeId || product.typeId <= 0) {
+      throw new Error("type_id is required by /v3/product/import — resolve it via category tree leaf before createDraft");
+    }
     const item: Record<string, unknown> = {
       // offer_id is REQUIRED by /v3/product/import (task fails with
       // offer_id_invalid when missing). Max 50 chars.
@@ -124,7 +129,7 @@ export class OzonClient {
       // v3/product/import requires description_category_id (NOT category_id —
       // the legacy name fails with description_category_is_empty)
       description_category_id: product.categoryId,
-      ...(product.typeId && product.typeId > 0 ? { type_id: product.typeId } : {}),
+      type_id: product.typeId,
       price: typeof product.price === "number" ? product.price.toFixed(2) : String(product.price),
       vat: product.vat,
       images: product.images,
