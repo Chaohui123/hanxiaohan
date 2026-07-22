@@ -414,10 +414,16 @@ export async function stepCreateDraft(
       price: processed.priceRub,
       vat: "0" as const,
       images: ctx.imageIds ?? processed.specImageUrls, // Ozon image IDs (primary) or raw URLs (fallback)
-      attributes: (processed.attributes ?? []).map((a) => ({
-        id: a.attributeId,
-        values: [{ value: a.value as string }],
-      })),
+      attributes: [
+        // Ozon attribute 9048 ("Название модели" / model name) is REQUIRED —
+        // import fails with error_attribute_values_empty when missing.
+        // Use a trimmed Russian title as the model name (max 50 chars).
+        { id: 9048, values: [{ value: processed.titleRu.slice(0, 50) }] },
+        ...(processed.attributes ?? []).map((a) => ({
+          id: a.attributeId,
+          values: [{ value: a.value as string }],
+        })),
+      ],
       dimensions: {
         length: processed.dimensionsCm.length * 10,
         width: processed.dimensionsCm.width * 10,
