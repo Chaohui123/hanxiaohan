@@ -35,6 +35,19 @@ cp .env.example .env
 pnpm --filter @onzo/api-services dev
 ```
 
+## 自动部署（deploy-watch，GitHub Actions 不可用时的替代）
+
+服务器 cron 每 5 分钟运行 `scripts/deploy/deploy-watch.sh`：检测 `origin/main` 有新 commit 时自动 `git reset --hard` + `docker compose --profile production up -d --build` + 缓存清理 + 健康检查。日志：`/home/ubuntu/deploy-watch.log`。
+
+```bash
+# 手动触发一次
+/home/ubuntu/onzo/scripts/deploy/deploy-watch.sh
+# 查看部署日志
+tail -f /home/ubuntu/deploy-watch.log
+```
+
+GitHub Actions 恢复后两者可并存（同一套 reset+compose 动作，幂等）。
+
 ## 环境变量完整清单
 
 ```ini
