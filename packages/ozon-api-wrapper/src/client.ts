@@ -121,7 +121,9 @@ export class OzonClient {
       offer_id: product.offerId ?? `onzo-${Date.now()}`,
       name: product.name,
       description: product.description,
-      category_id: product.categoryId,
+      // v3/product/import requires description_category_id (NOT category_id —
+      // the legacy name fails with description_category_is_empty)
+      description_category_id: product.categoryId,
       ...(product.typeId && product.typeId > 0 ? { type_id: product.typeId } : {}),
       price: typeof product.price === "number" ? product.price.toFixed(2) : String(product.price),
       vat: product.vat,
@@ -180,9 +182,10 @@ export class OzonClient {
         {
           items: chunk.map((p) => {
             const item: Record<string, unknown> = {
+              offer_id: p.offerId ?? `onzo-${Date.now()}`,
               name: p.name,
               description: p.description,
-              category_id: p.categoryId,
+              description_category_id: p.categoryId,
               price: typeof p.price === "number" ? p.price.toFixed(2) : String(p.price),
               vat: p.vat,
               images: p.images,
