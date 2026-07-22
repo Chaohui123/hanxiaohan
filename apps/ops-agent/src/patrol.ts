@@ -12,6 +12,10 @@ interface PatrolConfig extends ApiConfig {
 const PATROL_INTERVAL_MS = 60_000;
 const ALERT_COOLDOWN_MS = 5 * 60_000;
 
+// /health returns "ok", /ready returns "ready" — both mean healthy.
+// (patrol used to compare against only "ok", causing false alerts on /ready)
+const OK_STATUSES = new Set(["ok", "ready"]);
+
 export let lastStatus = "ok";
 export let lastAlertAt = -ALERT_COOLDOWN_MS - 1; // allow first alert
 let patrolTimer: ReturnType<typeof setInterval> | null = null;
@@ -36,7 +40,7 @@ export async function runPatrolCheck(
     const data = await apiClient.ready(config);
     const currentStatus = String(data.status || "unknown");
 
-    if (currentStatus !== "ok" && currentStatus !== lastStatus) {
+    if (!OK_STATUSES.has(currentStatus) && currentStatus !== lastStatus) {
       const now = nowOverride ?? Date.now();
       if (now - lastAlertAt < ALERT_COOLDOWN_MS) return result;
       lastAlertAt = now;
@@ -110,7 +114,7 @@ export async function runPatrolCheck(
       }
     }
 
-    if (currentStatus === "ok" && lastStatus !== "ok") {
+    if (OK_STATUSES.has(currentStatus) && !OK_STATUSES.has(lastStatus)) {
       await bot.sendMessage(config.chatId, "✅ 系统已恢复正常");
       result.recovered = true;
     }
