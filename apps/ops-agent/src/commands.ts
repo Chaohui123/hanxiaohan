@@ -50,6 +50,7 @@ export function registerCommands(bot: FeishuBot, config: ApiConfig): void {
 
   // ---- Message handler ----
   bot.onMessage(async (ctx: MsgContext) => {
+    logger.info({ chatId: ctx.chatId, text: ctx.text.slice(0, 80), messageId: ctx.messageId }, "ops-agent received message");
     // Forward promo-agent commands via shared router
     if (await forwardPromoCommand(ctx.text, { chatId: ctx.chatId, messageId: ctx.messageId, senderOpenId: ctx.senderOpenId })) {
       return;
