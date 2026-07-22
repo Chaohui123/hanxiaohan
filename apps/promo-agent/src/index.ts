@@ -39,6 +39,7 @@ const feishuConfig: FeishuConfig = {
   appSecret: FEISHU_APP_SECRET,
   chatId: CHAT_ID || undefined,
   port: PROMO_FEISHU_PORT,
+  tag: "推广",
 };
 
 const bot = new FeishuBot(feishuConfig);

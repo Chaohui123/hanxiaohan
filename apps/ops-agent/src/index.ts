@@ -27,6 +27,7 @@ const feishuConfig: FeishuConfig = {
   appId: FEISHU_APP_ID,
   appSecret: FEISHU_APP_SECRET,
   chatId: CHAT_ID || undefined,
+  tag: "运维",
 };
 
 const bot = new FeishuBot(feishuConfig);

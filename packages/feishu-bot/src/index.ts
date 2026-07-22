@@ -7,6 +7,9 @@ export interface FeishuConfig {
   appSecret: string;
   chatId?: string;
   port?: number; // HTTP callback port, default 8181
+  /** Identity tag prepended to every outgoing message (e.g. "运维" / "推广")
+   *  so users can tell agents apart when they share one bot identity. */
+  tag?: string;
 }
 
 export interface MsgContext {
@@ -41,6 +44,11 @@ export class FeishuBot {
     });
   }
 
+  /** Prepend the identity tag (when configured) to outgoing text. */
+  private withTag(text: string): string {
+    return this.config.tag ? `[${this.config.tag}] ${text}` : text;
+  }
+
   onMessage(handler: MsgHandler): void {
     this.msgHandler = handler;
   }
@@ -63,7 +71,7 @@ export class FeishuBot {
         data: {
           receive_id: chatId,
           msg_type: "text",
-          content: JSON.stringify({ text }),
+          content: JSON.stringify({ text: this.withTag(text) }),
         },
       });
     } catch (err) {
@@ -79,7 +87,7 @@ export class FeishuBot {
   ): Promise<void> {
     const card = {
       header: {
-        title: { tag: "plain_text", content: title },
+        title: { tag: "plain_text", content: this.withTag(title) },
         template: "warning" as const,
       },
       elements: [
@@ -136,7 +144,7 @@ export class FeishuBot {
         path: { message_id: messageId },
         data: {
           msg_type: "text",
-          content: JSON.stringify({ text }),
+          content: JSON.stringify({ text: this.withTag(text) }),
         },
       });
     } catch (err) {
