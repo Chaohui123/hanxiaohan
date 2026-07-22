@@ -14,11 +14,10 @@
 // ============================================================
 
 import { Router } from "express";
-import { parseWebhookPayload, handleWebhookEvent, type WebhookPayload } from "@onzo/ozon-order/webhook";
+import { parseWebhookPayload, type WebhookPayload } from "@onzo/ozon-order/webhook";
 import { getDb } from "../db/connection.js";
 import { logger } from "@onzo/logger";
-import { writeToDeadLetter } from "../services/dead-letter.js";
-import { processNewOrder, processCancelledOrder, processStatusChange, recordWebhookReceived, recordWebhookProcessed } from "../services/order-processor.js";
+import { recordWebhookReceived, recordWebhookProcessed } from "../services/order-processor.js";
 
 // Ozon signs webhooks with HMAC-SHA256 using the API key.
 // Some setups use a dedicated webhook secret (OZON_WEBHOOK_SECRET).
@@ -68,7 +67,8 @@ export function createWebhookRouter(): Router {
   }
 
   // HEAD/GET: Ozon URL verification test → always 200
-  router.use("/webhook/ozon", (req, res, next) => {
+  // Paths: "/webhook/ozon" (mounted at /api, /api/v1) and "/webhook" (mounted at /ozon → /ozon/webhook)
+  router.use(["/webhook/ozon", "/webhook"], (req, res, next) => {
     stripDeprecationHeaders(res);
     if (req.method === "HEAD" || req.method === "GET") {
       res.status(200).end();
@@ -78,7 +78,7 @@ export function createWebhookRouter(): Router {
   });
 
   // Webhook-specific body size guard — Ozon payloads are < 10KB, 100KB is generous
-  router.post("/webhook/ozon", (req, res, next) => {
+  router.post(["/webhook/ozon", "/webhook"], (req, res, next) => {
     const contentLength = parseInt(req.headers["content-length"] || "0", 10);
     if (contentLength > 100_000) {
       res.status(413).json({
@@ -91,7 +91,7 @@ export function createWebhookRouter(): Router {
     next();
   });
 
-  router.post("/webhook/ozon", async (req, res) => {
+  router.post(["/webhook/ozon", "/webhook"], async (req, res) => {
     const rawBodyBuffer = (req as typeof req & { rawBody?: Buffer }).rawBody;
     const rawBody = rawBodyBuffer ? rawBodyBuffer.toString("utf8") : JSON.stringify(req.body);
     const signature = req.headers["x-ozon-signature"] as string | undefined;
@@ -198,67 +198,54 @@ export function createWebhookRouter(): Router {
       orderId: payload.orderId,
       status: payload.status,
       correlationId: req.correlationId,
-    }, "Webhook event processing");
+    }, "Webhook event accepted");
 
-    // Respond immediately (Ozon expects fast 200) — process async
-    // Ozon expects exactly {"result":true} — no extra fields
+    // ---- Event-driven architecture ----
+    // 1. Persist the RAW request FIRST (audit trail, before any processing)
+    // 2. Enqueue via the log row (process_status='queued') for the drain job
+    // 3. Respond 200 immediately — ALL business logic runs asynchronously
+    const logId = `owl-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+    const db = await getDb().catch(() => null);
+    if (db) {
+      await db.run(
+        `INSERT INTO ozon_webhook_log (id, event_id, event_type, posting_number, order_id, status, signature, client_ip, payload_json, process_status, received_at)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', NOW())
+         ON CONFLICT(event_id) DO NOTHING`,
+        [logId, payload.eventId, payload.eventType, payload.postingNumber, payload.orderId, payload.status, signature ?? null, clientIp, rawBody]
+      ).catch((err: Error) => logger.warn({ err: err.message }, "ozon_webhook_log insert failed — continuing ack"));
+    } else {
+      logger.error({ correlationId: req.correlationId }, "DB unavailable — webhook event will not be persisted/queued");
+    }
+
+    // Ozon expects exactly {"result":{}} — no extra fields
     res.setHeader("Content-Type", "application/json; charset=utf-8");
     res.status(200).send('{"result":{}}');
     recordWebhookReceived();
+    recordWebhookProcessed(0, true);
+  });
 
-    // Background processing
-    const processStart = Date.now();
-    try {
-      await handleWebhookEvent(payload, {
-        onStatusChanged: async (p) => {
-          await processStatusChange(p.postingNumber, p.status);
-        },
-        onDelivered: async (p) => {
-          await processStatusChange(p.postingNumber, "delivered");
-        },
-        onCancelled: async (p) => {
-          await processCancelledOrder(p.postingNumber, "store_1");
-        },
-      });
-
-      // If it's a new order, process inventory
-      if (payload.eventType === "order.created") {
-        // Reconstruct minimal OzonPosting for new order processing
-        const order = {
-          postingNumber: payload.postingNumber,
-          orderId: payload.orderId,
-          status: payload.status,
-          createdAt: payload.timestamp,
-          products: [] as Array<{ sku: number; quantity: number; price: number }>,
-          price: 0,
-          commission: 0,
-          payout: 0,
-        } as unknown as Parameters<typeof processNewOrder>[0];
-        await processNewOrder(order, "store_1");
-      }
-
-      recordWebhookProcessed(Date.now() - processStart, true);
-    } catch (err) {
-      const errorMsg = (err as Error).message;
-      logger.error({ correlationId: req.correlationId, err: errorMsg }, "Webhook event handling failed");
-      recordWebhookProcessed(Date.now() - processStart, false);
-      writeToDeadLetter({
-        taskType: "webhook",
-        errorMessage: errorMsg,
-        payload: { eventId: payload.eventId },
-        correlationId: req.correlationId,
-      }).catch(() => {});
-
-      // Enqueue a retry task — stuck-task-recovery will pick it up
-      const db = await getDb().catch(() => null);
-      if (db) {
-        await db.run(
-          `INSERT INTO task_queue (id, type, status, payload_json, store_id, priority, max_retries, created_at)
-           VALUES (?, 'webhook_retry', 'queued', ?, 'store_1', 5, 3, NOW())`,
-          [`wr-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`, JSON.stringify({ eventType: payload.eventType, body: JSON.parse(rawBody) })]
-        ).catch(() => {});
-      }
+  // Manual replay — re-queue a FAILED webhook event for the drain job.
+  // Requires API key (not in PUBLIC_PATHS) by design.
+  router.post(["/webhook/replay/:id", "/replay/:id"], async (req, res) => {
+    const db = await getDb().catch(() => null);
+    if (!db) {
+      res.status(503).json({ success: false, error: { code: "DB_UNAVAILABLE", message: "Database unavailable", retryable: true }, correlationId: req.correlationId });
+      return;
     }
+    const result = await db.run(
+      "UPDATE ozon_webhook_log SET process_status = 'queued', error = NULL, processed_at = NULL WHERE id = ? AND process_status = 'failed'",
+      [req.params.id]
+    );
+    if (result.changes === 0) {
+      res.status(404).json({
+        success: false,
+        error: { code: "NOT_FOUND_OR_NOT_FAILED", message: "No failed webhook event with this id", retryable: false },
+        correlationId: req.correlationId,
+      });
+      return;
+    }
+    logger.info({ id: req.params.id }, "Webhook event re-queued for replay");
+    res.json({ success: true, data: { id: req.params.id, processStatus: "queued" }, correlationId: req.correlationId });
   });
 
   return router;

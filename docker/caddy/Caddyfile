@@ -14,6 +14,9 @@ http://{$CADDY_DOMAIN:localhost} {
 	handle /api/webhook/ozon {
 		reverse_proxy api-services:3000
 	}
+	handle /ozon/webhook {
+		reverse_proxy api-services:3000
+	}
 	# Everything else → redirect to HTTPS
 	handle {
 		redir https://{host}{uri} 308
@@ -26,8 +29,11 @@ http://{$CADDY_DOMAIN:localhost} {
 	header Access-Control-Allow-Methods "GET, POST, OPTIONS"
 	header Access-Control-Allow-Headers "Content-Type, X-API-Key, Authorization"
 
-	# Webhook
+	# Webhook (both legacy and canonical paths)
 	handle /api/webhook/ozon {
+		reverse_proxy api-services:3000
+	}
+	handle /ozon/webhook {
 		reverse_proxy api-services:3000
 	}
 

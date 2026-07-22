@@ -37,6 +37,7 @@ const PUBLIC_PATHS = [
   "/images",
   "/api/webhook/ozon",
   "/api/v1/webhook/ozon",
+  "/ozon/webhook",
 ];
 
 function isPublicPath(path: string): boolean {

@@ -59,6 +59,26 @@ export const MIGRATIONS: Migration[] = [
         event_type TEXT, created_at TIMESTAMP DEFAULT NOW()
       );
 
+      -- Raw webhook request log (event-driven architecture)
+      CREATE TABLE IF NOT EXISTS ozon_webhook_log (
+        id TEXT PRIMARY KEY,
+        event_id TEXT NOT NULL UNIQUE,
+        event_type TEXT NOT NULL,
+        posting_number TEXT,
+        order_id BIGINT,
+        status TEXT,
+        signature TEXT,
+        client_ip TEXT,
+        payload_json TEXT NOT NULL,
+        process_status TEXT NOT NULL DEFAULT 'queued',
+        error TEXT,
+        received_at TIMESTAMP DEFAULT NOW(),
+        processed_at TIMESTAMP
+      );
+      CREATE INDEX IF NOT EXISTS idx_owl_posting ON ozon_webhook_log(posting_number);
+      CREATE INDEX IF NOT EXISTS idx_owl_status ON ozon_webhook_log(process_status);
+      CREATE INDEX IF NOT EXISTS idx_owl_received ON ozon_webhook_log(received_at);
+
       CREATE TABLE IF NOT EXISTS inventory (
         offer_id TEXT NOT NULL, sku INTEGER NOT NULL,
         stock_available INTEGER DEFAULT 0, stock_reserved INTEGER DEFAULT 0,

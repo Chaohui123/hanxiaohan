@@ -9,7 +9,7 @@ import { nowDb } from "../utils/time.js";
 
 // ---- Types ----
 
-export type TaskType = "listing" | "ocr" | "translate" | "upload_image" | "create_draft" | "batch_listing" | "webhook_retry";
+export type TaskType = "listing" | "ocr" | "translate" | "upload_image" | "create_draft" | "batch_listing" | "webhook_retry" | "webhook_event";
 export type TaskStatus = "queued" | "processing" | "done" | "failed";
 
 export interface QueuedTask<T = Record<string, unknown>> {

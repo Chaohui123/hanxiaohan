@@ -40,10 +40,21 @@ export interface CoreJobDeps {
 export function registerCoreJobs(deps: CoreJobDeps): void {
   const { db, ozonClient, tokenTracker, logger, config, taskQueue, listingInfra } = deps;
 
-  registerJob("order-sync", 30 * 60_000, async () => {
+  // Event-driven order flow: webhook is the primary channel.
+  // This 6h job is only a deep-reconciliation fallback (was 30min polling).
+  registerJob("order-sync", 6 * 3600_000, async () => {
     const { syncOrders } = await import("@onzo/ozon-order");
     await syncOrders(ozonClient as never, { storeId: "store_1", pageSize: 50 }).catch((err) =>
       logger.error({ err }, "Scheduled order sync failed")
+    );
+  });
+
+  // Async webhook consumer — drains ozon_webhook_log every 30s so all
+  // business logic stays out of the HTTP request path (receiver acks 200 instantly)
+  registerJob("webhook-event-drain", 30_000, async () => {
+    const { drainOzonWebhookLog } = await import("../services/webhook-drain.js");
+    await drainOzonWebhookLog().catch((err) =>
+      logger.error({ err: (err as Error).message }, "Webhook drain cycle failed")
     );
   });
 

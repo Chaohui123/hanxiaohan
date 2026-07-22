@@ -69,6 +69,8 @@ export async function mountAllRoutes(app: express.Express, deps: RouteDeps): Pro
   // Webhook: mounted directly (no mountApi) to avoid deprecation headers interfering with Ozon
   app.use("/api", createWebhookRouter());
   app.use("/api/v1", createWebhookRouter());
+  // Canonical event-driven path: /ozon/webhook
+  app.use("/ozon", createWebhookRouter());
 
   mountApi("", createPriceRouter());
   mountApi("", createStoreRouter());
