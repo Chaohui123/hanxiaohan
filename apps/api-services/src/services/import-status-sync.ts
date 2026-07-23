@@ -33,12 +33,15 @@ export async function syncImportStatuses(ozonClient: OzonClient, limit = 50): Pr
     return { checked: 0, backfilled: 0, failed: 0, stillProcessing: 0 };
   }
 
-  // Task ids are stored in ozon_product_id until import completes.
-  // Only check records not yet in a terminal state.
+  // NOTE: listing_records are marked 'done' at draft-creation time, while
+  // ozon_product_id still holds the import task_id. So we can't filter by a
+  // "processing" status — instead check every non-failed record and let the
+  // import/info response tell us whether the stored id is a task_id (needs
+  // backfill) or already the real product_id (returns nothing → skip).
   const rows = (await db.all(
     `SELECT id, draft_id, ozon_product_id, status FROM listing_records
-     WHERE status IN ('processing', 'moderating', 'pending_moderation', 'draft')
-       AND ozon_product_id IS NOT NULL AND ozon_product_id > 0
+     WHERE ozon_product_id IS NOT NULL AND ozon_product_id > 0
+       AND status NOT IN ('failed')
      ORDER BY created_at ASC LIMIT ?`,
     [limit]
   )) as ListingRow[];
@@ -56,7 +59,7 @@ export async function syncImportStatuses(ozonClient: OzonClient, limit = 50): Pr
         continue;
       }
 
-      if (info.status === "imported" && info.productId > 0) {
+      if (info.status === "imported" && info.productId > 0 && info.productId !== taskId) {
         // Backfill real product_id everywhere the task_id was used
         await db.run(
           "UPDATE listing_records SET ozon_product_id = ?, status = 'done', result_json = ? WHERE id = ?",
