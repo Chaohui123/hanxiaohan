@@ -259,6 +259,40 @@ export class OzonClient {
     };
   }
 
+  /**
+   * Poll a /v3/product/import task's result. Ozon import is async — the draft
+   * creation call returns a task_id, and the REAL product_id only appears here
+   * once the task reaches "imported".
+   * Required to backfill ozon_product_id in listing_records and sku_1688_mapping.
+   */
+  async getImportStatus(taskId: number): Promise<{
+    offerId: string;
+    productId: number;
+    status: string; // "imported" | "failed" | "processing" | others
+    errors: Array<{ code: string; field: string; description: string }>;
+  } | null> {
+    const response = await this.doRequest<{
+      result: { items?: Array<{ offer_id?: string; product_id?: number; status?: string; errors?: Array<{ code?: string; field?: string; description?: string }> }> };
+    }>(
+      "POST",
+      "/v1/product/import/info",
+      { task_id: taskId }
+    );
+
+    const item = response.result?.items?.[0];
+    if (!item) return null;
+    return {
+      offerId: item.offer_id ?? "",
+      productId: item.product_id ?? 0,
+      status: item.status ?? "unknown",
+      errors: (item.errors ?? []).map((e) => ({
+        code: e.code ?? "",
+        field: e.field ?? "",
+        description: e.description ?? "",
+      })),
+    };
+  }
+
   /** Get full category tree — uses Ozon description-category API */
   async getCategoryTree(categoryId?: number): Promise<OzonCategoryNode[]> {
     const body: Record<string, unknown> = categoryId

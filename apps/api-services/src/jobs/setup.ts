@@ -58,6 +58,13 @@ export function registerCoreJobs(deps: CoreJobDeps): void {
     );
   });
 
+  registerJob("import-status-sync", 15 * 60_000, async () => {
+    const { syncImportStatuses } = await import("../services/import-status-sync.js");
+    await syncImportStatuses(ozonClient as never).catch((err) =>
+      logger.error({ err: (err as Error).message }, "Import status sync failed")
+    );
+  });
+
   registerJob("auto-ship", 3 * 3600_000, async () => {
     const { batchShipOrders } = await import("../services/auto-ship.js");
     await batchShipOrders(ozonClient as never).catch((err) =>
