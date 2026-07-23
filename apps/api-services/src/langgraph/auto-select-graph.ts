@@ -8,6 +8,7 @@ import { Annotation } from "@langchain/langgraph";
 import { logger } from "@onzo/logger";
 import { deepseekChatCompletion } from "./client/deepseek-client.js";
 import { getDb } from "../db/connection.js";
+import { getSeasonalMatchScore } from "../services/russia-seasonality.js";
 
 // ---- Configurable scoring weights (from .env) ----
 const W_MARGIN = parseInt(process.env.SCORE_WEIGHT_MARGIN || "40", 10);
@@ -113,8 +114,10 @@ async function promoScoreNode(s: typeof AutoSelectState.State): Promise<Partial<
   const scored = cands.map(c => {
     // Multi-dimension scoring: margin + seasonality + competition + compliance
     const marginScore = Math.min(1, Math.max(0, (c.price > 0 ? (200 - c.price) / 150 : 0.5)));
-    // Seasonal demand score: use price tier as proxy for demand level
-    const salesScore = c.price < 500 ? 0.7 : c.price < 1000 ? 0.5 : 0.3;
+    // Seasonal demand score: REAL Russia seasonality match (not price-tier proxy)
+    // getSeasonalMatchScore returns 0-100; normalize to 0-1. Fallback 0.3 when no match.
+    const rawSeason = getSeasonalMatchScore(c.title) / 100;
+    const salesScore = rawSeason > 0 ? rawSeason : 0.3;
     // Competition score: lower price = more suppliers = more competition
     const competeScore = c.price < 100 ? 0.8 : c.price < 200 ? 0.6 : 0.3;
     // Compliance score: penalty for categories likely needing certification

@@ -541,6 +541,7 @@ async function handleAutoSelect(
         `📢 推广计划: \`${d.promoPlanId || "已创建"}\``,
         ``,
         `🔍 交叉验证: ✅ 通过 (Ops + Promo 双重确认)`,
+        ...(d.report ? [``, `---`, d.report] : []),
       ].join("\n"));
     } else if (top) {
       await bot.sendMessage(chatId, [
@@ -553,6 +554,7 @@ async function handleAutoSelect(
         ...(d.validationIssues || []).map((i: string) => `  • ${i}`),
         ``,
         `📋 共找到 ${d.candidates || 0} 个候选商品，可手动选择上架`,
+        ...(d.report ? [``, `---`, d.report] : []),
       ].join("\n"));
     } else {
       await bot.sendMessage(chatId, `❌ 未找到匹配商品，请尝试其他关键词`);
