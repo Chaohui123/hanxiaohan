@@ -3,7 +3,7 @@
   "name": "ONZO 1688采购助手",
   "version": "1.0.0",
   "description": "一键采集1688商品数据，同步至ONZO ERP，参与大盘选品、成本拆解、Ozon自动上架",
-  "permissions": ["storage", "activeTab"],
+  "permissions": ["storage", "activeTab", "scripting", "downloads"],
   "host_permissions": [
     "https://detail.1688.com/*",
     "https://*.1688.com/*",
