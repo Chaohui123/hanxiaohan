@@ -41,12 +41,19 @@ export const apiClient = {
     api<Record<string, unknown>>(c, "POST", "/api/orders/reconcile", { dateFrom, dateTo }),
   pipelineHealth: (c: ApiConfig) => api<Record<string, unknown>>(c, "GET", "/ready/pipeline"),
   /** 提交1688链接上架 */
-  submitListing: (c: ApiConfig, sourceUrl: string) =>
-    api<Record<string, unknown>>(c, "POST", "/api/process", { sourceUrl, storeId: "store_1" }),
-  /** 查询上架进度 */
-  taskProgress: (c: ApiConfig, taskId: string) =>
-    api<Record<string, unknown>>(c, "GET", `/api/task/${taskId}`),
-  /** 查询最近上架记录 */
+  submitListing: (c: ApiConfig, url: string) =>
+    api<Record<string, unknown>>(c, "POST", "/api/process", { url, storeId: "store_1" }),
+  /** 查询上架进度（/api/task/:id 不存在 — filter the queue list by id instead） */
+  taskProgress: async (c: ApiConfig, taskId: string) => {
+    const res = await api<{ data?: Array<Record<string, unknown>> }>(c, "GET", `/api/task/queue?limit=500`);
+    const task = (res.data ?? []).find((t) => t.id === taskId);
+    if (!task) throw new Error(`Task ${taskId} not found`);
+    return task;
+  },
+  /** 查询最近上架记录（/api/process/recent 不存在 — use /api/task/listings） */
   recentListings: (c: ApiConfig, limit = 5) =>
-    api<Record<string, unknown>>(c, "GET", `/api/process/recent?limit=${limit}`),
+    api<Record<string, unknown>>(c, "GET", `/api/task/listings?limit=${limit}`),
+  /** 触发 1688 官方插件下载详情页/图/SKU（采购铺垫素材记录） */
+  pluginReDownload: (c: ApiConfig, url: string, keyword?: string) =>
+    api<Record<string, unknown>>(c, "POST", "/api/plugin/re-download", { url, keyword: keyword || "" }),
 };

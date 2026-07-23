@@ -414,14 +414,14 @@ async function handleListing(
     }
     try {
       const data = await apiClient.taskProgress(config, taskId);
-      const status = (data as { status?: string; error_message?: string; progress?: number }).status || "unknown";
-      const error = (data as { error_message?: string }).error_message || "";
-      const progress = (data as { progress?: number }).progress;
+      // TaskDto from /api/task/queue — camelCase fields
+      const t = data as { status?: string; errorMessage?: string; retryCount?: number; type?: string };
       const lines = [
         `📦 上架进度 — ${taskId}`,
-        `状态: ${status}`,
-        progress != null ? `进度: ${progress}%` : "",
-        error ? `错误: ${error}` : "",
+        `状态: ${t.status || "unknown"}`,
+        t.type ? `类型: ${t.type}` : "",
+        t.retryCount != null ? `重试: ${t.retryCount} 次` : "",
+        t.errorMessage ? `错误: ${t.errorMessage}` : "",
       ].filter(Boolean);
       await bot.sendMessage(chatId, lines.join("\n"));
     } catch (err) {
@@ -434,7 +434,8 @@ async function handleListing(
   if (sub === "recent") {
     try {
       const data = await apiClient.recentListings(config, 5);
-      const items = (data as { items?: Array<{ sourceUrl: string; status: string; title?: string; taskId?: string }> }).items || [];
+      // /api/task/listings returns { data: [...], count } (not { items })
+      const items = (data as { data?: Array<{ sourceUrl: string; status: string; draftId?: string; createdAt?: string }> }).data || [];
       if (items.length === 0) {
         await bot.sendMessage(chatId, "📦 暂无上架记录");
         return;
@@ -445,8 +446,9 @@ async function handleListing(
           : item.status === "failed" ? "❌"
           : item.status === "processing" ? "⏳"
           : "📌";
-        const title = (item.title || item.sourceUrl || "").slice(0, 40);
-        lines.push(`${emoji} ${title}\n   ${item.status} | ${item.taskId || ""}`);
+        const title = (item.sourceUrl || "").slice(0, 40);
+        const ref = item.draftId || item.createdAt || "";
+        lines.push(`${emoji} ${title}\n   ${item.status}${ref ? ` | ${ref}` : ""}`);
       }
       await bot.sendMessage(chatId, lines.join("\n"));
     } catch (err) {
@@ -473,7 +475,8 @@ async function handleListing(
 
   try {
     const data = await apiClient.submitListing(config, url);
-    const taskId = (data as { taskId?: string; id?: string }).taskId || (data as { id?: string }).id || "unknown";
+    // Response shape: { success, data: { taskId } }
+    const taskId = (data as { data?: { taskId?: string } }).data?.taskId || "unknown";
     await bot.sendMessage(chatId, [
       `📦 已提交上架任务`,
       ``,
@@ -482,6 +485,18 @@ async function handleListing(
       ``,
       `查询进度: listing status ${taskId}`,
     ].join("\n"));
+
+    // 采购铺垫：并行触发 1688 官方插件下载详情页/图/SKU（落 plugin_products）。
+    // 插件离线不阻塞上架，仅提示。
+    try {
+      const dl = await apiClient.pluginReDownload(config, url);
+      const online = (dl as { success?: boolean }).success !== false;
+      if (online) {
+        await bot.sendMessage(chatId, `📥 已同步下发 1688 素材下载（详情页/图/SKU），为出单采购铺垫`);
+      }
+    } catch {
+      await bot.sendMessage(chatId, `ℹ️ 1688 插件离线 — 素材走 scraper 抓取（打开浏览器插件可补素材记录）`);
+    }
   } catch (err) {
     await bot.sendMessage(chatId, `❌ 提交失败: ${(err as Error).message}`);
   }
