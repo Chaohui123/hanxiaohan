@@ -48,6 +48,16 @@ tail -f /home/ubuntu/deploy-watch.log
 
 GitHub Actions 恢复后两者可并存（同一套 reset+compose 动作，幂等）。
 
+### 注意：Caddy 单文件 bind mount 与 git reset 冲突
+
+`deploy/Caddyfile` 以单文件 bind mount 挂进容器。`git reset --hard` 重建文件后 **inode 变更**，容器内挂载点仍指向旧 inode，导致 Caddy 配置失效（表现为域名 502/无响应）。deploy-watch 已内置 `docker restart onzo-caddy` 兜底；**手动在服务器执行 git 操作后必须同样重启**：
+
+```bash
+docker restart onzo-caddy
+```
+
+同理：不要在 deploy-watch 构建期间并行手动 `docker compose build`，并发构建会损坏 buildkit 缓存（已发生两次），需 `docker builder prune` 恢复。
+
 ## 环境变量完整清单
 
 ```ini
