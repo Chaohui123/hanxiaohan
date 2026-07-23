@@ -109,13 +109,30 @@ export class Notifier {
   }
 
   /** Convenience: listing success */
-  async notifySuccess(correlationId: string, title: string, offerId: string, productId: number): Promise<void> {
+  async notifySuccess(
+    correlationId: string,
+    title: string,
+    offerId: string,
+    productId: number,
+    pricing?: { costCnyMin: number; costCnyMax: number; exchangeRate: number; priceRub: number; markupPct?: number },
+  ): Promise<void> {
+    const lines = [`上架成功: ${title} (offerId: ${offerId}, productId: ${productId})`];
+    if (pricing) {
+      const markup = pricing.markupPct ?? Math.round((pricing.priceRub / (pricing.costCnyMin * pricing.exchangeRate) - 1) * 100);
+      lines.push(
+        `💰 定价拆解: 成本 ¥${pricing.costCnyMin.toFixed(1)}${pricing.costCnyMax > pricing.costCnyMin ? `~${pricing.costCnyMax.toFixed(1)}` : ""}` +
+        ` × 汇率 ${pricing.exchangeRate} × ${(1 + markup / 100).toFixed(2)}加成 = **${pricing.priceRub}₽**（预估利润空间 ~${markup}%）`,
+      );
+    }
     await this.notify({
       level: "info",
       event: "LISTING_SUCCESS",
-      message: `上架成功: ${title} (offerId: ${offerId}, productId: ${productId})`,
+      message: lines.join("\n"),
       correlationId,
-      metadata: { title, offerId, productId: String(productId) },
+      metadata: {
+        title, offerId, productId: String(productId),
+        ...(pricing ? { costCnyMin: String(pricing.costCnyMin), exchangeRate: String(pricing.exchangeRate), priceRub: String(pricing.priceRub) } : {}),
+      },
     });
   }
 

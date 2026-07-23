@@ -79,7 +79,15 @@ export function createProcessRouter(config: AppConfig, taskQueue: TaskQueue, lis
       );
 
       logger.info({ correlationId: ctx.correlationId, productId: outcome.productId }, "Draft created");
-      notifier.notifySuccess(ctx.correlationId, outcome.titleRu, outcome.offerId, outcome.productId).catch(() => {});
+      const p = ctx.processed;
+      notifier.notifySuccess(
+        ctx.correlationId, outcome.titleRu, outcome.offerId, outcome.productId,
+        p ? {
+          costCnyMin: p.priceCny.min, costCnyMax: p.priceCny.max,
+          exchangeRate: p.priceRub > 0 && p.priceCny.min > 0 ? Math.round((p.priceRub / (p.priceCny.min * 1.3)) * 100) / 100 : 0,
+          priceRub: p.priceRub,
+        } : undefined,
+      ).catch(() => {});
       return;
     }
 
