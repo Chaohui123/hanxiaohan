@@ -53,6 +53,14 @@ http://{$CADDY_DOMAIN:localhost} {
 		reverse_proxy api-services:3000
 	}
 
+	# Uploaded product images (public, fetched by Ozon for listings)
+	handle /images/* {
+		reverse_proxy api-services:3000
+	}
+	handle /tmp-images/* {
+		reverse_proxy api-services:3000
+	}
+
 	# Feishu Bot callback
 	handle /feishu/* {
 		reverse_proxy ops-agent:8181
