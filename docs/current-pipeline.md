@@ -93,7 +93,7 @@ node scripts/download-1688-assets.cjs <1688链接或offerId> [输出根目录]
 
 10. 图片公网 URL 链路：`POST /api/image/upload`（X-API-Key 头）存 api 容器 `./data/images`，生成 `/images/{uuid}.jpg`——**必须有 Caddy HTTPS 路由**（`8e235ad` 修复，此前落 SPA 返 HTML，Ozon 拉图失败报"无法通过链接下载照片"）。⚠️ `IMAGE_STORAGE_PATH` 未挂卷，**api 容器重建后历史图片全丢**（新传不受影响）。
 11. 商品图片三错误根因：主图 alicdn URL 实际返回 webp 内容 → Ozon 拒收（"无法接受这种格式"）+主图顶替+下载失败。**一律本地转 JPG → 传服务器 → 用服务器 URL**；`pictures/import` 最新成功的一张会自动成为主图。
-12. 视频自动化链路（已固化）：`scripts/make-video-ru.py`（去中文音轨+烧俄文字幕，ffmpeg/libass）→ `scripts/upload-ozon-video.cjs`（WebBridge 操作卖家后台：列表→评级面板→注入文件→保存）。关键：文件路径用**正斜杠**（反斜杠被转义损坏致 Ошибка загрузки）；上传后必须点面板"保存"，关页未保存则丢失；媒体缺口"视频/视频封面"任一即可补。
+12. 视频自动化链路（已固化）：`scripts/make-video-ru.py`（去中文音轨+烧俄文字幕，ffmpeg/libass）→ `scripts/upload-ozon-video.cjs`（WebBridge 操作卖家后台）。**两条上传路径**：默认媒体 tab 路径（列表 → SPA 内 `location.assign` 到 `/edit/general-info` → 媒体 tab →"添加视频"→注入→保存）；`--rating` 评级面板路径兜底（列表→评级按钮→面板内上传）。关键坑：①后台 tab Chrome 节流连骨架都不渲染，navigate 后必须 CDP `Page.bringToFront`；②骨架屏也有"商品编辑"标题，就绪判断要看"类目和类型"表单字段；③铅笔是 target=_blank 开 session 外新 tab，WebBridge 接管不到，须用 SPA 内跳转；④点击媒体 tab 可能不切 URL，需 `location.assign` 直达保底；⑤文件路径用正斜杠；⑥上传后必须点"保存"，关页未保存则丢失。媒体 tab 页还有"添加图片/视频封面/富内容"入口，同法可扩。
 
 ## 七、安全备忘
 
