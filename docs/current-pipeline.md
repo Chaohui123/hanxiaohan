@@ -71,7 +71,27 @@ node scripts/download-1688-assets.cjs <1688链接或offerId> [输出根目录]
 - ~~Ozon 测试商品清理~~ — 店铺活跃商品 0；11 个测试商品（SKU-HSR-*/SKU-NOBRAND/WarmDesk-DF5E 等）全部处于归档态（Ozon 终态，前台不可见，Ozon 不支持物理删除已创建商品）。
 - 注意：`listing_records` 回填过的 product_id 5601249994 在 Ozon 已查无此商品（既不在活跃也不在归档）——个别回填 id 可能失效，采购匹配遇 404 时按无货源处理即可。
 
-## 六、安全备忘
+## 六、首个真实商品上架（2026-07-27，已"在售"）
+
+商品：车载磁吸支架（1688 offer 891784406688）｜offer_id `HS-XP2-MAG-01`｜product_id `5683403180`｜SKU `5233533151`
+类目：Автотовары > Автоаксессуары > Держатель автомобильный（cat `17028749` / type `115950474`）
+状态：后台"在售"；CEL陆运仓（`1020005021424150`）库存 20；价格 99 CNY / 划线 245 CNY（前台 ≈1210₽/2990₽）；图 8 张（1920 原图，无中文）；属性 24/39。
+
+**复用经验（下次上架直接照用）**：
+
+1. 店铺合同币种 **CNY**（`/v1/seller/info` 可查）：价格必须 CNY 提交（`currency_code:"CNY"`），Ozon 前台自动换 RUB 展示；传 RUB 报 `currency_differs_from_contract`。
+2. v3 import 字段：`weight` 为 **int32（克）**；depth/width/height 为 mm（int）；`vat:"0"`；`offer_id` 必填 ≤50 字符；`type_id` 必填（类目树叶子）。
+3. 仓库分两型：FBP（Ural/GUOO，库存不可 API 手动更新，需入库流程）与 rFBS（CEL 系，`/v2/products/stocks` 可设）。**`errors:[]` 即成功，勿当失败重试**（曾因打印 bug 重复设库存致 4 仓各 20）。
+4. 图片：alicdn 原图 URL 直传最简（后缀 `_WxH`/`_sum.jpg`/`_.webp` 全部剥掉），约 7/8 成功率；失败补 `/v1/product/pictures/import`（需 product_id，创建后才能用）。upload.ozon.ru 已废弃（NXDOMAIN）。
+5. 商品状态查询：`/v3/product/info/list` 对单商品查询不友好（400/空），用 `/v1/product/import/info {task_id}` 查导入/更新任务，或直接卖家后台。
+6. 内容评级：初值 34.5（属性 11/39）；补到 24/39（含 Аннотация 短描述、#Хештеги、特性字典、产地、保修）。评级每日重算，次日复验。
+7. Rich-контент JSON（attr 11254）两次被模板拒绝（img fileName 格式不符）→ 搁置，对标标杆商品同样没有 rich content，不构成差距。格式调试入口：rich-content.ozon.ru/sandbox。
+8. 视频：API 无公开上传接口（21841/21845 属性只接受 Ozon 视频 id）→ 卖家后台手动传，本地视频在 `temp/listing-staging/`。
+9. 前台索引有延迟（数小时~1 天）：后台"在售" ≠ 前台立即可见。
+
+脚本（temp/，流程跑通后可固化）：`ozon-api.cjs`（API 客户端）、`ozon-list.cjs`（创建）、`ozon-enrich.cjs`（属性补全）、`listing-payload.json`（文案/定价/素材清单）。
+
+## 七、安全备忘
 
 - 以下凭据曾在即时通讯中明文传输，建议择机轮换：Kimi K3 API Key、飞书 App Secret、Ozon API Key。
 - 服务器 API_KEY 已在换服务器时轮换过一次（值存于服务器 handover 文件，未进仓库）。
