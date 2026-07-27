@@ -62,8 +62,13 @@ node scripts/download-1688-assets.cjs <1688链接或offerId> [输出根目录]
 ## 五、已知未决项（不影响主链路，按需处理）
 
 - 素材图成功率可通过"滚动到底再提取"进一步提升（未做，非必需）。
-- `transition-logistics.test.ts` 的 importBilling 用例超时——既有问题，与近期改动无关。
 - 飞书触发素材抓取的两段式串联（未做，需求待确认）。
+
+已关闭（2026-07-23 核实）：
+
+- ~~`transition-logistics.test.ts` importBilling 超时~~ — 复跑 14/14 全部通过（2.1s），不再复现。
+- ~~Ozon 测试商品清理~~ — 店铺活跃商品 0；11 个测试商品（SKU-HSR-*/SKU-NOBRAND/WarmDesk-DF5E 等）全部处于归档态（Ozon 终态，前台不可见，Ozon 不支持物理删除已创建商品）。
+- 注意：`listing_records` 回填过的 product_id 5601249994 在 Ozon 已查无此商品（既不在活跃也不在归档）——个别回填 id 可能失效，采购匹配遇 404 时按无货源处理即可。
 
 ## 六、安全备忘
 
