@@ -91,6 +91,10 @@ node scripts/download-1688-assets.cjs <1688链接或offerId> [输出根目录]
 
 脚本（temp/，流程跑通后可固化）：`ozon-api.cjs`（API 客户端）、`ozon-list.cjs`（创建）、`ozon-enrich.cjs`（属性补全）、`listing-payload.json`（文案/定价/素材清单）。
 
+10. 图片公网 URL 链路：`POST /api/image/upload`（X-API-Key 头）存 api 容器 `./data/images`，生成 `/images/{uuid}.jpg`——**必须有 Caddy HTTPS 路由**（`8e235ad` 修复，此前落 SPA 返 HTML，Ozon 拉图失败报"无法通过链接下载照片"）。⚠️ `IMAGE_STORAGE_PATH` 未挂卷，**api 容器重建后历史图片全丢**（新传不受影响）。
+11. 商品图片三错误根因：主图 alicdn URL 实际返回 webp 内容 → Ozon 拒收（"无法接受这种格式"）+主图顶替+下载失败。**一律本地转 JPG → 传服务器 → 用服务器 URL**；`pictures/import` 最新成功的一张会自动成为主图。
+12. 视频自动化链路（已固化）：`scripts/make-video-ru.py`（去中文音轨+烧俄文字幕，ffmpeg/libass）→ `scripts/upload-ozon-video.cjs`（WebBridge 操作卖家后台：列表→评级面板→注入文件→保存）。关键：文件路径用**正斜杠**（反斜杠被转义损坏致 Ошибка загрузки）；上传后必须点面板"保存"，关页未保存则丢失；媒体缺口"视频/视频封面"任一即可补。
+
 ## 七、安全备忘
 
 - 以下凭据曾在即时通讯中明文传输，建议择机轮换：Kimi K3 API Key、飞书 App Secret、Ozon API Key。
