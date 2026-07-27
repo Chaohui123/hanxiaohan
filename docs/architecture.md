@@ -48,7 +48,7 @@
 
 ### P2 — 比价与选品（增加 RAG）
 
-> **注意**：本小节描述的是 Phase2/Phase3 的长期架构目标（包括 RAG/Qdrant、向量检索等）。根据仓库强制约束（参见 `.claude/rules.md`），Phase1 明确禁止在生产代码中引入 Qdrant、RAG 或复杂 Agent 框架。如需推进 Phase2/3 功能，请先提交 PR 并完成安全与成本评估。
+> **注意**：RAG 知识库已上线（Phase2，所有 Agent 强制引用，见 `docs/rag-mandatory-reference.md`）；向量存储为 PG pgvector / SQLite 双实现（生产单机用 SQLite），Qdrant 永久废弃；LangGraph StateGraph 线性工作流已受控引入（见 `.claude/rules.md`）。其余 P2/P3 长期目标仍以 `.claude/rules.md` 为准，推进前需提交 PR 并完成安全与成本评估。
 
 ```
 每日抓取 WB/Ozon 竞品价格 → 存入 Qdrant 向量库

@@ -4,7 +4,7 @@
 
 1\. 禁止 Python、Py相关代码、混合多语言调用
 
-2\. 禁止 LangGraph、LangChain 复杂Agent框架，仅允许简单线性流程
+2\. 禁止 LangChain 及自主循环推理 Agent（ReAct 类）；LangGraph StateGraph 仅限线性/有向工作流编排（已生产应用于采购、选品、上架流水线等，见 apps/api-services/src/langgraph/），禁止引入自主决策循环
 
 3\. 禁止 Qdrant 独立向量数据库（已使用 PostgreSQL + pgvector 替代，RAG 知识库已上线，所有 Agent 强制引用，详见 `docs/rag-mandatory-reference.md`）
 
@@ -37,7 +37,8 @@
 ## 分阶段允许/禁止清单（Phase1 / Phase2 / Phase3）
 
 - Phase1 (必须遵守，当前开发优先级):
-  - 禁止：Python、LangGraph/LangChain、Qdrant独立向量库（已有pgvector替代）、Redis/MQ/Kafka、未经审计的影刀RPA、分布式多机部署
+  - 禁止：Python、LangChain 及自主循环推理 Agent、Qdrant独立向量库（已有pgvector替代）、Redis/MQ/Kafka、未经审计的影刀RPA、分布式多机部署
+  - 允许（受控）：LangGraph StateGraph 线性/有向工作流编排（见禁止项第2条）
   - 允许：TypeScript/Node.js、pnpm monorepo、Express、Playwright、better-sqlite3 + Drizzle、单机 Docker（n8n 可选）、PostgreSQL + pgvector（RAG知识库已上线）
 
 - Phase2 (受控评估后可引入):
@@ -45,7 +46,7 @@
   - 仍禁止：未审计的第三方复杂 Agent 框架、生产环境下的分布式数据库替换（需满足运维/安全评估）
 
 - Phase3 (长期规划与扩展):
-  - 允许：LangGraph/复杂 Agent 框架、PostgreSQL 分布式部署（当达到 ≥10 店并通过安全与成本审查）；注意：Qdrant 不再需要，pgvector 已满足需求
+  - 允许：自主循环推理 Agent 框架（需安全与成本审查）、PostgreSQL 分布式部署（当达到 ≥10 店并通过安全与成本审查）；注意：Qdrant 不再需要，pgvector/SQLite 向量存储已满足需求；LangGraph 线性工作流已在 Phase1 受控允许（见禁止项第2条）
 
 说明：`docs/architecture.md` 中的 P2/P3 方案为长期架构目标；但当前仓库硬性约束以本文件为准（Phase1 禁止项为强制规则）。在推进 Phase2/3 的任何改变前，请提交 PR 并完成安全、成本与隐私评估。
 
@@ -114,7 +115,7 @@
 1. 调用大模型分层规则：视觉OCR固定 K3；上架翻译/类目匹配使用 deepseek-v4-flash；仅多竞品深度比价允许 deepseek-v4-pro；
 2. 所有密钥、接口地址、模型名称、并发参数统一读取项目根.env，通过packages/ai/src/config.ts统一导出，禁止硬编码sk密钥、URL、模型名；
 3. 代码必须完整TS类型，复用shared-types内定义，拒绝any；全部外部API增加重试、异常捕获、限流逻辑；
-4. 严格遵守约束：不引入Python、LangGraph、Qdrant、Redis、影刀RPA、分布式集群；仅单机Docker+SQLite/PostgreSQL单店架构；所有Agent决策前必须查询RAG知识库；
+4. 严格遵守约束：不引入Python、LangChain、Qdrant、Redis、影刀RPA、分布式集群；LangGraph 仅限 StateGraph 线性工作流（见禁止项第2条）；仅单机Docker+SQLite/PostgreSQL单店架构；所有Agent决策前必须查询RAG知识库；
 5. 代码按Monorepo分包输出，存放路径匹配项目目录结构，支持Vitest单元测试扩展。
 
 # 安全与边界强制审查规范

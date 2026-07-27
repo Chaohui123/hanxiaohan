@@ -20,7 +20,7 @@
 ### 技术栈
 | 组件 | 技术选型 | 说明 |
 |------|---------|------|
-| 向量存储 | PostgreSQL + pgvector | 替代 Qdrant，生产环境已部署 |
+| 向量存储 | PostgreSQL + pgvector / SQLite 双实现 | 替代 Qdrant；生产单机（standalone）用 SQLite 向量存储（`services/rag-v2`），PG pgvector 保留用于多店扩展 |
 | Embedding 模型 | 智谱 embedding-3 | 2048 维，通过 `packages/embedding` 调用 |
 | 相似度算法 | 余弦相似度（cosine） | `<=>` 操作符，1 - distance = score |
 | 索引策略 | IVFFlat | 数据量 >10万条时自动启用 |
