@@ -33,8 +33,9 @@ docker compose --profile "$COMPOSE_PROFILE" --env-file .env.production up -d --b
 # Caddy keeps serving the deleted file's config forever.
 docker restart onzo-caddy >> "$LOG_FILE" 2>&1 || true
 
-# Keep build cache bounded (buildkitd GC also applies).
-docker builder prune -f >> "$LOG_FILE" 2>&1 || true
+# Keep build cache bounded: -f alone only drops dangling layers and let the
+# cache grow to 45GB (filled /var/lib/docker once). Cap at 10G instead.
+docker builder prune -af --keep-storage 10g >> "$LOG_FILE" 2>&1 || true
 
 # Health gate — log but don't fail hard (containers may still be starting).
 sleep 15
