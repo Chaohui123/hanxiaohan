@@ -47,10 +47,11 @@ export function createPluginRouter(): Router {
 
       // Store in plugin_products table
       if (db) {
-        db.exec("CREATE TABLE IF NOT EXISTS plugin_products (id TEXT PRIMARY KEY, source_url TEXT, title TEXT, price_cny REAL, images_json TEXT, specs_json TEXT, weight TEXT, supplier TEXT, stock TEXT, category TEXT, created_at TEXT DEFAULT (datetime('now')), synced INTEGER DEFAULT 0)");
+        db.exec("CREATE TABLE IF NOT EXISTS plugin_products (id TEXT PRIMARY KEY, source_url TEXT, title TEXT, price_cny REAL, images_json TEXT, specs_json TEXT, weight TEXT, supplier TEXT, stock TEXT, category TEXT, created_at TEXT DEFAULT (NOW()), synced INTEGER DEFAULT 0)");
         const id = `plug_${Date.now()}`;
+        // id is timestamp-unique — plain INSERT is PG+SQLite compatible (INSERT OR REPLACE is SQLite-only)
         await db.run(
-          "INSERT OR REPLACE INTO plugin_products (id, source_url, title, price_cny, images_json, specs_json, weight, supplier, stock, category) VALUES (?,?,?,?,?,?,?,?,?,?)",
+          "INSERT INTO plugin_products (id, source_url, title, price_cny, images_json, specs_json, weight, supplier, stock, category) VALUES (?,?,?,?,?,?,?,?,?,?)",
           [id, product.sourceUrl, product.title, priceCny, JSON.stringify(product.images || []), JSON.stringify(product.specs || []), product.weight || "", product.supplier || "", product.stock || "", product.category || ""],
         );
         logger.info({ id, title: product.title.slice(0, 50) }, "Plugin: product stored");

@@ -65,6 +65,14 @@ function isValidToken(token: string): boolean {
 }
 
 export function authMiddleware(req: Request, res: Response, next: NextFunction): void {
+  // CORS preflight: must return 204 without auth — browsers abort the real
+  // request when the preflight is non-2xx (was breaking the 1688 plugin's
+  // cross-origin sync with "Failed to fetch").
+  if (req.method === "OPTIONS") {
+    res.sendStatus(204);
+    return;
+  }
+
   if (isPublicPath(req.path)) {
     next();
     return;
