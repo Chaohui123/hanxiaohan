@@ -85,7 +85,7 @@ node scripts/download-1688-assets.cjs <1688链接或offerId> [输出根目录]
 4. 图片：alicdn 原图 URL 直传最简（后缀 `_WxH`/`_sum.jpg`/`_.webp` 全部剥掉），约 7/8 成功率；失败补 `/v1/product/pictures/import`（需 product_id，创建后才能用）。upload.ozon.ru 已废弃（NXDOMAIN）。
 5. 商品状态查询：`/v3/product/info/list` 对单商品查询不友好（400/空），用 `/v1/product/import/info {task_id}` 查导入/更新任务，或直接卖家后台。
 6. 内容评级：初值 34.5（属性 11/39）；补到 24/39（含 Аннотация 短描述、#Хештеги、特性字典、产地、保修）。评级每日重算，次日复验。
-7. ~~Rich-контент JSON（attr 11254）两次被模板拒绝~~ → 已解决：同款 JSON 在商品"在售"稳定后提交即通过（3 个 img+text 块，相对路径 `multimedia-*/….jpg` 可用）。**规律：审核/导入处理中的商品富内容校验更严，等"在售"后再提交**。富内容不计入内容评级分（100 分不含它），作用是提升转化率。
+7. ~~Rich-контент JSON（attr 11254）两次被模板拒绝~~ → 已解决：按**官方 schema**（`assets/ozon-rich-schema.json`，来自 rich-content.ozon.ru/docs）组装。三个必踩坑：①顶层 `{content:[...], version:0.3}`（不是 0.4）；②块用 widgetName（raShowcase/raTextBlock/raVideo/raTable/list），不是 blockName+type；③**img 必须全尺寸五字段**（src/srcMobile/width/height/widthMobile/heightMobile，缺 srcMobile 必拒）；src 用商品已上传图的 `multimedia-*/….jpg` 内部引用。**提交前必跑本地校验**：`node scripts/validate-rich-json.cjs <json>`（ajv + 官方 schema，示例 `assets/ozon-rich-example.json`）。富内容不计入内容评级分，作用是提升转化率；提交时机：商品"在售"稳定后。
 8. 视频：API 无公开上传接口（21841/21845 属性只接受 Ozon 视频 id）→ 卖家后台手动传，本地视频在 `temp/listing-staging/`。
 9. 前台索引有延迟（数小时~1 天）：后台"在售" ≠ 前台立即可见。
 

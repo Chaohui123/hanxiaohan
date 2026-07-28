@@ -1,0 +1,162 @@
+{
+  "content": [
+    {
+      "widgetName": "raShowcase",
+      "type": "billboard",
+      "blocks": [
+        {
+          "img": {
+            "src": "multimedia-1-w/13084316564.jpg",
+            "srcMobile": "multimedia-1-w/13084316564.jpg",
+            "width": 1080,
+            "height": 1080,
+            "widthMobile": 1080,
+            "heightMobile": 1080
+          },
+          "title": {
+            "content": [
+              "Навигатор всегда перед глазами"
+            ]
+          },
+          "text": {
+            "content": [
+              "Магнитный держатель на вакуумной присоске: крепится за 3 секунды, держит до 10 кг"
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "widgetName": "raTextBlock",
+      "theme": "default",
+      "title": {
+        "content": [
+          "Почему этот держатель удобнее обычных"
+        ]
+      },
+      "text": {
+        "content": [
+          "Обычные держатели отваливаются на жаре, разбалтываются за месяц и закрывают обзор. Этот собран из металла: вакуумная присоска держит до 10 кг, магнит фиксирует телефон одним движением, а шарнир поворачивается на 360° и не разбалтывается со временем."
+        ]
+      }
+    },
+    {
+      "widgetName": "raShowcase",
+      "type": "chess",
+      "blocks": [
+        {
+          "reverse": false,
+          "img": {
+            "src": "multimedia-1-e/13084319822.jpg",
+            "srcMobile": "multimedia-1-e/13084319822.jpg",
+            "width": 1920,
+            "height": 1920,
+            "widthMobile": 1920,
+            "heightMobile": 1920
+          },
+          "title": {
+            "content": [
+              "Вакуумная присоска — до 10 кг"
+            ]
+          },
+          "text": {
+            "content": [
+              "Надёжно фиксируется на стекле и панели, не отваливается на жаре и морозе. Многоразовая — достаточно промыть водой."
+            ]
+          }
+        },
+        {
+          "reverse": true,
+          "img": {
+            "src": "multimedia-1-h/13084313525.jpg",
+            "srcMobile": "multimedia-1-h/13084313525.jpg",
+            "width": 1336,
+            "height": 1336,
+            "widthMobile": 1336,
+            "heightMobile": 1336
+          },
+          "title": {
+            "content": [
+              "Мощный магнит и шарнир 360°"
+            ]
+          },
+          "text": {
+            "content": [
+              "Смартфон фиксируется одним движением. Шаровая муфта из металла, а не хрупкого пластика."
+            ]
+          }
+        },
+        {
+          "reverse": false,
+          "img": {
+            "src": "multimedia-1-s/13084315336.jpg",
+            "srcMobile": "multimedia-1-s/13084315336.jpg",
+            "width": 1919,
+            "height": 1919,
+            "widthMobile": 1919,
+            "heightMobile": 1919
+          },
+          "title": {
+            "content": [
+              "Универсальная совместимость"
+            ]
+          },
+          "text": {
+            "content": [
+              "iPhone (MagSafe), Samsung, Xiaomi и любые смартфоны до 7 дюймов."
+            ]
+          }
+        }
+      ]
+    },
+    {
+      "widgetName": "list",
+      "theme": "bullet",
+      "blocks": [
+        {
+          "title": {
+            "content": [
+              "Вакуумная присоска — выдерживает до 10 кг"
+            ]
+          }
+        },
+        {
+          "title": {
+            "content": [
+              "Мощный магнит, совместим с MagSafe"
+            ]
+          }
+        },
+        {
+          "title": {
+            "content": [
+              "Металлический шарнир, поворот на 360°"
+            ]
+          }
+        },
+        {
+          "title": {
+            "content": [
+              "Смартфоны с диагональю до 7 дюймов"
+            ]
+          }
+        },
+        {
+          "title": {
+            "content": [
+              "Установка за 3 секунды, снимается без следов"
+            ]
+          }
+        },
+        {
+          "title": {
+            "content": [
+              "Вес 180 г · Материалы: ABS-пластик и металл · Гарантия 6 месяцев"
+            ]
+          }
+        }
+      ]
+    }
+  ],
+  "version": 0.3
+}
