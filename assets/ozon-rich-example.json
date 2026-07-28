@@ -6,8 +6,8 @@
       "blocks": [
         {
           "img": {
-            "src": "multimedia-1-w/13084316564.jpg",
-            "srcMobile": "multimedia-1-w/13084316564.jpg",
+            "src": "https://ir-20.ozonstatic.cn/s3/multimedia-1-w/13084316564.jpg",
+            "srcMobile": "https://ir-20.ozonstatic.cn/s3/multimedia-1-w/13084316564.jpg",
             "width": 1080,
             "height": 1080,
             "widthMobile": 1080,
@@ -47,8 +47,8 @@
         {
           "reverse": false,
           "img": {
-            "src": "multimedia-1-e/13084319822.jpg",
-            "srcMobile": "multimedia-1-e/13084319822.jpg",
+            "src": "https://ir-20.ozonstatic.cn/s3/multimedia-1-e/13084319822.jpg",
+            "srcMobile": "https://ir-20.ozonstatic.cn/s3/multimedia-1-e/13084319822.jpg",
             "width": 1920,
             "height": 1920,
             "widthMobile": 1920,
@@ -68,8 +68,8 @@
         {
           "reverse": true,
           "img": {
-            "src": "multimedia-1-h/13084313525.jpg",
-            "srcMobile": "multimedia-1-h/13084313525.jpg",
+            "src": "https://ir-20.ozonstatic.cn/s3/multimedia-1-h/13084313525.jpg",
+            "srcMobile": "https://ir-20.ozonstatic.cn/s3/multimedia-1-h/13084313525.jpg",
             "width": 1336,
             "height": 1336,
             "widthMobile": 1336,
@@ -89,8 +89,8 @@
         {
           "reverse": false,
           "img": {
-            "src": "multimedia-1-s/13084315336.jpg",
-            "srcMobile": "multimedia-1-s/13084315336.jpg",
+            "src": "https://ir-20.ozonstatic.cn/s3/multimedia-1-s/13084315336.jpg",
+            "srcMobile": "https://ir-20.ozonstatic.cn/s3/multimedia-1-s/13084315336.jpg",
             "width": 1919,
             "height": 1919,
             "widthMobile": 1919,
