@@ -95,7 +95,12 @@ node scripts/download-1688-assets.cjs <1688链接或offerId> [输出根目录]
 11. 商品图片三错误根因：主图 alicdn URL 实际返回 webp 内容 → Ozon 拒收（"无法接受这种格式"）+主图顶替+下载失败。**一律本地转 JPG → 传服务器 → 用服务器 URL**；`pictures/import` 最新成功的一张会自动成为主图。
 12. 视频自动化链路（已固化）：`scripts/make-video-ru.py`（去中文音轨+烧俄文字幕，ffmpeg/libass）→ `scripts/upload-ozon-video.cjs`（WebBridge 操作卖家后台）。**两条上传路径**：默认媒体 tab 路径（列表 → SPA 内 `location.assign` 到 `/edit/general-info` → 媒体 tab →"添加视频"→注入→保存）；`--rating` 评级面板路径兜底（列表→评级按钮→面板内上传）。关键坑：①后台 tab Chrome 节流连骨架都不渲染，navigate 后必须 CDP `Page.bringToFront`；②骨架屏也有"商品编辑"标题，就绪判断要看"类目和类型"表单字段；③铅笔是 target=_blank 开 session 外新 tab，WebBridge 接管不到，须用 SPA 内跳转；④点击媒体 tab 可能不切 URL，需 `location.assign` 直达保底；⑤文件路径用正斜杠；⑥上传后必须点"保存"，关页未保存则丢失。媒体 tab 页还有"添加图片/视频封面/富内容"入口，同法可扩。
 
-## 七、安全备忘
+## 七、平台规则情报（2026-07-28 Ozon 公告）
+
+- **商品合并规则（强制）**："型号"合并仅限同款的尺寸/颜色/容量变体；功能形态不同的商品（如磁吸款 vs 夹持款）不得并入同一型号组，应分建商品卡用"相似商品"关联。违规有 7 天修正期，系统性违规暂停全部商品组展示。9048 型号名保持店铺内唯一值（防误合并+防虚假分组，现做法已合规）。
+- **评价积分取消（2026-08-04 起）**：不再显示评价积分徽章、停止发放评价积分。新品首批评价依赖 Ozon 推送邀评/主页通知等保留工具——出单后主动引导评价更重要。
+
+## 八、安全备忘
 
 - 以下凭据曾在即时通讯中明文传输，建议择机轮换：Kimi K3 API Key、飞书 App Secret、Ozon API Key。
 - 服务器 API_KEY 已在换服务器时轮换过一次（值存于服务器 handover 文件，未进仓库）。
