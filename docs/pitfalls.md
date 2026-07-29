@@ -31,6 +31,7 @@
 | M3 | 富内容 JSON 三次被拒 | ①blockName/0.4 ②img 缺 srcMobile/宽高 ③multimedia- 相对路径 | 按官方 schema（assets/ozon-rich-schema.json，V03 widgetName/0.3）；img 全尺寸五字段；src 用完整可下载 URL（ir-*.ozonstatic.cn/s3/multimedia-*）；**提交前 `scripts/validate-rich-json.cjs` 本地预检** |
 | M4 | 后台删图/改图不生效 | 媒体 tab 操作后未点"保存商品" | 后台任何编辑后必须点"保存/保存商品"并确认 |
 | M5 | API 无图片删除端点 | pictures/import 只追加，v3 import 合并 | 删图只能卖家后台手动（媒体 tab） |
+| M5b | 图片管线重建期 v4 images 返回瞬时值（0/部分），据此反复补传会触发更多重建越搞越乱 | 把重建中的瞬时 0 当成真实缺失反复 pictures/import | 补图后**等 ≥10 分钟管线稳定再判真实图数**；瞬时 0 ≠ 缺失；只一次性全量传，不单独反复补 |
 | M6 | 卖点信息图同模板同底图雷同，Ozon 去重+无竞争力 | 4 张信息图用同一模板+同一产品底图，视觉雷同被判重 | **信息图差异化**：同模板信息图 ≤2 张，其余用不同底图/真实场景/细节特写/使用图；模板只统一版式，底图必须多样 |
 
 ## WebBridge 自动化
