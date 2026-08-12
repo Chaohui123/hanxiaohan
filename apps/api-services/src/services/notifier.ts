@@ -1,15 +1,16 @@
 // ============================================================
-// Unified Notification Service — WeChat Work + Telegram
+// Unified Notification Service — Feishu + WeChat Work + Telegram
 // Features: retry (3x exponential backoff), rate limiting,
 // priority levels, quiet hours, channel health checks
 // ============================================================
 
+import crypto from "node:crypto";
 import { logger } from "@onzo/logger";
 
 // ---- Types ----
 
 export type NotifyLevel = "critical" | "error" | "warn" | "info";
-export type NotifyChannel = "wechat" | "telegram";
+export type NotifyChannel = "feishu" | "wechat" | "telegram";
 
 export interface NotifyPayload {
   level: NotifyLevel;
@@ -38,11 +39,14 @@ interface ChannelHealth {
 
 // ---- Config ----
 
+const FEISHU_WEBHOOK = process.env.NOTIFY_FEISHU_WEBHOOK || "";
+// Optional: Feishu custom-bot signature secret (安全设置选"签名校验"时必填)
+const FEISHU_SECRET = process.env.NOTIFY_FEISHU_SECRET || "";
 const WECHAT_WEBHOOK = process.env.NOTIFY_WECHAT_WEBHOOK || "";
 const TELEGRAM_BOT = process.env.NOTIFY_TELEGRAM_BOT_TOKEN || "";
 const TELEGRAM_CHAT = process.env.NOTIFY_TELEGRAM_CHAT_ID || "";
 
-// Quiet hours: only critical events sent during this window (UTC)
+// Quiet hours: only critical/forced events sent during this window (UTC)
 const QUIET_START_HOUR = parseInt(process.env.NOTIFY_QUIET_START || "22", 10); // 22:00
 const QUIET_END_HOUR = parseInt(process.env.NOTIFY_QUIET_END || "7", 10);     // 07:00
 
@@ -54,6 +58,7 @@ const RATE_LIMIT_WINDOW_MS = 5 * 60 * 1000; // 5 minutes
 
 const rateLimitMap = new Map<string, RateLimitEntry>();
 const channelHealth: ChannelHealth[] = [
+  { channel: "feishu", available: !!FEISHU_WEBHOOK, lastCheck: 0, successCount: 0, failCount: 0 },
   { channel: "wechat", available: !!WECHAT_WEBHOOK, lastCheck: 0, successCount: 0, failCount: 0 },
   { channel: "telegram", available: !!(TELEGRAM_BOT && TELEGRAM_CHAT), lastCheck: 0, successCount: 0, failCount: 0 },
 ];
@@ -78,14 +83,15 @@ export class Notifier {
       return;
     }
 
-    // Quiet hours check
-    if (!this.shouldSendNow(payload.level)) {
+    // Quiet hours check — critical level and force-flagged events always send
+    if (!this.shouldSendNow(payload.level, payload.force)) {
       logger.debug({ event: payload.event, level: payload.level }, "Notification suppressed — quiet hours");
       return;
     }
 
     // Send to all available channels concurrently
     const promises: Promise<void>[] = [];
+    if (FEISHU_WEBHOOK) promises.push(this.sendWithRetry("feishu", () => this.sendFeishu(payload)));
     if (WECHAT_WEBHOOK) promises.push(this.sendWithRetry("wechat", () => this.sendWechat(payload)));
     if (TELEGRAM_BOT && TELEGRAM_CHAT) promises.push(this.sendWithRetry("telegram", () => this.sendTelegram(payload)));
 
@@ -154,7 +160,7 @@ export class Notifier {
 
   /** Check if any channel is available */
   get enabled(): boolean {
-    return !!(WECHAT_WEBHOOK || (TELEGRAM_BOT && TELEGRAM_CHAT));
+    return !!(FEISHU_WEBHOOK || WECHAT_WEBHOOK || (TELEGRAM_BOT && TELEGRAM_CHAT));
   }
 
   // ---- Private ----
@@ -206,9 +212,9 @@ export class Notifier {
     return true;
   }
 
-  /** Check quiet hours — only critical events bypass */
-  private shouldSendNow(level: NotifyLevel): boolean {
-    if (level === "critical") return true; // Critical always sends
+  /** Check quiet hours — critical events and force-flagged payloads bypass */
+  private shouldSendNow(level: NotifyLevel, force?: boolean): boolean {
+    if (level === "critical" || force) return true;
     const hour = new Date().getUTCHours();
     if (QUIET_START_HOUR < QUIET_END_HOUR) {
       return hour < QUIET_START_HOUR || hour >= QUIET_END_HOUR;
@@ -218,6 +224,45 @@ export class Notifier {
   }
 
   // ---- Channel senders ----
+
+  /**
+   * Feishu custom bot (群自定义机器人).
+   * Security settings on the bot side: either enable 签名校验 and set
+   * NOTIFY_FEISHU_SECRET, or use 自定义关键词 "ONZO" (every message is
+   * prefixed with ONZO so it passes the keyword filter).
+   */
+  private async sendFeishu(payload: NotifyPayload): Promise<boolean> {
+    const emoji = payload.level === "critical" ? "🔴" : payload.level === "error" ? "🟠" : payload.level === "warn" ? "🟡" : "🟢";
+    const text = [
+      `${emoji} ONZO ${payload.event}`,
+      payload.message,
+      `级别: ${payload.level} | 时间: ${new Date().toLocaleString("zh-CN")} | ID: ${payload.correlationId}`,
+    ].join("\n");
+
+    const body: Record<string, unknown> = { msg_type: "text", content: { text } };
+    if (FEISHU_SECRET) {
+      const timestamp = Math.floor(Date.now() / 1000).toString();
+      // Feishu sign: Base64(HMAC-SHA256(key=`${timestamp}\n${secret}`, data=""))
+      const sign = crypto.createHmac("sha256", `${timestamp}\n${FEISHU_SECRET}`).update("").digest("base64");
+      body.timestamp = timestamp;
+      body.sign = sign;
+    }
+
+    const resp = await fetch(FEISHU_WEBHOOK, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10_000),
+    });
+
+    const data = await resp.json() as { code?: number; StatusCode?: number };
+    const ok = resp.ok && (data.code === 0 || data.StatusCode === 0);
+    if (!ok) {
+      logger.warn({ response: data }, "Feishu webhook failed");
+      return false;
+    }
+    return true;
+  }
 
   private async sendWechat(payload: NotifyPayload): Promise<boolean> {
     const emoji = payload.level === "critical" ? "🔴" : payload.level === "error" ? "🟠" : payload.level === "warn" ? "🟡" : "🟢";

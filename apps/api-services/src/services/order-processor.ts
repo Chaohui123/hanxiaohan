@@ -81,18 +81,31 @@ export async function processNewOrder(
       }
     }
 
-    // 3. Notify
-    await notifier.notify({
-      level: "info",
-      event: "新订单",
-      message: `订单 ${order.postingNumber}: ${order.products.length} 件商品, ${order.price} RUB`,
-      correlationId: `order-${order.postingNumber}`,
-      metadata: {
-        postingNumber: order.postingNumber,
-        products: String(order.products.length),
-        price: String(order.price),
-      },
-    }).catch(() => {});
+    // 3. Notify — unless the fallback order sync already announced this
+    // posting (it writes ozon_orders and notifies when the webhook path
+    // missed the order). Dedup both directions, first-seen wins.
+    // Match by order_number: ozon_orders stores package-level posting_number
+    // ("...-1") while webhook events reference the bare order_number.
+    const syncedRows = await db.all(
+      "SELECT 1 AS x FROM ozon_orders WHERE posting_number = ? OR posting_number LIKE ? || '-%' LIMIT 1",
+      [order.postingNumber, order.postingNumber]
+    ).catch(() => [] as Array<{ x: number }>);
+    if (syncedRows.length === 0) {
+      await notifier.notify({
+        level: "info",
+        event: "新订单",
+        message: `订单 ${order.postingNumber}: ${order.products.length} 件商品, ${order.price} RUB`,
+        correlationId: `order-${order.postingNumber}`,
+        force: true,
+        metadata: {
+          postingNumber: order.postingNumber,
+          products: String(order.products.length),
+          price: String(order.price),
+        },
+      }).catch(() => {});
+    } else {
+      logger.info({ postingNumber: order.postingNumber }, "Order already announced by sync — notification skipped");
+    }
 
     logger.info({ postingNumber: order.postingNumber, products: order.products.length, price: order.price },
       "New order processed");

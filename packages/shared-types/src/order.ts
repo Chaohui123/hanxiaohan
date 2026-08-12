@@ -57,6 +57,7 @@ export interface OzonPostingFilter {
   status?: OzonOrderStatus;
   since?: string;              // ISO datetime
   until?: string;              // ISO datetime
+  orderNumber?: string;        // filter by order_number (fbs/list supports it)
   limit?: number;              // default 100
   offset?: number;
 }

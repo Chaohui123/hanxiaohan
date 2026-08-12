@@ -6,7 +6,9 @@
 //   2. The webhook URL Ozon will call:
 //      https://{PUBLIC_DOMAIN}/api/webhook/ozon
 //   3. Register via: npx tsx scripts/setup-webhook.ts
-//   4. Ozon signs requests with HMAC-SHA256 using OZON_API_KEYS
+//   4. Real Ozon pushes carry NO signature header (verified in production
+//      2026-08); authenticity = seller_id match + optional OZON_WEBHOOK_IPS
+//      whitelist. If a signature IS present it is HMAC-verified.
 //
 // Ozon webhook source IPs (optional whitelist):
 //   These are documented at https://docs.ozon.ru/api/seller/#section/Obshie-svedeniya
@@ -22,10 +24,8 @@ import { recordWebhookReceived, recordWebhookProcessed } from "../services/order
 // Ozon signs webhooks with HMAC-SHA256 using the API key.
 // Some setups use a dedicated webhook secret (OZON_WEBHOOK_SECRET).
 // Prefer the dedicated secret, fall back to the primary API key.
+// NOTE: real Ozon pushes usually carry no signature — see route handler.
 const API_SECRET = process.env.OZON_WEBHOOK_SECRET || process.env.OZON_API_KEYS || "";
-
-// In production, reject webhooks without HMAC-SHA256 signature verification
-const ENFORCE_WEBHOOK_SIGNATURE = (process.env.ENV || process.env.NODE_ENV) !== "dev";
 
 // Optional: Ozon webhook IP whitelist (comma-separated CIDR or IPs)
 const ALLOWED_WEBHOOK_IPS = (process.env.OZON_WEBHOOK_IPS || "")
@@ -131,18 +131,24 @@ export function createWebhookRouter(): Router {
       return;
     }
 
-    // Empty body / no signature → Ozon template ack: result is the STRING "true"
-    if (!rawJson || Object.keys(rawJson).length === 0 || !signature) {
+    // Empty body / empty JSON → Ozon template ack: result is the STRING "true"
+    if (!rawJson || Object.keys(rawJson).length === 0) {
       res.status(200).send('{"result":"true"}');
       return;
     }
 
-    // Reject requests without signature in production — prevents forged webhooks
-    if (ENFORCE_WEBHOOK_SIGNATURE && !signature) {
-      logger.warn({ clientIp, correlationId: req.correlationId }, "Webhook rejected — missing X-Ozon-Signature header");
-      res.status(401).json({
+    // Real Ozon pushes do NOT carry X-Ozon-Signature (observed in production).
+    // Signature is verified when present (inside parseWebhookPayload); when
+    // absent, authenticity rests on:
+    //   1. seller_id match (when the payload carries one), and/or
+    //   2. the optional OZON_WEBHOOK_IPS whitelist (checked above).
+    const sellerId = (rawJson as Record<string, unknown>).seller_id;
+    const configuredSellers = (process.env.OZON_CLIENT_IDS || "").split(",").map((s) => s.trim()).filter(Boolean);
+    if (sellerId != null && configuredSellers.length > 0 && !configuredSellers.includes(String(sellerId))) {
+      logger.warn({ clientIp, sellerId, correlationId: req.correlationId }, "Webhook rejected — seller_id not in OZON_CLIENT_IDS");
+      res.status(403).json({
         success: false,
-        error: { code: "MISSING_SIGNATURE", message: "X-Ozon-Signature header required", retryable: false },
+        error: { code: "SELLER_MISMATCH", message: "seller_id not recognized", retryable: false },
         correlationId: req.correlationId,
       });
       return;
@@ -200,6 +206,15 @@ export function createWebhookRouter(): Router {
       status: payload.status,
       correlationId: req.correlationId,
     }, "Webhook event accepted");
+
+    // Known non-order events (stocks/category-tree/item updates): ack without
+    // queueing — the raw body is already in the logs, and these carry no
+    // actionable order state for the drain job.
+    if (payload.eventType === "ignored") {
+      res.setHeader("Content-Type", "application/json; charset=utf-8");
+      res.status(200).send('{"result":"true"}');
+      return;
+    }
 
     // ---- Event-driven architecture ----
     // 1. Persist the RAW request FIRST (audit trail, before any processing)

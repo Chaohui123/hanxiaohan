@@ -67,7 +67,9 @@ export class OzonOrderSyncService {
       }
     }
 
-    logger.info({ storesScanned: stores.length, totalOrders, newOrders, flaggedOrders, errors: errors.length },
+    // Include error details — a bare count hides persistent failures
+    // (a sync that errors every cycle looks identical to a healthy idle one).
+    logger[errors.length > 0 ? "warn" : "info"]({ storesScanned: stores.length, totalOrders, newOrders, flaggedOrders, errors },
       "OzonOrderSync: All stores synced");
 
     return { storesScanned: stores.length, totalOrders, newOrders, flaggedOrders, skippedOrders, errors };
@@ -186,6 +188,35 @@ export class OzonOrderSyncService {
 
     logger.info({ storeId, postingNumber: posting.postingNumber, needsReview, marginPercent },
       "OzonOrderSync: Order processed");
+
+    // ---- Notification (fallback path) ----
+    // The webhook path (drain → processNewOrder) writes local_orders (keyed by
+    // order_number) and notifies; skip here when that already happened.
+    // First-seen wins. Match both the bare order_number and the package-level
+    // posting_number.
+    const isNew = existing.length === 0;
+    const becameCancelled = !isNew && existing[0].status !== "cancelled" && posting.status === "cancelled";
+    if ((isNew && posting.status !== "cancelled") || becameCancelled) {
+      const orderNumber = posting.orderNumber || posting.postingNumber;
+      const viaWebhook = await this.db.all<{ x: number }>(
+        "SELECT 1 AS x FROM local_orders WHERE posting_number = ? OR posting_number = ? LIMIT 1",
+        [orderNumber, posting.postingNumber]
+      ).catch(() => [] as Array<{ x: number }>);
+      if (viaWebhook.length === 0) {
+        const { emitEvent } = await import("./notification-events.js");
+        if (isNew) {
+          await emitEvent("ORDER_NEW", {
+            postingNumber: posting.postingNumber,
+            productCount: String(posting.products.length),
+            priceRub: String(posting.price),
+          }, `order-${posting.postingNumber}`).catch(() => {});
+        } else {
+          await emitEvent("ORDER_CANCELLED", {
+            postingNumber: posting.postingNumber,
+          }, `order-${posting.postingNumber}`).catch(() => {});
+        }
+      }
+    }
 
     return needsReview ? "flagged" : "new";
   }

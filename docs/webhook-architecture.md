@@ -1,7 +1,8 @@
 # Ozon 对接模块 — Webhook 事件驱动架构
 
 > 架构：**Webhook 事件驱动为主 + API v3 定时兜底**
-> 接收器只做：验签 → 原始请求落库 → 立即 200。全部业务逻辑由 drain job 异步消费。
+> 接收器只做：seller_id 校验（有签名时验签）→ 原始请求落库 → 立即 200。全部业务逻辑由 drain job 异步消费。
+> **2026-08 实测修正**：Ozon 推送**不带 X-Ozon-Signature 头**，报文字段为 `message_type`/`order_number`/`uuid`（非早期假设的 event_type/posting_number/event_id）；伪造防护 = seller_id 白名单 + 可选 OZON_WEBHOOK_IPS。
 > 队列限流：ozon-api-wrapper 令牌桶 + 熔断 + 指数退避（遵守 rules.md 禁 Redis/MQ 约束，不使用 BullMQ）。
 
 ## 一、目录结构
@@ -31,18 +32,20 @@ docker/caddy/Caddyfile            # HTTPS 终止 + /ozon/webhook 转发
 
 ```
 Ozon ──POST /ozon/webhook──> Caddy(HTTPS) ──> api-services
-  ① 验签 (HMAC-SHA256, timingSafeEqual)
-  ② event_id 幂等 (webhook_events ON CONFLICT + ozon_webhook_log.event_id UNIQUE)
+  ① seller_id 校验（对 OZON_CLIENT_IDS；带签名时 HMAC-SHA256 验签）
+  ② uuid 幂等 (webhook_events ON CONFLICT + ozon_webhook_log.event_id UNIQUE)
   ③ INSERT INTO ozon_webhook_log (process_status='queued', payload_json=原始报文)
+     （ignored 类非订单事件——库存/类目树/商品更新——只记日志不落库）
   ④ 立即 200 {"result":{}}
                                       │
 webhook-event-drain job (每 30s) <────┘
   ⑤ SELECT ... WHERE process_status='queued' LIMIT 10（乐观锁 queued→processing）
-  ⑥ handleWebhookEvent → order-processor（新单扣库存/状态变更/取消）
+  ⑥ handleWebhookEvent → order-processor（新单按 order_number 拉真实包裹/扣库存/飞书通知；状态变更/取消/买家消息）
   ⑦ UPDATE process_status='done'|'failed'(error)
   ⑧ 失败 → 死信队列 + 人工 POST /api/webhook/replay/:id 重跑
 
-兜底：ozon-order-sync-v2 job 每 5min 调 /v3/posting/{fbs,fbo}/list 补偿丢失事件；
+兜底：ozon-order-sync-v2 job 每 5min 调 /v3/posting/{fbs,fbo}/list 补偿丢失事件，
+     抓到新单/取消单同样发飞书通知（与 webhook 路径双向防重，先到者通知）；
      order-sync job 每 6h 深度对账。
 ```
 

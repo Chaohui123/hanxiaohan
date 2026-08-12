@@ -50,6 +50,8 @@ export class OzonOrderClient {
           since,
           to: until,
           status: filter?.status || "",
+          // Only include order_number when set — empty string is not accepted
+          ...(filter?.orderNumber ? { order_number: filter.orderNumber } : {}),
         },
         limit: filter?.limit ?? 100,
         offset: filter?.offset ?? 0,
