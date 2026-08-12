@@ -174,6 +174,16 @@ export class RedisCache {
     return true;
   }
 
+  /**
+   * Expose the shared Redis client for Lua-script users (redis-lock's
+   * extendLock/releaseLock). Returns null when Redis is unavailable.
+   * Without this, callers fall back to the in-memory path and lock
+   * extension silently always fails — which breaks scheduler leadership.
+   */
+  async getClient() {
+    return getClient();
+  }
+
   async ping(): Promise<boolean> {
     const client = await getClient();
     if (!client) return false;
