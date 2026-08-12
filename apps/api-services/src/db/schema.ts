@@ -48,7 +48,7 @@ export async function initSchema(db: DbAdapter): Promise<void> {
 
     CREATE TABLE IF NOT EXISTS local_orders (
       id TEXT PRIMARY KEY, store_id TEXT NOT NULL DEFAULT 'store_1',
-      posting_number TEXT UNIQUE NOT NULL, order_id INTEGER NOT NULL,
+      posting_number TEXT UNIQUE NOT NULL, order_id BIGINT NOT NULL,
       status TEXT NOT NULL, created_at TIMESTAMP NOT NULL,
       updated_at TIMESTAMP DEFAULT NOW(),
       buyer_name_masked TEXT, buyer_phone_masked TEXT,
@@ -335,7 +335,7 @@ export async function initSchema(db: DbAdapter): Promise<void> {
       id TEXT PRIMARY KEY,
       store_id TEXT NOT NULL DEFAULT 'store_1',
       posting_number TEXT NOT NULL,
-      order_id INTEGER NOT NULL,
+      order_id BIGINT NOT NULL,
       order_number TEXT,
       status TEXT NOT NULL,
       created_at_ozon TEXT,
@@ -363,7 +363,7 @@ export async function initSchema(db: DbAdapter): Promise<void> {
       id TEXT PRIMARY KEY,
       store_id TEXT NOT NULL DEFAULT 'store_1',
       ozon_posting_number TEXT NOT NULL,
-      ozon_order_id INTEGER NOT NULL,
+      ozon_order_id BIGINT NOT NULL,
       source_1688_url TEXT,
       offer_id TEXT,
       sku_list_json TEXT NOT NULL DEFAULT '[]',

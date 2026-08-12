@@ -4,6 +4,7 @@
 // ============================================================
 
 import { getDb, type DbAdapter } from "./connection.js";
+import { getAdDailyStats } from "../services/ozon-ads.js";
 
 async function db(): Promise<DbAdapter> {
   const d = await getDb();
@@ -126,30 +127,104 @@ export async function insertAuditLog(entry: { actionType: string; offerId: strin
 
 // ---- Stats & Sales ----
 
-export async function querySalesRanking(days: number): Promise<Array<Record<string, unknown>>> {
+export interface SalesRankingItem {
+  offerId: string;
+  name: string;
+  orders: number;
+  revenue: number;
+}
+
+/** 销量榜 — 从 ozon_orders.products_json 聚合（product_performance 为空表，弃用） */
+export async function querySalesRanking(days: number): Promise<SalesRankingItem[]> {
   const d = await db();
   const cutoff = new Date(Date.now() - days * 86400000).toISOString();
-  return d.all(
-    "SELECT product_id AS offerId, COALESCE(title, '') AS name, sales AS orders, revenue_rub AS revenue FROM product_performance WHERE updated_at >= ? ORDER BY sales DESC LIMIT 20",
+  const rows = await d.all(
+    "SELECT products_json FROM ozon_orders WHERE created_at_ozon >= ? AND status != 'cancelled'",
     [cutoff],
   );
+  const agg = new Map<string, SalesRankingItem>();
+  for (const r of rows) {
+    let products: Array<{ offerId?: string; name?: string; quantity?: number; price?: number }>;
+    try {
+      products = JSON.parse(String((r as Record<string, unknown>).products_json || "[]"));
+    } catch {
+      continue; // 跳过损坏的 JSON 行
+    }
+    if (!Array.isArray(products)) continue;
+    for (const p of products) {
+      const offerId = String(p.offerId || "");
+      if (!offerId) continue;
+      const qty = Number(p.quantity || 0);
+      const entry = agg.get(offerId) || { offerId, name: "", orders: 0, revenue: 0 };
+      entry.orders += qty;
+      entry.revenue += Number(p.price || 0) * qty;
+      if (!entry.name && p.name) entry.name = String(p.name);
+      agg.set(offerId, entry);
+    }
+  }
+  return [...agg.values()].sort((a, b) => b.orders - a.orders).slice(0, 20);
 }
 
-export async function queryDailyStats(date: string): Promise<{ orders: number; revenue: number; avgOrderValue: number }> {
-  const d = await db();
-  const rows = await d.all("SELECT orders, revenue_rub AS revenue, avg_order_value AS avgOrderValue FROM daily_sales WHERE date = ?", [date]);
-  const row = rows[0] as Record<string, unknown> | undefined;
-  return { orders: Number(row?.orders || 0), revenue: Number(row?.revenue || 0), avgOrderValue: Number(row?.avgOrderValue || 0) };
+export interface DailyStats {
+  orders: number;
+  revenue: number;
+  avgOrderValue: number;
+  cancelledOrders: number;
 }
 
-export async function queryPromoCost(fromDate: string, toDate: string): Promise<Record<string, number>> {
+/** 日报数据 — 真实订单来自 ozon_orders（daily_sales 表无写入方，弃用） */
+export async function queryDailyStats(date: string): Promise<DailyStats> {
   const d = await db();
-  const tokenRows = await d.all("SELECT COALESCE(SUM(cost_estimate), 0) AS cost FROM token_usage WHERE DATE(timestamp) BETWEEN ? AND ?", [fromDate, toDate]);
-  const salesRows = await d.all("SELECT COALESCE(SUM(revenue_rub), 0) AS revenue FROM daily_sales WHERE date BETWEEN ? AND ?", [fromDate, toDate]);
-  const adSpend = (tokenRows[0] as Record<string, unknown> | undefined)?.cost as number || 0;
-  const totalRevenue = (salesRows[0] as Record<string, unknown> | undefined)?.revenue as number || 0;
-  const organicRevenue = totalRevenue * 0.7;
-  const paidRevenue = totalRevenue * 0.3;
-  const roi = adSpend > 0 ? paidRevenue / adSpend : 0;
+  const rows = await d.all(
+    "SELECT COUNT(*) AS cnt, COALESCE(SUM(total_price_rub), 0) AS revenue FROM ozon_orders WHERE date(created_at_ozon) = ? AND status != 'cancelled'",
+    [date],
+  );
+  const cancelledRows = await d.all(
+    "SELECT COUNT(*) AS cnt FROM ozon_orders WHERE date(created_at_ozon) = ? AND status = 'cancelled'",
+    [date],
+  );
+  const orders = Number((rows[0] as Record<string, unknown> | undefined)?.cnt || 0);
+  const revenue = Number((rows[0] as Record<string, unknown> | undefined)?.revenue || 0);
+  const cancelledOrders = Number((cancelledRows[0] as Record<string, unknown> | undefined)?.cnt || 0);
+  return { orders, revenue, avgOrderValue: orders > 0 ? revenue / orders : 0, cancelledOrders };
+}
+
+/** 按天聚合订单（周报趋势图） */
+export async function queryOrdersByDay(fromDate: string, toDate: string): Promise<Array<{ date: string; orders: number; revenue: number }>> {
+  const d = await db();
+  const rows = await d.all(
+    "SELECT date(created_at_ozon) AS date, COUNT(*) AS orders, COALESCE(SUM(total_price_rub), 0) AS revenue FROM ozon_orders WHERE date(created_at_ozon) BETWEEN ? AND ? AND status != 'cancelled' GROUP BY date(created_at_ozon) ORDER BY date(created_at_ozon)",
+    [fromDate, toDate],
+  );
+  return rows.map((r) => {
+    const row = r as Record<string, unknown>;
+    return { date: String(row.date || ""), orders: Number(row.orders || 0), revenue: Number(row.revenue || 0) };
+  });
+}
+
+export interface PromoCostStats {
+  adSpend: number | null; // null = 广告 API 未接入/失败（区别于真实 0）
+  totalRevenue: number;
+  organicRevenue: number | null;
+  paidRevenue: number | null;
+  roi: number | null;
+}
+
+/** 推广成本 — 广告费来自 Ozon Performance API，收入来自 ozon_orders（token_usage 是 LLM 成本，弃用） */
+export async function queryPromoCost(fromDate: string, toDate: string): Promise<PromoCostStats> {
+  const d = await db();
+  const rows = await d.all(
+    "SELECT COALESCE(SUM(total_price_rub), 0) AS revenue FROM ozon_orders WHERE date(created_at_ozon) BETWEEN ? AND ? AND status != 'cancelled'",
+    [fromDate, toDate],
+  );
+  const totalRevenue = Number((rows[0] as Record<string, unknown> | undefined)?.revenue || 0);
+  const adStats = await getAdDailyStats(fromDate, toDate);
+  if (!adStats) {
+    return { adSpend: null, totalRevenue, organicRevenue: null, paidRevenue: null, roi: null };
+  }
+  const adSpend = adStats.spendRub;
+  const paidRevenue = adStats.adRevenueRub;
+  const organicRevenue = Math.max(0, totalRevenue - paidRevenue);
+  const roi = adSpend > 0 ? paidRevenue / adSpend : null;
   return { adSpend, totalRevenue, organicRevenue, paidRevenue, roi };
 }

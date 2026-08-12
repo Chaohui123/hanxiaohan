@@ -124,15 +124,19 @@ node scripts/download-1688-assets.cjs <1688链接或offerId> [输出根目录]
 
 **事故**：8/10 11:28（北京）61N 出首单（0148010868-0049，1 件），无任何提醒；8/11 20:49 买家取消。排查证实通知链路**从未真正工作过**，四重断裂：①Ozon 推送**不带 X-Ozon-Signature 头**（实测），接收器 `webhook.route.ts` 对无签名请求静默 200 吞掉，零落库（ozon_webhook_log 7 天 0 行）；②Ozon 真实报文字段是 `message_type`/`order_number`/`uuid`，与解析器期望的 `event_type`/`posting_number`/`event_id` 完全不匹配；③`notifier.ts` 只支持企业微信/Telegram，**无飞书渠道**，且服务器未配任何 `NOTIFY_*` 变量；④5 分钟兜底同步抓到单也不发通知。另：静默时段 UTC 22-07 = 北京 06:00-15:00，白天 info 级通知全被吞。
 
-**修复（已提交，待部署）**：
+**修复（commit `937b5ff` + `ea0b250`，已部署并端到端验证通过）**：
 - `packages/ozon-order/src/webhook.ts`：兼容真实报文（message_type→事件映射表、uuid 幂等、order_number、new_state）；TYPE_STOCKS_CHANGED/类目树等非订单事件标记 `ignored` 不落库；TYPE_NEW_MESSAGE→买家消息通知。
 - `webhook.route.ts`：无签名不再静默吞；伪造防护改为 **seller_id 白名单校验**（对 OZON_CLIENT_IDS）+ 可选 `OZON_WEBHOOK_IPS` IP 白名单；有签名仍验签。
 - `webhook-drain.ts`：新单按 `order_number` 调 `/v3/posting/fbs/list` 拉真实包裹（含 `-1` 后缀）聚合商品/金额；拉取失败降级 minimal payload 仍发通知；买家消息触发通知。
-- `notifier.ts`：新增**飞书自定义机器人渠道**（`NOTIFY_FEISHU_WEBHOOK` + 可选 `NOTIFY_FEISHU_SECRET` 签名校验；消息带 ONZO 前缀兼容关键词安全设置）；`force` 标志真正生效（此前被忽略）。
+- `notifier.ts`：新增**飞书自定义机器人渠道**（`NOTIFY_FEISHU_WEBHOOK` + `NOTIFY_FEISHU_SECRET` 签名校验，已配置并实测收发成功）；`force` 标志真正生效（此前被忽略）。
 - `notification-events.ts`：ORDER_NEW/ORDER_CANCELLED/BUYER_MESSAGE 均 `force: true`（突破静默时段）。
-- `ozon-order-sync.ts`：兜底同步发现新单/取消单也发通知；与 webhook 路径**双向防重**（order_number ↔ 带后缀 posting_number 前缀匹配，先到者通知）；同步错误内容打日志（此前只记数量，154 次 errors:1 无法回溯）。
+- `ozon-order-sync.ts`：兜底同步发现新单/取消单也发通知；与 webhook 路径**双向防重**（order_number ↔ 带后缀 posting_number 前缀匹配，先到者通知）；同步错误内容打日志。
 - 测试：ozon-order 23 + api-services 相关 15，共 38 全过（含 6 个真实报文格式用例）。
-- **待办**：服务器 `.env.production` 配 `NOTIFY_FEISHU_WEBHOOK`（群自定义机器人）；建议 Ozon 后台推送 URL 保持 `https://huashangshangmao.top/ozon/webhook` 不变即可。
+
+**部署中追加发现的两个隐藏故障（同批修复）**：
+- **定时任务调度器 leader 锁断裂**：`redis-lock.ts` 的 extendLock 依赖 `cache.getClient()` 执行 Lua 续约，但 `getClient` 只是 cache 包模块私有函数、从未挂到单例上 → 续约永远失败 → leader 身份每 30s 丢失，60s 任务 tick 与 30s leader 窗口谐振后**drain/订单同步等全部定时任务在容器重建后永久落空**。修复：`RedisCache` 类暴露 `getClient()` 方法（commit `ea0b250`）。
+- **`order_id` INTEGER 溢出（8/10-8/11 sync 154 次 errors:1 的真凶）**：Ozon order_id 为 11 位数（38394336004）超 PG int4 上限，sync 拉到订单后 INSERT 直接失败——这就是"凭据正常、API 正常但永远 0 单"的原因。修复：`local_orders.order_id` / `ozon_orders.order_id` / `purchase_1688.ozon_order_id` 三列改 BIGINT（schema.ts + 生产库已 ALTER）。8/10 首单已手动补录进 ozon_orders（cancelled 态）。
+- 教训：**job 报错必须带内容**，只记数量的日志等于没有日志。
 
 ### 广告与促销
 - **CPC 两次实证止损**（学费 842₹）：磁吸 33706085（CPC 57₹）+ 67F 33938265（CPC 43₹，728₹/0 单）。**铁律：自动策略 MAX_CLICKS 对窄品类长尾件出价失控，冷门件零评价期不投 CPC；正确形态=平均 CPC 策略 ≤15₹（保本线内）**。重开条件：67F 审核恢复 + 任一 SKU 出单有评价。

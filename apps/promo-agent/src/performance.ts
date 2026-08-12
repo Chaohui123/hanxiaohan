@@ -11,12 +11,13 @@ export interface DailyReport {
   orders: number;
   revenue: number;
   avgOrderValue: number;
+  cancelledOrders: number;
   topProducts: Array<{ offerId: string; name: string; orders: number; revenue: number }>;
   competitorChanges: number;
   pricingAdjustments: number;
   copyOptimizations: number;
   roi: number | null;
-  adSpend: number;
+  adSpend: number | null; // null = 广告 API 未接入/无数据
 }
 
 export interface WeeklyReport {
@@ -134,6 +135,7 @@ async function sendDailyReport(bot: FeishuBot, chatId: string, config: ApiConfig
       : 0;
 
     const avgOrderValue = orders > 0 ? revenue / orders : 0;
+    const cancelledOrders = dailyData?.cancelledOrders || 0;
 
     // 竞品变动数（从定价历史中推断）
     const pricingAdjustments = pricingData?.adjustments?.length || 0;
@@ -141,9 +143,9 @@ async function sendDailyReport(bot: FeishuBot, chatId: string, config: ApiConfig
     // 文案优化数
     const copyOptimizations = copyData?.copies?.length || 0;
 
-    // ROI
-    const adSpend = costData?.adSpend || 0;
-    const roi = costData?.roi ?? (adSpend > 0 ? revenue / adSpend : null);
+    // 广告花费与 ROI（广告 API 未接入时为 null，不显示假 0）
+    const adSpend = costData?.adSpend ?? null;
+    const roi = costData?.roi ?? null;
 
     const lines = [
       `📊 **日报 ${yesterday}**`,
@@ -151,9 +153,10 @@ async function sendDailyReport(bot: FeishuBot, chatId: string, config: ApiConfig
       `📦 订单: **${orders}** 笔 ${formatDiff(orderDiff)}`,
       `💰 销售额: **${fmtRub(revenue)}** ${formatDiff(revenueDiff)}`,
       `🧾 客单价: ${fmtRub(avgOrderValue)}`,
+      cancelledOrders > 0 ? `🚫 取消: ${cancelledOrders} 笔` : "",
       "",
       `📈 推广效果`,
-      `🔥 广告花费: ${fmtRub(adSpend)}`,
+      adSpend !== null ? `🔥 广告花费: ${fmtRub(adSpend)}` : `🔥 广告花费: 未接入/无数据`,
       roi !== null ? `💎 ROI: **${roi.toFixed(2)}x**` : `💎 ROI: 暂无数据`,
       `🔧 调价: ${pricingAdjustments} 次`,
       `✍️ 文案优化: ${copyOptimizations} 次`,
@@ -199,10 +202,10 @@ async function sendWeeklyReport(bot: FeishuBot, chatId: string, config: ApiConfi
     const orders = weeklyData?.orders || 0;
     const revenue = weeklyData?.revenue || 0;
 
-    // ROI
-    const adSpend = costData?.adSpend || 0;
-    const roi = costData?.roi ?? (adSpend > 0 ? revenue / adSpend : null);
-    const organicRatio = costData?.organicRevenue && costData?.totalRevenue
+    // 广告花费与 ROI（广告 API 未接入时为 null）
+    const adSpend = costData?.adSpend ?? null;
+    const roi = costData?.roi ?? null;
+    const organicRatio = costData?.organicRevenue != null && costData?.totalRevenue
       ? (costData.organicRevenue / costData.totalRevenue * 100)
       : null;
 
@@ -222,7 +225,7 @@ async function sendWeeklyReport(bot: FeishuBot, chatId: string, config: ApiConfi
       `🧾 日均: ${(orders / 7).toFixed(0)} 笔 / ${fmtRub(revenue / 7)}`,
       "",
       `📊 **推广效果**`,
-      `🔥 广告花费: ${fmtRub(adSpend)}`,
+      adSpend !== null ? `🔥 广告花费: ${fmtRub(adSpend)}` : `🔥 广告花费: 未接入/无数据`,
       roi !== null ? `💎 ROI: **${roi.toFixed(2)}x**` : `💎 ROI: 暂无数据`,
       organicRatio !== null ? `🌿 自然流占比: **${organicRatio.toFixed(0)}%**` : "",
       `🔧 调价次数: ${pricingAdjustments}`,

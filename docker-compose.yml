@@ -101,6 +101,8 @@ services:
       - NODE_ENV=production
       - PORT=3000
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
+      - OZON_PERF_CLIENT_ID=${OZON_PERF_CLIENT_ID:-}
+      - OZON_PERF_CLIENT_SECRET=${OZON_PERF_CLIENT_SECRET:-}
     volumes:
       - app_uploads:/app/uploads
       - app_dead_letter:/app/dead-letter

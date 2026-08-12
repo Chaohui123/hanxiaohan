@@ -1,7 +1,126 @@
 import { Router } from "express";
 import { InventoryManager, type InventoryItem, type SupplierInfo } from "../services/inventory-manager.js";
 import { getDb } from "../db/connection.js";
+import { getActiveStoreConfigs } from "../db/models.js";
+import { decrypt, isEncrypted } from "../services/crypto.js";
 import { logger } from "@onzo/logger";
+
+// ============================================================
+// Ozon 实时商品 fallback
+// product_performance 为空时，从 Ozon Seller API 拉在售商品，
+// 合成 promo-agent 契约字段（price=RUB 售价，cost=CNY 采购成本）
+// ============================================================
+
+interface OzonInventoryItem {
+  offerId: string;
+  name: string;
+  price: number;
+  stock: number;
+  cost: number;
+  rating: number;
+  orders: number;
+  revenue: number;
+  quantity: number;
+}
+
+// 90s 轻量内存缓存，避免 decision-engine 每店循环重复拉取
+let ozonInventoryCache: { items: OzonInventoryItem[]; expiresAt: number } | null = null;
+const OZON_INVENTORY_CACHE_TTL_MS = 90_000;
+
+/** 从 Ozon API 实时拉取在售商品；任何失败记 warn 并返回空数组（不 500） */
+async function fetchOzonInventoryItems(): Promise<OzonInventoryItem[]> {
+  if (ozonInventoryCache && Date.now() < ozonInventoryCache.expiresAt) {
+    return ozonInventoryCache.items;
+  }
+
+  try {
+    // 构造 Ozon client（与 webhook-drain.buildOrderClient 同模式，单店取第一个）
+    const stores = await getActiveStoreConfigs();
+    const store = stores[0];
+    if (!store) return [];
+    const apiKey = isEncrypted(store.apiKey) ? decrypt(store.apiKey) : store.apiKey;
+    const { AuthManager, OzonClient } = await import("@onzo/ozon-api-wrapper");
+    const auth = new AuthManager({ clients: [{ clientId: store.clientId, apiKey, storeId: store.storeId }] });
+    const client = new OzonClient({ auth });
+
+    // 1. 全量商品 product_id
+    const listResp = await client.request<{ result?: { items?: Array<{ product_id: number }> } }>(
+      "POST", "/v3/product/list", { filter: { visibility: "ALL" }, limit: 100 },
+    );
+    const productIds = (listResp.result?.items || []).map((i) => i.product_id).filter(Boolean);
+    if (productIds.length === 0) {
+      ozonInventoryCache = { items: [], expiresAt: Date.now() + OZON_INVENTORY_CACHE_TTL_MS };
+      return [];
+    }
+
+    // 2. 商品详情（offer_id / name）
+    const infoResp = await client.request<{ items?: Array<{ offer_id?: string; name?: string }> }>(
+      "POST", "/v3/product/info/list", { product_id: productIds },
+    );
+    const infos = infoResp.items || [];
+
+    // 3. 售价（RUB 字符串 → number）
+    const priceResp = await client.request<{ items?: Array<{ offer_id?: string; price?: { price?: string } }> }>(
+      "POST", "/v4/product/info/prices", { filter: { product_id: productIds.map(String) }, limit: 100 },
+    );
+    const priceByOffer = new Map<string, number>();
+    for (const p of priceResp.items || []) {
+      const offerId = String(p.offer_id || "");
+      if (offerId) priceByOffer.set(offerId, parseFloat(String(p.price?.price || "0")) || 0);
+    }
+
+    // 4. 库存（stocks[].present 汇总）
+    const stockResp = await client.request<{ items?: Array<{ offer_id?: string; stocks?: Array<{ present?: number }> }> }>(
+      "POST", "/v2/products/stocks", { filter: { product_id: productIds.map(String) }, limit: 100 },
+    );
+    const stockByOffer = new Map<string, number>();
+    for (const s of stockResp.items || []) {
+      const offerId = String(s.offer_id || "");
+      if (offerId) stockByOffer.set(offerId, (s.stocks || []).reduce((sum, st) => sum + (Number(st.present) || 0), 0));
+    }
+
+    // 5. 1688 采购成本（CNY），按 ozon_offer_id 匹配；查不到记 0
+    const costByOffer = new Map<string, number>();
+    const db = await getDb().catch(() => null);
+    if (db) {
+      const costRows = await db.all<{ ozon_offer_id: string; purchase_price_cny: number }>(
+        `SELECT ozon_offer_id, MAX(purchase_price_cny) AS purchase_price_cny
+         FROM sku_1688_mapping GROUP BY ozon_offer_id`,
+      ).catch(() => [] as Array<{ ozon_offer_id: string; purchase_price_cny: number }>);
+      for (const row of costRows) {
+        costByOffer.set(String(row.ozon_offer_id), Number(row.purchase_price_cny) || 0);
+      }
+    }
+
+    // 6. 合成 promo-agent 契约字段；只保留有价格且库存>0 的在售商品
+    const items: OzonInventoryItem[] = [];
+    for (const info of infos) {
+      const offerId = String(info.offer_id || "").trim();
+      if (!offerId) continue;
+      const price = priceByOffer.get(offerId) || 0;
+      const stock = stockByOffer.get(offerId) || 0;
+      if (price <= 0 || stock <= 0) continue;
+      items.push({
+        offerId,
+        name: String(info.name || offerId),
+        price,
+        stock,
+        cost: costByOffer.get(offerId) || 0,
+        rating: 0,
+        orders: 0,
+        revenue: 0,
+        quantity: stock,
+      });
+    }
+
+    ozonInventoryCache = { items, expiresAt: Date.now() + OZON_INVENTORY_CACHE_TTL_MS };
+    logger.info({ count: items.length }, "Ozon inventory fallback loaded");
+    return items;
+  } catch (err) {
+    logger.warn({ err: (err as Error).message }, "Ozon inventory fallback failed — returning empty items");
+    return [];
+  }
+}
 
 export function createInventoryRouter(): Router {
   const router = Router();
@@ -28,6 +147,13 @@ export function createInventoryRouter(): Router {
          LIMIT ?`,
         [limit],
       );
+
+      // 本地表为空 → 回退到 Ozon 实时在售商品
+      if (items.length === 0) {
+        const fallbackItems = await fetchOzonInventoryItems();
+        res.json({ items: fallbackItems.slice(0, limit) });
+        return;
+      }
       res.json({ items });
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
@@ -53,7 +179,13 @@ export function createInventoryRouter(): Router {
       );
 
       if (rows.length === 0) {
-        res.status(404).json({ error: "Product not found", offerId });
+        // 本地无记录 → 回退到 Ozon 实时商品中查找
+        const fallbackItem = (await fetchOzonInventoryItems()).find((i) => i.offerId === offerId);
+        if (!fallbackItem) {
+          res.status(404).json({ error: "Product not found", offerId });
+          return;
+        }
+        res.json({ ...fallbackItem, reviewCount: 0 });
         return;
       }
       res.json(rows[0]);

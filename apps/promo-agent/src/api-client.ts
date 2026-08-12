@@ -99,6 +99,7 @@ export const statsApi = {
       orders: number;
       revenue: number;
       avgOrderValue: number;
+      cancelledOrders: number;
       topProducts: Array<{ offerId: string; name: string; orders: number; revenue: number }>;
     }>(c, "GET", `/api/stats/daily?date=${date}`),
   weekly: (c: ApiConfig, from: string, to: string) =>
@@ -124,10 +125,10 @@ export const statsApi = {
     }>(c, "GET", `/api/promo/copy-history?days=${days || 7}`),
   promoCost: (c: ApiConfig, from: string, to: string) =>
     api<{
-      adSpend: number;
+      adSpend: number | null; // null = 广告 API 未接入/无数据
       totalRevenue: number;
-      organicRevenue: number;
-      paidRevenue: number;
-      roi: number;
+      organicRevenue: number | null;
+      paidRevenue: number | null;
+      roi: number | null;
     }>(c, "GET", `/api/promo/cost?from=${from}&to=${to}`),
 };

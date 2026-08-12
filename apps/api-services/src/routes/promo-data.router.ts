@@ -10,7 +10,7 @@ import {
   queryEvents, insertEvent,
   queryPricingHistory, insertPricingHistory,
   queryCopyHistory,
-  querySalesRanking, queryDailyStats, queryPromoCost,
+  querySalesRanking, queryDailyStats, queryPromoCost, queryOrdersByDay,
   insertAuditLog,
 } from "../db/promo-db.js";
 
@@ -114,9 +114,11 @@ export function createPromoDataRouter(): Router {
     try {
       const fromDate = String(req.query.from || daysAgo(7));
       const toDate = String(req.query.to || daysAgo(1));
-      const cost = await queryPromoCost(fromDate, toDate);
-      const top5 = await querySalesRanking(7);
-      res.json({ orders: 0, revenue: cost.totalRevenue, byDay: [], top5: top5.slice(0, 5), bottom5: [] });
+      const [byDay, top5] = await Promise.all([queryOrdersByDay(fromDate, toDate), querySalesRanking(7)]);
+      const orders = byDay.reduce((sum, d) => sum + d.orders, 0);
+      const revenue = byDay.reduce((sum, d) => sum + d.revenue, 0);
+      // bottom5 无真实数据源，保持空数组（不编造）
+      res.json({ orders, revenue, byDay, top5: top5.slice(0, 5), bottom5: [] });
     } catch (err) { res.status(500).json({ error: (err as Error).message }); }
   });
 

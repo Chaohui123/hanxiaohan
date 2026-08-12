@@ -166,7 +166,7 @@ export function stopDecisionEngine(): void {
 // 核心流程
 // ============================================================
 
-async function runDecisionCycle(
+export async function runDecisionCycle(
   bot: FeishuBot,
   chatId: string,
   config: ApiConfig,
@@ -181,6 +181,12 @@ async function runDecisionCycle(
 
   // 2. 评分
   const scored = await scoreAllProducts(config);
+
+  // 无可评分商品 — 抑制空卡片，本轮直接结束（无副作用，不计 metrics）
+  if (scored.length === 0) {
+    logger.info("No products to score — card suppressed");
+    return;
+  }
 
   // 3. 规划
   const actions = planActions(scored);
