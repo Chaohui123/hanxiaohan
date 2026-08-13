@@ -80,7 +80,7 @@ function defaultOzonRequest(_method: unknown, path: unknown, _body: unknown) {
       ],
     });
   }
-  if (path === "/v4/product/info/prices") {
+  if (path === "/v5/product/info/prices") {
     return Promise.resolve({
       items: [
         { offer_id: "OFFER-1", price: { price: "1500.00" } },
@@ -89,7 +89,7 @@ function defaultOzonRequest(_method: unknown, path: unknown, _body: unknown) {
       ],
     });
   }
-  if (path === "/v2/products/stocks") {
+  if (path === "/v4/product/info/stocks") {
     return Promise.resolve({
       items: [
         { offer_id: "OFFER-1", stocks: [{ present: 8 }, { present: 2 }] },

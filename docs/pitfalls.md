@@ -71,6 +71,9 @@
 | D2 | system prune -af 误删运行中容器+镜像 | 崩溃窗口期 prune | prune 前确认关键容器在运行；禁 --volumes |
 | D3 | Caddy 单文件 bind mount 失效 | git reset 后 inode 变更 | 部署后必 `docker restart onzo-caddy`（deploy-watch 内置） |
 | D4 | 插件同步失败 | ①SQL `INSERT OR REPLACE` PG 不兼容 ②OPTIONS 预检被 auth 401 | SQL 用普通 INSERT（时间戳 id）；authMiddleware OPTIONS 短路 204 |
+| D5 | Ozon webhook 全部静默吞掉（零落库零告警） | 接收器假设推送带 X-Ozon-Signature 并据此 401/静默，**实测 Ozon 推送不带签名头**；且报文字段是 message_type/order_number/uuid 而非假设的 event_type/posting_number/event_id | **外部推送格式以实测为准**，别信臆测；无签名防护用 seller_id 白名单+IP 白名单；接收器对"无法处理但已收到"的请求必须打 warn，禁止静默 200 |
+| D6 | 定时任务全瘫但服务"健康" | scheduler leader 锁续约依赖 `cache.getClient()`，而该方法从未挂到 cache 单例上——续约永远失败，leader 每 30s 丢失与 60s job tick 谐振后恒落空 | 跨模块动态调用（`as any` 取方法）要在集成测试验证；**job 报错必须带内容**（只记数量的 errors:1 排查了两天） |
+| D7 | Ozon 订单同步拉到单却写库失败（154 次 errors） | order_id 用 INTEGER，Ozon 订单号 11 位（38394336004）超 PG int4 上限 | **外部平台 ID 一律 BIGINT 或 TEXT**；新链路上线后用一条真实数据端到端验证写库 |
 
 ## 流程与协作
 | # | 坑 | 根因 | 预防规则 |

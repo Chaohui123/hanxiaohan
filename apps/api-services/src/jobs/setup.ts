@@ -156,13 +156,18 @@ export function registerCoreJobs(deps: CoreJobDeps): void {
       ).catch(() => [] as Array<{ offer_id: string; sku: number; stock_available: number }>);
       if (invRows && invRows.length > 0) {
         try {
+          // /v3/product/info/stocks 已 404 下线；查询库存用 v4（2026-08 实测）
+          // v4 响应为顶层 items[]，库存明细在 items[].stocks[]（present/sku/type）
           const stocksResp = await ozonClient.request(
-            "POST", "/v3/product/info/stocks",
-            { filter: { offer_id: invRows.map((r: { offer_id: string }) => r.offer_id) } }
-          ) as { result?: { items?: Array<{ offer_id: string; sku: number; stock: number }> } };
+            "POST", "/v4/product/info/stocks",
+            { filter: { offer_id: invRows.map((r: { offer_id: string }) => r.offer_id), visibility: "ALL" } }
+          ) as { items?: Array<{ offer_id: string; stocks?: Array<{ sku: number; present: number }> }> };
           const ozonStocks = new Map<string, number>();
-          for (const item of stocksResp.result?.items || []) {
-            ozonStocks.set(`${item.offer_id}:${item.sku}`, item.stock);
+          for (const item of stocksResp.items || []) {
+            for (const st of item.stocks || []) {
+              const key = `${item.offer_id}:${st.sku}`;
+              ozonStocks.set(key, (ozonStocks.get(key) ?? 0) + (Number(st.present) || 0));
+            }
           }
           const diffs: string[] = [];
           for (const r of invRows) {

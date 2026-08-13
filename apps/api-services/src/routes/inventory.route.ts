@@ -61,7 +61,7 @@ async function fetchOzonInventoryItems(): Promise<OzonInventoryItem[]> {
 
     // 3. 售价（RUB 字符串 → number）
     const priceResp = await client.request<{ items?: Array<{ offer_id?: string; price?: { price?: string } }> }>(
-      "POST", "/v4/product/info/prices", { filter: { product_id: productIds.map(String) }, limit: 100 },
+      "POST", "/v5/product/info/prices", { filter: { product_id: productIds.map(String) }, limit: 100 },
     );
     const priceByOffer = new Map<string, number>();
     for (const p of priceResp.items || []) {
@@ -71,7 +71,7 @@ async function fetchOzonInventoryItems(): Promise<OzonInventoryItem[]> {
 
     // 4. 库存（stocks[].present 汇总）
     const stockResp = await client.request<{ items?: Array<{ offer_id?: string; stocks?: Array<{ present?: number }> }> }>(
-      "POST", "/v2/products/stocks", { filter: { product_id: productIds.map(String) }, limit: 100 },
+      "POST", "/v4/product/info/stocks", { filter: { product_id: productIds.map(String), visibility: "ALL" }, limit: 100 },
     );
     const stockByOffer = new Map<string, number>();
     for (const s of stockResp.items || []) {
