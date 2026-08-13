@@ -138,6 +138,17 @@ node scripts/download-1688-assets.cjs <1688链接或offerId> [输出根目录]
 - **`order_id` INTEGER 溢出（8/10-8/11 sync 154 次 errors:1 的真凶）**：Ozon order_id 为 11 位数（38394336004）超 PG int4 上限，sync 拉到订单后 INSERT 直接失败——这就是"凭据正常、API 正常但永远 0 单"的原因。修复：`local_orders.order_id` / `ozon_orders.order_id` / `purchase_1688.ozon_order_id` 三列改 BIGINT（schema.ts + 生产库已 ALTER）。8/10 首单已手动补录进 ozon_orders（cancelled 态）。
 - 教训：**job 报错必须带内容**，只记数量的日志等于没有日志。
 
+### 推广汇报链路（2026-08-13 修复，commit `8acbe4c`+`2dce21f`）
+
+**问题**：飞书群日报/周报/决策卡片全是硬编码假数据（实证 7/31-8/12 全部消息）：日报永远 0 单（daily_sales 表无 job 写入）、周报 `orders:0` 写死、"广告花费"实为 LLM token 成本、自然流 70/30 拍脑袋、决策卡片空壳（商品源 `/api/inventory` 查空表 product_performance 且 cost 硬编码 0）。
+
+**修复**：
+- 日报/周报订单+销售额：改查 `ozon_orders`（`date(created_at_ozon)`，含取消单统计）——8/10 首单已补录（cancelled 态）。
+- 广告花费/ROI：新增 `services/ozon-ads.ts`（Performance API，`OZON_PERF_CLIENT_ID/SECRET` 已入服务器 env，实测 8/1-8/12 花费 781.61₽）；付费/自然流按广告订单真实拆分；API 不可用返回 null（日报显示"未接入"，不造假）。
+- 决策引擎商品源：`/api/inventory` 空表时 fallback Ozon API 实时拉在售（list→info→**v5 prices**→**v4 stocks**，90s 缓存）+ 成本取 `sku_1688_mapping.purchase_price_cny`（MAX 保守）；空评分不再发空卡片；自动执行保留（20% 幅度+10 次/日限额）。
+- **Ozon 端点下线实测（重要）**：`/v4/product/info/prices` 已 404 → **必须用 v5**；`/v2/products/stocks` 是"设置库存"不是查询；**查询库存用 `/v4/product/info/stocks`**（v3 同名已 404；jobs 一致性检查同步修复）。
+- 测试 +18，全量 403 绿。
+
 ### 广告与促销
 - **CPC 两次实证止损**（学费 842₹）：磁吸 33706085（CPC 57₹）+ 67F 33938265（CPC 43₹，728₹/0 单）。**铁律：自动策略 MAX_CLICKS 对窄品类长尾件出价失控，冷门件零评价期不投 CPC；正确形态=平均 CPC 策略 ≤15₹（保本线内）**。重开条件：67F 审核恢复 + 任一 SKU 出单有评价。
 - **破零促销在跑（均"我正在参与"）**：磁吸 4127830（至 8/14）、67F破零（至 8/16）、61N 4154063 + 6E7 4154141（8/6-8/19）。
