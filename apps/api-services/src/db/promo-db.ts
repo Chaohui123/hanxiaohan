@@ -31,11 +31,11 @@ export async function deleteWatchItem(offerId: string): Promise<void> {
 
 // ---- Competitor Prices ----
 
-export async function queryCompetitorPrices(offerId: string, days: number): Promise<Array<{ price: number; rating: number; salesCount: number; capturedAt: string | null }>> {
+export async function queryCompetitorPrices(offerId: string, days: number): Promise<Array<{ price: number; rating: number; salesCount: number; capturedAt: string | null; competitorUrl: string }>> {
   const d = await db();
   const cutoff = new Date(Date.now() - days * 86400000).toISOString();
   return d.all(
-    "SELECT price, rating, sales_count AS salesCount, captured_at AS capturedAt FROM promo_competitor_prices WHERE offer_id = ? AND captured_at >= ? ORDER BY captured_at DESC",
+    "SELECT price, rating, sales_count AS salesCount, captured_at AS capturedAt, competitor_url AS competitorUrl FROM promo_competitor_prices WHERE offer_id = ? AND captured_at >= ? ORDER BY captured_at DESC",
     [offerId, cutoff],
   );
 }
@@ -50,6 +50,54 @@ export async function insertCompetitorPrices(
     await d.run(
       "INSERT INTO promo_competitor_prices (offer_id, price, rating, sales_count, captured_at) VALUES (?, ?, ?, ?, ?)",
       [offerId, p.price, p.rating || 0, p.salesCount || 0, p.capturedAt || new Date().toISOString()],
+    );
+    count++;
+  }
+  return count;
+}
+
+// ---- Competitor Links (精准监控：选品留档的指定竞品链接) ----
+
+export interface CompetitorLinkRow {
+  offerId: string;
+  competitorUrl: string;
+  competitorName: string;
+  lastCapturedAt: string | null;
+}
+
+/** 列出竞品链接（可按我方 offerId 过滤），附带该链接最近一次快照时间 */
+export async function queryCompetitorLinks(offerId?: string): Promise<CompetitorLinkRow[]> {
+  const d = await db();
+  const where = offerId ? "WHERE l.offer_id = ?" : "";
+  const params = offerId ? [offerId] : [];
+  return d.all(
+    `SELECT l.offer_id AS "offerId", l.competitor_url AS "competitorUrl", l.competitor_name AS "competitorName",
+            (SELECT MAX(p.captured_at) FROM promo_competitor_prices p
+              WHERE p.offer_id = l.offer_id AND p.competitor_url = l.competitor_url) AS "lastCapturedAt"
+     FROM promo_competitor_links l ${where} ORDER BY l.offer_id, l.id`,
+    params,
+  );
+}
+
+export async function insertCompetitorLink(offerId: string, competitorUrl: string, competitorName = ""): Promise<void> {
+  const d = await db();
+  await d.run(
+    "INSERT INTO promo_competitor_links (offer_id, competitor_url, competitor_name) VALUES (?, ?, ?) ON CONFLICT(offer_id, competitor_url) DO NOTHING",
+    [offerId, competitorUrl, competitorName],
+  );
+}
+
+/** 批量写入精准竞品快照（每条绑定具体 competitor_url） */
+export async function insertCompetitorSnapshots(
+  offerId: string,
+  snapshots: Array<{ competitorUrl: string; price: number; rating?: number; salesCount?: number; capturedAt?: string }>,
+): Promise<number> {
+  const d = await db();
+  let count = 0;
+  for (const s of snapshots) {
+    await d.run(
+      "INSERT INTO promo_competitor_prices (offer_id, competitor_url, price, rating, sales_count, captured_at) VALUES (?, ?, ?, ?, ?, ?)",
+      [offerId, s.competitorUrl, s.price, s.rating || 0, s.salesCount || 0, s.capturedAt || new Date().toISOString()],
     );
     count++;
   }

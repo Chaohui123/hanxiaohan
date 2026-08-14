@@ -335,7 +335,11 @@ export async function scoreAllProducts(config: ApiConfig): Promise<ProductScore[
     let competitorAvg = currentPrice; // fallback = 自己的价格
     try {
       const priceData = await competitorApi.getPrices(config, offerId, 3);
-      const prices = priceData.prices || [];
+      const all = priceData.prices || [];
+      // 精准快照（competitorUrl 非空，来自留档链接的本机抓取）优先；
+      // 无精准数据时回退到全部快照（按名搜索的聚合数据）
+      const precise = all.filter((p) => p.competitorUrl);
+      const prices = precise.length > 0 ? precise : all;
       if (prices.length > 0) {
         competitorAvg = prices.reduce((s, p) => s + p.price, 0) / prices.length;
       }

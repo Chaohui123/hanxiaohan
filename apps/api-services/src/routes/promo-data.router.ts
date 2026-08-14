@@ -7,6 +7,7 @@ import { ragRateLimit } from "../middleware/rag-rate-limit.js";
 import { getCached, getCachedOrStale, invalidateCache } from "../cache/promo-cache.js";
 import {
   queryCompetitorPrices, insertCompetitorPrices,
+  queryCompetitorLinks, insertCompetitorLink, insertCompetitorSnapshots,
   queryEvents, insertEvent,
   queryPricingHistory, insertPricingHistory,
   queryCopyHistory,
@@ -17,6 +18,37 @@ import {
 export function createPromoDataRouter(): Router {
   const router = Router();
   router.use(ragRateLimit);
+
+  // ---- Competitor Links (精准监控链接清单) ----
+  // GET /api/promo/competitor-links[?offerId=] — 本机抓取脚本拉任务用
+  router.get("/promo/competitor-links", async (req, res) => {
+    try {
+      const offerId = req.query.offerId ? String(req.query.offerId) : undefined;
+      const links = await queryCompetitorLinks(offerId);
+      res.json({ items: links });
+    } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+  });
+
+  // POST /api/promo/competitor-links — 补录单个竞品链接
+  router.post("/promo/competitor-links", async (req, res) => {
+    try {
+      const { offerId, competitorUrl, competitorName } = req.body as { offerId?: string; competitorUrl?: string; competitorName?: string };
+      if (!offerId || !competitorUrl) { res.status(400).json({ error: "offerId and competitorUrl required" }); return; }
+      await insertCompetitorLink(offerId, competitorUrl, competitorName || "");
+      res.json({ success: true });
+    } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+  });
+
+  // POST /api/promo/competitor-snapshots — 本机 WebBridge 抓取回传（批量）
+  router.post("/promo/competitor-snapshots", async (req, res) => {
+    try {
+      const { offerId, snapshots } = req.body as { offerId?: string; snapshots?: Array<{ competitorUrl: string; price: number; rating?: number; salesCount?: number; capturedAt?: string }> };
+      if (!offerId || !Array.isArray(snapshots) || snapshots.length === 0) { res.status(400).json({ error: "offerId and non-empty snapshots array required" }); return; }
+      const inserted = await insertCompetitorSnapshots(offerId, snapshots);
+      await insertAuditLog({ actionType: "competitor_snapshots_save", offerId, details: { count: inserted } });
+      res.json({ success: true, inserted });
+    } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+  });
 
   // ---- Competitor Prices ----
   router.post("/promo/competitor-prices/:offerId", async (req, res) => {

@@ -164,7 +164,33 @@ async function searchAndSave(
   apiConfig: ApiConfig,
   entry: WatchEntry,
 ): Promise<CompetitorSnapshot | null> {
-  // 搜索同名/相似商品
+  // 1. 精准模式：该商品有竞品链接留档（promo_competitor_links）→
+  //    使用本机 WebBridge 抓回的链接快照（competitor_url 非空）。
+  //    快照由本机 temp/competitor-scan.py 定期写入；有链接但暂无新鲜快照时
+  //    不按名搜索凑合（模糊搜索的聚合数据会污染精准均价）。
+  const linksData = await competitorApi.getCompetitorLinks(apiConfig, entry.offerId).catch(() => null);
+  const trackedLinks = linksData?.items || [];
+  if (trackedLinks.length > 0) {
+    const data = await competitorApi.getPrices(apiConfig, entry.offerId, 1).catch(() => null);
+    const FRESH_MS = 12 * 3600_000;
+    const fresh = (data?.prices || []).filter((p) =>
+      p.competitorUrl && p.capturedAt && Date.now() - new Date(p.capturedAt).getTime() < FRESH_MS,
+    );
+    if (fresh.length === 0) {
+      logger.info({ offerId: entry.offerId, links: trackedLinks.length },
+        "Tracked competitor links but no fresh snapshot — waiting for local scan");
+      return null;
+    }
+    return {
+      offerId: entry.offerId,
+      name: entry.name,
+      price: fresh.reduce((s, p) => s + p.price, 0) / fresh.length,
+      rating: fresh.reduce((s, p) => s + p.rating, 0) / fresh.length,
+      salesCount: fresh.reduce((s, p) => s + p.salesCount, 0),
+    };
+  }
+
+  // 2. 回退：无链接留档的商品按名字模糊搜索（历史行为）
   const searchResult = await competitorApi.searchCompetitors(apiConfig, entry.name);
   const items = searchResult.items || [];
 

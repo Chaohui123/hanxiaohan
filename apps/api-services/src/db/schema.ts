@@ -218,8 +218,10 @@ export async function initSchema(db: DbAdapter): Promise<void> {
     );
 
     -- Promo Agent: competitor price snapshots
+    -- competitor_url: 精准跟踪模式下标识快照来自哪个竞品链接（空=按名搜索的聚合快照）
     CREATE TABLE IF NOT EXISTS promo_competitor_prices (
       id SERIAL PRIMARY KEY, offer_id TEXT NOT NULL,
+      competitor_url TEXT DEFAULT '',
       price REAL NOT NULL, rating REAL DEFAULT 0,
       sales_count INTEGER DEFAULT 0, captured_at TIMESTAMP DEFAULT NOW()
     );

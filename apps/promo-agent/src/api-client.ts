@@ -65,8 +65,12 @@ export const competitorApi = {
   savePrices: (c: ApiConfig, offerId: string, prices: Array<{ price: number; rating: number; salesCount: number; capturedAt: string }>) =>
     api<Record<string, unknown>>(c, "POST", `/api/promo/competitor-prices/${offerId}`, { prices }),
   getPrices: (c: ApiConfig, offerId: string, days?: number) =>
-    api<{ prices: Array<{ price: number; rating: number; salesCount: number; capturedAt: string }> }>(
+    api<{ prices: Array<{ price: number; rating: number; salesCount: number; capturedAt: string; competitorUrl: string }> }>(
       c, "GET", `/api/promo/competitor-prices/${offerId}?days=${days || 7}`,
+    ),
+  getCompetitorLinks: (c: ApiConfig, offerId?: string) =>
+    api<{ items: Array<{ offerId: string; competitorUrl: string; competitorName: string; lastCapturedAt: string | null }> }>(
+      c, "GET", `/api/promo/competitor-links${offerId ? `?offerId=${encodeURIComponent(offerId)}` : ""}`,
     ),
   getScraperStatus: (c: ApiConfig) => api<{ status: string; blockedUntil?: string }>(c, "GET", "/api/scraper/status"),
   postEvent: (c: ApiConfig, event: { type: string; payload?: Record<string, unknown> }) =>
