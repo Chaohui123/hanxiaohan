@@ -51,6 +51,8 @@
 | W6 | 1688 搜索乱码空结果 | 中文关键词需 GBK percent-encoding（非 UTF-8） | 搜索 URL 用 GBK 编码（python quote(s.encode('gbk'))） |
 | W7 | daemon 重启电脑后未就绪 | 无开机自启 | Startup 文件夹 kimi-webbridge-start.bat（已配） |
 | W8 | 前台提问/日历等交互无响应，fill 报 "Uncaught" | Ozon 前台 isTrusted 校验合成事件；textarea 不兼容 fill | 一律 CDP `Input.dispatchMouseEvent` 真实点击；文本输入用 focus + `Input.insertText` |
+| W9 | navigate 返回 success 但页面没跳/截图与 URL 不符 | ①SPA 场景 navigate 静默失败 ②后台 tab 被 Chrome 节流不渲染 | **navigate 后立即 `Page.bringToFront`**（解节流）；仍不跳用 CDP `Page.navigate` 强跳；评价页面状态以 list_tabs + evaluate 为准，别信 navigate 返回 |
+| W10 | 点击"不利›"等链接后找不到新页面元素 | Ozon 后台这类跳转是 target=_blank 开新 tab，**不在 WebBridge session 的 tab 组里** | `find_tab {url, active:true}` 借用用户当前 tab 接管；价格管理详情页 URL 规律：`/app/prices/manager/{product_id}/prices`（可 SPA 直达，竞品链接入口在"Ozon上的竞争对手价格"卡片） |
 
 ## 平台规则与运营
 | # | 坑 | 根因 | 预防规则 |

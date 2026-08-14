@@ -12,6 +12,7 @@
 调度建议：每日 2 次（快照新鲜度 12h 内 competitor-watch 才会消费）。
 """
 import json, os, sys, time, random, urllib.request, urllib.error, io
+sys.stdout.reconfigure(encoding="utf-8")
 
 WB = "http://127.0.0.1:10086/command"
 SESSION = "onzo-competitor-scan"

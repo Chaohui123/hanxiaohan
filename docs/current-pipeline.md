@@ -162,6 +162,11 @@ node scripts/download-1688-assets.cjs <1688链接或offerId> [输出根目录]
 **永久黑名单**：通用卡扣/LED 灯泡/普通雨刮/机滤/汽车通用火花塞/平衡杆胶套/三滤/刹车/转向/气囊/喷油嘴/氧传感器/高压传感器/220V 带电/液体/粉末/易碎/大件。
 **标题红线**：**禁含他人品牌词**（Yamaha/Haval 等——67F 侵权停售实证；副厂件用"аналог+OE 件号"表述，OE 件号不是商标可用）；hashtags 同禁。
 
+### 竞品监控双链路（2026-08-14 上线）
+- **官方价格指数（Ozon 后台）**：7 个 SKU 共 31 条精准竞品链接已提交审核（COVER-S/M 各3、6E7 7、DOOR 8、GEN-CARB 6、61N 4；67F 下架恢复后补、磁吸/摩托支架无留档）。入口：价格页"未指定→添加"（无竞品时）或 `/app/prices/manager/{product_id}/prices` 价格管理页"Ozon上的竞争对手价格→添加链接"。添加后 72h 内指数重算——目标把 50%"不利"扭转为"有利"（搜索提升+"就是这个价"徽章）。**实证：GEN-CARB 的不利来自 Ozon 自动匹配的 wildberries 同款 1700₽（指数 1.36）**。
+- **自抓精准快照（我方系统）**：`promo_competitor_links`（34 条留档）→ 本机 `temp/competitor-scan.py`（WebBridge 开竞品页提取价格/评分/评论数）→ `POST /api/promo/competitor-snapshots` 入库（`promo_competitor_prices.competitor_url` 区分精准/聚合）。competitor-watch 精准快照优先（12h 新鲜度）、decision-engine 均价精准优先。首轮 34/34 全部成功（实证与调研期价格/评论数吻合，数据可信）。**调度建议每日 2 次**（快照 12h 新鲜度门槛）。
+- 历史结论：服务器到 Ozon 前台被风控拒连（api-seller 通），竞品页只能本机 WebBridge 抓（同 1688 素材两段式）；原"按名搜索竞品"实际在**自己店铺商品里模糊匹配**（ensureCategoryCache 拉自家 /v3/product/list）——数据从来都是假的，已被精准模式取代。
+
 ### 关键工具（全部固化可用）
 - 采集：`temp/auto-scan.cjs`（Ozon 搜索页批量筛查，13 词 2.5 分钟）、`temp/src1688-scan.py`（1688 搜索+商品页，GBK 编码）、`scripts/download-1688-assets.cjs`、`scripts/filter-images.py`、`temp/wb.py`（WebBridge 通用 POST 助手，请求文件方式防转义）
 - 制作：`temp/make-carousel-videos.py`（轮播视频生成，含 67F/6E7/door/boat-cover/carb-kit/gen-carb 六套 config）、`temp/listing-*/build_images.py`（各品信息图脚本）
