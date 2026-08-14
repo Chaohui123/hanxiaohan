@@ -39,6 +39,7 @@
 6. 补尺寸属性（7956 Длина/8416 Ширина cm 等）提内容评级
 7. 富内容：CDN 图址就绪后组装 → `scripts/validate-rich-json.cjs` 预检 → 写 11254
 8. **录货源成本+竞品链接（硬性，上架即录）**：①`sku_1688_mapping`：`ozon_offer_id` + `ozon_sku` + `source_1688_url` + `purchase_price_cny`（区间取中位）+ `weight_kg`——缺失则决策引擎利润率评分不成立、出单后采购匹配断链。②`promo_competitor_links`：阶段 1 留档的竞品链接逐条录入（offer_id + competitor_url + competitor_name）——缺失则竞品监控只能靠商品名模糊搜索（不准）。历史 8 SKU 已于 2026-08-13 补录。
+9. **Ozon 后台添加官方竞品链接（硬性，上架 T+0 完成）**：把阶段 1 留档的竞品链接提交到 Ozon 官方"价格指数"竞品库（官方计算价格指数、发"就是这个价"徽章+搜索提升；72h 生效）。操作：价格页该商品行"竞争对手的价格"列"未指定→添加"，或价格管理页 `/app/prices/manager/{product_id}/prices`"Ozon上的竞争对手价格→添加链接"；**批量用 `temp/add-competitor-links.py <offerId>`（价格页）/ `temp/add-links-here.py <url...>`（弹窗就地）**，提交后点"发送以进行审核"。注意：已下架商品无添加入口（恢复后补）；Ozon 自动匹配的跨平台竞品（如 wildberries）不代表我方精准竞品，必须手动补 Ozon 平台内同款。历史 7 SKU 已于 2026-08-14 提交 31 条。
 
 ## 阶段 6 · 质检验收（质检 Agent）
 - 建品状态/图片管线（M5b：瞬时 0≠缺失）/价格/库存/属性/内容合规/前台索引/内容评级
