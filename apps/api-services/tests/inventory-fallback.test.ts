@@ -28,6 +28,11 @@ vi.mock("../src/services/crypto.js", () => ({
   decrypt: (s: string) => s,
 }));
 
+// 汇率固定 10 CNY→RUB，避免测试触达真实汇率服务（外网）
+vi.mock("../src/services/exchange-rate.js", () => ({
+  getExchangeRate: async () => ({ rate: 10 }),
+}));
+
 vi.mock("@onzo/ozon-api-wrapper", () => ({
   AuthManager: class {
     constructor(_config: unknown) { /* no-op */ }
@@ -133,7 +138,7 @@ describe("GET /api/inventory — Ozon fallback", () => {
     expect(item1).toMatchObject({
       offerId: "OFFER-1",
       name: "Dog Boots",
-      price: 1500,
+      price: 15000, // 1500 CNY × 10（v5 prices 返回 CNY，契约输出 RUB）
       stock: 10, // 8 + 2 汇总
       cost: 50.5, // sku_1688_mapping 匹配
       rating: 0,
@@ -143,7 +148,7 @@ describe("GET /api/inventory — Ozon fallback", () => {
     });
 
     const item2 = res.body.items.find((i: Record<string, unknown>) => i.offerId === "OFFER-2");
-    expect(item2).toMatchObject({ offerId: "OFFER-2", price: 3200.5, stock: 5, cost: 0 }); // 无映射 → cost 0
+    expect(item2).toMatchObject({ offerId: "OFFER-2", price: 32005, stock: 5, cost: 0 }); // 3200.5 × 10；无映射 → cost 0
   });
 
   it("product_performance 有数据时走旧逻辑，不调用 Ozon API", async () => {
@@ -186,7 +191,7 @@ describe("GET /api/inventory/:offerId — Ozon fallback", () => {
     expect(res.body).toMatchObject({
       offerId: "OFFER-1",
       name: "Dog Boots",
-      price: 1500,
+      price: 15000,
       stock: 10,
       cost: 50.5,
       reviewCount: 0,

@@ -225,6 +225,17 @@ export async function initSchema(db: DbAdapter): Promise<void> {
     );
     CREATE INDEX IF NOT EXISTS idx_comp_prices_offer ON promo_competitor_prices(offer_id, captured_at);
 
+    -- Promo Agent: curated competitor links per our offer (选品调研产物，上架时录入)
+    -- 精准跟踪指定竞品，优于按商品名模糊搜索
+    CREATE TABLE IF NOT EXISTS promo_competitor_links (
+      id SERIAL PRIMARY KEY, offer_id TEXT NOT NULL,
+      competitor_url TEXT NOT NULL,
+      competitor_name TEXT DEFAULT '',
+      added_at TIMESTAMP DEFAULT NOW(),
+      UNIQUE(offer_id, competitor_url)
+    );
+    CREATE INDEX IF NOT EXISTS idx_comp_links_offer ON promo_competitor_links(offer_id);
+
     -- Promo Agent: events (scraper blocked, etc.)
     CREATE TABLE IF NOT EXISTS promo_events (
       id SERIAL PRIMARY KEY, type TEXT NOT NULL,

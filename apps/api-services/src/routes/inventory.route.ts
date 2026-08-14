@@ -63,10 +63,14 @@ async function fetchOzonInventoryItems(): Promise<OzonInventoryItem[]> {
     const priceResp = await client.request<{ items?: Array<{ offer_id?: string; price?: { price?: string } }> }>(
       "POST", "/v5/product/info/prices", { filter: { product_id: productIds.map(String) }, limit: 100 },
     );
+    const { getExchangeRate } = await import("../services/exchange-rate.js");
+    const cnyToRub = (await getExchangeRate().catch(() => null))?.rate ?? 11.5;
     const priceByOffer = new Map<string, number>();
     for (const p of priceResp.items || []) {
       const offerId = String(p.offer_id || "");
-      if (offerId) priceByOffer.set(offerId, parseFloat(String(p.price?.price || "0")) || 0);
+      // v5 prices 返回店铺合同币种 CNY；契约 price 为 RUB —— 换算（decision-engine 以 cost(CNY)×rate 对齐）
+      const cny = parseFloat(String(p.price?.price || "0")) || 0;
+      if (offerId) priceByOffer.set(offerId, Math.round(cny * cnyToRub * 100) / 100);
     }
 
     // 4. 库存（stocks[].present 汇总）
