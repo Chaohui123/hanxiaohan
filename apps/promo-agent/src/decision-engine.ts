@@ -121,6 +121,8 @@ let currentPlan: DecisionPlan | null = null;
 let dailyActionCount = 0;
 let dailyActionDate = "";
 let lastSalesByOffer = new Map<string, { recent: number; prev: number }>();
+/** 每商品每日调价记录（key: `${YYYY-MM-DD}:${offerId}`）——同一商品每日最多调价 1 次 */
+const dailyPriceAdjustments = new Set<string>();
 
 export function isAutoDecisionEnabled(): boolean {
   return autoDecisionEnabled;
@@ -364,6 +366,11 @@ export async function scoreAllProducts(config: ApiConfig): Promise<ProductScore[
     const marginPercent = ((currentPrice - cost * rate) / currentPrice) * 100;
     const marginScore = scoreMargin(marginPercent);
 
+    // 调价底价（2026-08-14 方案）：毛利率≥20% 与 净利率≥10% 双底线取大
+    // 毛利线：(P−C)/P ≥ 20% ⇒ P ≥ C/0.80；净利线：P×(1−佣金20%) − C − 物流300₽ ≥ P×10% ⇒ P ≥ (C+300)/0.70
+    const costRub = cost * rate;
+    const floorPrice = Math.round(Math.max(costRub / 0.80, (costRub + 300) / 0.70) * 100) / 100;
+
     // 价格优势评分
     const priceAdvantage = competitorAvg > 0
       ? ((competitorAvg - currentPrice) / competitorAvg) * 100
@@ -407,6 +414,8 @@ export async function scoreAllProducts(config: ApiConfig): Promise<ProductScore[
       salesGrowth7d: Math.round(salesGrowth7d * 10) / 10,
       rating: Math.round(rating * 10) / 10,
       totalScore,
+      costRub: Math.round(costRub * 100) / 100,
+      floorPrice,
       breakdown: {
         margin: Math.round(marginScore * 100),
         priceAdvantage: Math.round(priceAdvScore * 100),
@@ -469,19 +478,41 @@ export function planActions(scored: ProductScore[]): PlannedAction[] {
   for (const product of scored) {
     if (product.recommendation === "skip" || product.totalScore < SCORE_THRESHOLD) continue;
 
-    const suggestedPrice = product.recommendation !== "copy"
-      ? Math.round(Math.max(
-          product.competitorAvg * 0.95,
-          product.cost * 12 * 1.3,
-        ))
-      : undefined;
-
-    // 调价幅度检验
-    if (suggestedPrice && product.currentPrice > 0) {
-      const diffPct = Math.abs((suggestedPrice - product.currentPrice) / product.currentPrice);
-      if (diffPct > 0.20 && product.recommendation !== "copy") {
-        logger.warn({ offerId: product.offerId, diffPct }, "Price change exceeds 20%, skipping");
-        continue;
+    // ---- 建议价（2026-08-14 方案：双底线 + 双向调价）----
+    let suggestedPrice: number | undefined;
+    if (product.recommendation !== "copy") {
+      const floor = product.floorPrice;
+      const cur = product.currentPrice;
+      if (product.priceAdvantage < -5) {
+        // 不利降价：略低于精准竞品均价，不破底价
+        suggestedPrice = Math.round(Math.max(floor, Math.min(cur, product.competitorAvg * 0.97)));
+      } else if (product.priceAdvantage > 15) {
+        // 明显便宜：小幅涨价，不超竞品均价
+        suggestedPrice = Math.round(Math.min(product.competitorAvg, cur * 1.05));
+      } else if (product.marginPercent < 20) {
+        // 利润修复：提到毛利率 25% 水位（P = C/0.75），不破底价
+        suggestedPrice = Math.round(Math.max(product.floorPrice, product.costRub / 0.75));
+      }
+      if (suggestedPrice !== undefined) {
+        // 底价校验：建议价低于底价（含计算结果等于现价的无效动作）→ 跳过
+        if (suggestedPrice < floor) {
+          logger.warn({ offerId: product.offerId, suggestedPrice, floor }, "Suggested price below floor — skipping");
+          continue;
+        }
+        if (suggestedPrice === Math.round(cur)) continue; // 无变化
+        // 单次幅度 ≤10%（比平台风控线 20% 更稳）
+        const diffPct = Math.abs((suggestedPrice - cur) / cur);
+        if (diffPct > 0.10) {
+          logger.warn({ offerId: product.offerId, diffPct }, "Price change exceeds 10%, skipping");
+          continue;
+        }
+        // 每商品每日最多 1 次调价
+        const today = new Date().toISOString().slice(0, 10);
+        const adjustKey = `${today}:${product.offerId}`;
+        if (dailyPriceAdjustments.has(adjustKey)) {
+          logger.info({ offerId: product.offerId }, "Already adjusted today — skipping");
+          continue;
+        }
       }
     }
 
@@ -678,10 +709,10 @@ async function executePricingAction(
   }
 
   const diffPct = Math.abs((action.suggestedPrice - action.currentPrice) / action.currentPrice);
-  if (diffPct > 0.20) {
+  if (diffPct > 0.10) {
     return {
       offerId: action.offerId, name: action.name, type: "pricing", success: false,
-      message: `调价幅度超限: ${(diffPct * 100).toFixed(1)}%`, appliedAt,
+      message: `调价幅度超限(10%): ${(diffPct * 100).toFixed(1)}%`, appliedAt,
     };
   }
 
@@ -689,6 +720,9 @@ async function executePricingAction(
     const newPrice = action.suggestedPrice as number; // narrowed by guard above
     await withRetry(() => promoApi.updatePrice(config, action.offerId, newPrice));
     dailyActionCount++;
+    // 记录每商品每日调价（同日不再调该商品）
+    const today = new Date().toISOString().slice(0, 10);
+    dailyPriceAdjustments.add(`${today}:${action.offerId}`);
     logger.info({ offerId: action.offerId, price: newPrice }, "Auto price updated");
     return {
       offerId: action.offerId, name: action.name, type: "pricing", success: true,

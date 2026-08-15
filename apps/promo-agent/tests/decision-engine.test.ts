@@ -125,7 +125,7 @@ describe("getRecommendation", () => {
   it("低利润 → pricing操作", () => {
     const r = getRecommendation(55, 10, 5);
     expect(r.recommendation).toBe("pricing");
-    expect(r.reason).toContain("价格");
+    expect(r.reason).toContain("利润");
   });
 
   it("价格优势过大(>15%) → pricing操作", () => {
@@ -154,6 +154,7 @@ describe("planActions", () => {
     offerId: "test1",
     name: "Test Product",
     cost: 100,
+    costRub: 1234,          // 100 CNY × 12.34
     currentPrice: 1500,
     stock: 50,
     marginPercent: 20,
@@ -162,6 +163,7 @@ describe("planActions", () => {
     salesGrowth7d: 10,
     rating: 4.0,
     totalScore: 65,
+    floorPrice: 1543,       // max(1234/0.80, (1234+300)/0.70)
     breakdown: { margin: 80, priceAdvantage: 60, stock: 80, salesGrowth: 40, rating: 60 },
     reason: "test",
   };
@@ -178,13 +180,17 @@ describe("planActions", () => {
     expect(actions).toHaveLength(0);
   });
 
-  it("pricing推荐生成调价action", () => {
-    const scored = [{ ...baseProduct, recommendation: "pricing" as const }];
+  it("pricing推荐生成调价action（价格劣势场景：建议价=竞品均价×0.97，不低于底价）", () => {
+    // 价格高于竞品均价（劣势 -10%）→ 降价建议
+    const scored = [{ ...baseProduct, priceAdvantage: -10, competitorAvg: 1600, recommendation: "pricing" as const }];
     const actions = planActions(scored);
     expect(actions).toHaveLength(1);
     expect(actions[0].type).toBe("pricing");
     expect(actions[0].suggestedPrice).toBeDefined();
     expect(actions[0].suggestedPrice).toBeGreaterThan(0);
+    // 建议价 = max(底价, min(现价, 竞品均价×0.97)) = max(1543, min(1500, 1552)) = 1543
+    expect(actions[0].suggestedPrice).toBe(1543);
+    expect(actions[0].suggestedPrice!).toBeGreaterThanOrEqual(baseProduct.floorPrice);
   });
 
   it("copy推荐生成文案action", () => {
