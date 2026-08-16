@@ -1,0 +1,59 @@
+{
+  "offerId": "MAR-YAM-66T-01",
+  "product": "66T-W0093-00/01 化油器修理包（Yamaha 40X/E40X 二冲 40HP 船外机）",
+  "decision": "GO",
+  "decidedAt": "2026-08-16",
+  "category": {
+    "ref": "同 61N（MAR-YAM-61N-01）",
+    "note": "船外机化油器修理包类目，建品时按 61N 同类目/同 type_id"
+  },
+  "pricing": {
+    "costCny": 36,
+    "costRub": 444,
+    "priceCny": 146.9,
+    "priceRub": 1812,
+    "compareAtRub": 3000,
+    "marginPct": 75.5,
+    "netPerUnitRub": 706,
+    "netMarginPct": 38.9,
+    "floorPriceRub": 1063,
+    "logic": "对标唯一正经卖家 1735₽（仅剩 4 件将断货）接位；较 PREMARINE 3007₽ 低 40%；不与 680-877₽ 机翻杂牌缠斗；同 61N 已首单实证价位",
+    "source": "temp/pricing-carb-66t.md"
+  },
+  "supply": {
+    "source1688Url": "https://detail.1688.com/offer/608822032027.html",
+    "supplier": "无锡亚玛瑞轴承机电有限公司",
+    "priceCny": 36,
+    "supplierRate": 0.45,
+    "notes": "退货包运费、先采后付；素材 1271² 白底仅左上角 logo（白化可除）；备选 福鼎马力 975115459585 ¥30（全水印素材弃）"
+  },
+  "titleRu": "Ремкомплект карбюратора 40 л.с., аналог 66T-W0093-00, 66T-W0093-01",
+  "titleCandidates": [
+    "Ремкомплект карбюратора 40 л.с., аналог 66T-W0093-00, 66T-W0093-01",
+    "Ремкомплект карбюратора лодочного мотора 40 л.с., аналог 66T-W0093-00",
+    "Ремкомплект карбюратора 40 л.с. 2Т, аналог 66T-W0093-00, 66T-14301-02"
+  ],
+  "fitment": "Yamaha 40X / E40X（二冲 40HP 船外机）",
+  "oeCross": ["66T-W0093-00", "66T-W0093-01", "66T-14301-00", "66T-14301-01", "66T-14301-02"],
+  "assets": {
+    "imagesDir": "temp/src-assets/carb-66t-yamarui/1688_608822032027/images",
+    "usable": ["img_01.webp 全家福主图", "img_03.webp 竖排全家福实拍", "img_04.webp 矩阵排列内容物", "img_02.webp 裁片补充"],
+    "plan": "61N 图 8 骨架：4 俄文信息图（英雄式/适配表/内容网格/症状）+ 4 实拍；logo 白化（y<145 纯白带矩形）",
+    "source": "temp/visual-carb-66t.md"
+  },
+  "copy": { "source": "temp/copy-carb-66t.md", "hashtagsCount": 12, "brandFree": true },
+  "buyEvidence": {
+    "q1": "凭什么转化：OE 件号 66T-W0093-00/01 搜索直达 + 40X/E40X 适配表 + 俄文信息图 vs 杂牌机翻 0 评；唯一正经卖家仅剩 4 件（供给空窗接位）；61N 同族打法首单实证",
+    "q2": "需求定位一致：40HP 船机化油器垫片老化件是真实维保刚需，61N 同族已验证，无季节错位"
+  },
+  "firstBatch": { "qty": 25, "reviewDays": 14 },
+  "competitors": [
+    "https://www.ozon.ru/product/remkomplekt-karbyuratora-yamaha-40x-e40x-66t-w0093-01-1735/",
+    "杂牌机翻 680-877₽（0 评，不录入监控）"
+  ],
+  "risks": [
+    "需求深度未证（评论仅 2 条）——首批 20-30 件，14 天复盘",
+    "66T 与 61N 同族版式，主图版式需差异化防判重（同模板≤2 张）",
+    "套件内容物按 61N 标品撰写，上架前需按实物照片核对"
+  ]
+}
