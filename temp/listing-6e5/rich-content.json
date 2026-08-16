@@ -1,0 +1,50 @@
+{
+  "content": [
+    {
+      "widgetName": "raShowcase",
+      "type": "chess",
+      "blocks": [
+        {
+          "reverse": false,
+          "img": {
+            "src": "https://huashangshangmao.top/images/d8260709-608e-45f8-992b-4b609251983e.jpg",
+            "srcMobile": "https://huashangshangmao.top/images/d8260709-608e-45f8-992b-4b609251983e.jpg",
+            "width": 750,
+            "height": 1000,
+            "widthMobile": 750,
+            "heightMobile": 1000
+          },
+          "title": { "content": ["Полная совместимость по номеру"] },
+          "text": { "content": ["Подходит к штатным карбюраторам серии 6E5-14301 моторов 115–130 л.с. (2T, V4 / V6). Сверьте номер на корпусе карбюратора с 6E5-W0093-06-00 — совпадение означает полную совместимость. Внимание: на моторе два карбюратора, для полной переборки нужны 2 комплекта."] }
+        },
+        {
+          "reverse": true,
+          "img": {
+            "src": "https://huashangshangmao.top/images/19c60b97-6913-4c1a-acef-007efcba8fa5.jpg",
+            "srcMobile": "https://huashangshangmao.top/images/19c60b97-6913-4c1a-acef-007efcba8fa5.jpg",
+            "width": 750,
+            "height": 1000,
+            "widthMobile": 750,
+            "heightMobile": 1000
+          },
+          "title": { "content": ["Всё для переборки в одном наборе"] },
+          "text": { "content": ["Прокладки, мембрана, игольчатый клапан с седлом, поплавок, жиклёры и уплотнительные кольца — не нужно подбирать детали по отдельности, всё уже в комплекте. Одного набора хватает на один карбюратор."] }
+        },
+        {
+          "reverse": false,
+          "img": {
+            "src": "https://huashangshangmao.top/images/9155fd26-d572-4949-993c-7e266d948eef.jpg",
+            "srcMobile": "https://huashangshangmao.top/images/9155fd26-d572-4949-993c-7e266d948eef.jpg",
+            "width": 750,
+            "height": 1000,
+            "widthMobile": 750,
+            "heightMobile": 1000
+          },
+          "title": { "content": ["Мотор снова тянет на полную"] },
+          "text": { "content": ["Перебои на холостом ходу, провалы при разгоне, потеря мощности и рост расхода топлива — признаки износа прокладок и игольчатого клапана. Переборка с ремкомплектом возвращает мотору штатную тягу."] }
+        }
+      ]
+    }
+  ],
+  "version": 0.3
+}
