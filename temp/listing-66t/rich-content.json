@@ -1,0 +1,50 @@
+{
+  "content": [
+    {
+      "widgetName": "raShowcase",
+      "type": "chess",
+      "blocks": [
+        {
+          "reverse": false,
+          "img": {
+            "src": "https://huashangshangmao.top/images/4f4cf311-fac1-49c8-926f-34446a4d6b5f_opt.jpg",
+            "srcMobile": "https://huashangshangmao.top/images/4f4cf311-fac1-49c8-926f-34446a4d6b5f_opt.jpg",
+            "width": 750,
+            "height": 1000,
+            "widthMobile": 750,
+            "heightMobile": 1000
+          },
+          "title": { "content": ["Полная совместимость по номеру"] },
+          "text": { "content": ["Подходит к карбюраторам 66T-14301-00, 66T-14301-01 и 66T-14301-02 моторов 40X / E40X (2T, 40 л.с.). Сверьте номер на корпусе карбюратора с 66T-W0093-00 — совпадение означает полную совместимость."] }
+        },
+        {
+          "reverse": true,
+          "img": {
+            "src": "https://huashangshangmao.top/images/0d573db8-f91e-4f3c-bbcc-a44dc4a8a05b.jpg",
+            "srcMobile": "https://huashangshangmao.top/images/0d573db8-f91e-4f3c-bbcc-a44dc4a8a05b.jpg",
+            "width": 750,
+            "height": 1000,
+            "widthMobile": 750,
+            "heightMobile": 1000
+          },
+          "title": { "content": ["Всё для переборки в одном наборе"] },
+          "text": { "content": ["Прокладки, мембрана, игольчатый клапан с седлом, поплавок, жиклёры и уплотнительные кольца — не нужно подбирать детали по отдельности, всё уже в комплекте."] }
+        },
+        {
+          "reverse": false,
+          "img": {
+            "src": "https://huashangshangmao.top/images/25af61cb-6c7d-463a-8e15-6e4d0f7d567e.jpg",
+            "srcMobile": "https://huashangshangmao.top/images/25af61cb-6c7d-463a-8e15-6e4d0f7d567e.jpg",
+            "width": 750,
+            "height": 1000,
+            "widthMobile": 750,
+            "heightMobile": 1000
+          },
+          "title": { "content": ["Мотор снова работает ровно"] },
+          "text": { "content": ["Перебои на холостом ходу, глохнущий мотор, трудный запуск и рост расхода топлива — признаки износа прокладок и игольчатого клапана. Переборка с ремкомплектом возвращает мотору штатную работу."] }
+        }
+      ]
+    }
+  ],
+  "version": 0.3
+}

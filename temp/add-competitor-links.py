@@ -55,6 +55,12 @@ DATA = {
         "https://www.ozon.ru/product/krylchatka-pompy-yamaha-f75-100l-s-67f-44352-00-488249718/",
         "https://www.ozon.ru/product/krylchatka-pompy-ohlazhdeniya-lodochnogo-motora-yamaha-75-80-90-100hp-67f-44352-01-1547351619/",
     ],
+    "MAR-YAM-66T-01": [
+        "https://www.ozon.ru/product/remkomplekt-karbyuratora-yamaha-40x-e40x-66t-w0093-01-2850638004/",
+        "https://www.ozon.ru/product/remkomplekt-karbyuratora-66t-yamaha-40x-premarine-2940068889/",
+        "https://www.ozon.ru/product/o094f-66t-w0093-00-remontnyy-komplekt-karbyuratora-podvesnye-detali-dlya-yamaha-40-hp-2t-1877913211/",
+        "https://www.ozon.ru/product/q-p-j-b-komplekt-dlya-remonta-karbyuratora-66t-w0093-00-podvesnye-detali-40-2t-aksessuary-5076856943/",
+    ],
 }
 
 def wb(action, args, timeout=90):
