@@ -216,6 +216,14 @@ export async function runDecisionCycle(
     return;
   }
 
+  // 6.5 无动作不发卡片（2026-08-16：每 4h 雷同卡片刷屏无信息量）
+  // 有动作（调价/文案）才执行+发卡片；无动作仅记日志。
+  if (plan.actions.length === 0) {
+    logger.info({ scored: scored.length }, "No actions planned — card suppressed");
+    plan.status = "completed";
+    return;
+  }
+
   // 7. 验证通过 → 检查每日限额，超限截断
   if (dailyActionCount >= MAX_DAILY_AUTO_ACTIONS) {
     logger.warn("Daily action limit reached, skipping execution");

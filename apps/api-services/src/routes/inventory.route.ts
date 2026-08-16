@@ -53,11 +53,13 @@ async function fetchOzonInventoryItems(): Promise<OzonInventoryItem[]> {
       return [];
     }
 
-    // 2. 商品详情（offer_id / name）
-    const infoResp = await client.request<{ items?: Array<{ offer_id?: string; name?: string }> }>(
+    // 2. 商品详情（offer_id / name / 在售状态）
+    const infoResp = await client.request<{ items?: Array<{ offer_id?: string; name?: string; statuses?: { status_name?: string } }> }>(
       "POST", "/v3/product/info/list", { product_id: productIds },
     );
-    const infos = infoResp.items || [];
+    // 排除停售品（statuses.status_name="Не продается"，如 67F 商标停售）——
+    // 停售品不应参与调价决策（2026-08-15 实证 67F 被反复评分触发无效调价）
+    const infos = (infoResp.items || []).filter((i) => i.statuses?.status_name !== "Не продается");
 
     // 3. 售价（RUB 字符串 → number）
     const priceResp = await client.request<{ items?: Array<{ offer_id?: string; price?: { price?: string } }> }>(
