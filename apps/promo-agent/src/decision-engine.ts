@@ -500,11 +500,19 @@ export function planActions(scored: ProductScore[]): PlannedAction[] {
           continue;
         }
         if (suggestedPrice === Math.round(cur)) continue; // 无变化
-        // 单次幅度 ≤10%（比平台风控线 20% 更稳）
-        const diffPct = Math.abs((suggestedPrice - cur) / cur);
+        // 单次幅度 >10% 时**分步调价**：本轮按 10% 上限调整，后续周期继续逼近目标
+        // （一次性降到位永远不触发 = 不利品永远卡死，2026-08-15 实证 DOOR 差 28%）
+        let diffPct = Math.abs((suggestedPrice - cur) / cur);
         if (diffPct > 0.10) {
-          logger.warn({ offerId: product.offerId, diffPct }, "Price change exceeds 10%, skipping");
-          continue;
+          const clamped = Math.round(suggestedPrice < cur ? cur * 0.90 : cur * 1.10);
+          if (clamped < floor) {
+            logger.warn({ offerId: product.offerId, clamped, floor }, "Clamped price below floor — skipping");
+            continue;
+          }
+          logger.info({ offerId: product.offerId, from: cur, to: clamped, target: suggestedPrice },
+            "Step pricing: clamp to 10% this cycle, converge later");
+          suggestedPrice = clamped;
+          diffPct = 0.10;
         }
         // 每商品每日最多 1 次调价
         const today = new Date().toISOString().slice(0, 10);

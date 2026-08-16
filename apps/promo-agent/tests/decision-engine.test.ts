@@ -193,6 +193,18 @@ describe("planActions", () => {
     expect(actions[0].suggestedPrice!).toBeGreaterThanOrEqual(baseProduct.floorPrice);
   });
 
+  it("幅度超10%时分步调价：本轮 clamp 到 10%（DOOR 实证：价差 28% 不再永远卡死）", () => {
+    const scored = [{
+      ...baseProduct,
+      priceAdvantage: -28, competitorAvg: 1000, currentPrice: 1500,
+      floorPrice: 1200, recommendation: "pricing" as const,
+    }];
+    const actions = planActions(scored);
+    expect(actions).toHaveLength(1);
+    // 目标价 = max(1200, min(1500, 970)) = 1200，幅度 20% 超限 → 本轮降 10% 到 1350
+    expect(actions[0].suggestedPrice).toBe(1350);
+  });
+
   it("copy推荐生成文案action", () => {
     const scored = [{ ...baseProduct, recommendation: "copy" as const }];
     const actions = planActions(scored);
