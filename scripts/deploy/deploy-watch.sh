@@ -33,6 +33,11 @@ docker compose --profile "$COMPOSE_PROFILE" --env-file .env.production up -d --b
 # Caddy keeps serving the deleted file's config forever.
 docker restart onzo-caddy >> "$LOG_FILE" 2>&1 || true
 
+# Agents hold keep-alive connections to api-services; after an api rebuild the
+# pooled connections point at the dead instance and every call ECONNREFUSEDs
+# until the agent restarts. Bounce them so they re-resolve and reconnect.
+docker restart onzo-promo-agent onzo-ops-agent >> "$LOG_FILE" 2>&1 || true
+
 # Keep build cache bounded: -f alone only drops dangling layers and let the
 # cache grow to 45GB (filled /var/lib/docker once). Cap at 10G instead.
 docker builder prune -af --keep-storage 10g >> "$LOG_FILE" 2>&1 || true

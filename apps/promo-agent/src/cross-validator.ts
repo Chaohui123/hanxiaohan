@@ -110,18 +110,22 @@ interface CheckResult {
   issue: string;
 }
 
-/** 网络类瞬时错误（部署窗口/容器 DNS 波动）允许 3s 后重试一次再判失败 */
+/** 网络类瞬时错误（部署窗口/容器 DNS 收敛/keep-alive 死连接）指数退避重试 3 次再判失败 */
 async function withTransientRetry<T>(fn: () => Promise<T>): Promise<T> {
-  try {
-    return await fn();
-  } catch (err) {
-    const msg = ((err as Error).message || "").toLowerCase();
-    if (msg.includes("econnrefused") || msg.includes("etimedout") || msg.includes("econnreset") || msg.includes("fetch failed")) {
-      await new Promise((r) => setTimeout(r, 3000));
-      return fn(); // 第二次仍失败则抛给外层
+  const delays = [3000, 10000, 30000];
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= delays.length; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      const msg = ((err as Error).message || "").toLowerCase();
+      const transient = msg.includes("econnrefused") || msg.includes("etimedout") || msg.includes("econnreset") || msg.includes("fetch failed") || msg.includes("econnaborted") || msg.includes("socket");
+      if (!transient || attempt === delays.length) throw err;
+      await new Promise((r) => setTimeout(r, delays[attempt]));
     }
-    throw err;
   }
+  throw lastErr;
 }
 
 /** 1. 系统健康检查 */
