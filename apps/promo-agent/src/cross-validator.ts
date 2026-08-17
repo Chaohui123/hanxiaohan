@@ -23,7 +23,7 @@ export interface CrossValidationResult {
 // ============================================================
 
 const MAX_DAILY_AUTO_ACTIONS = parseInt(process.env.PROMO_MAX_DAILY_ACTIONS || "10", 10);
-const MAX_API_LATENCY_MS = 3000;
+const MAX_API_LATENCY_MS = 5000;
 const MAX_DAILY_SPEND = parseFloat(process.env.PROMO_MAX_DAILY_SPEND || "500");
 
 // ============================================================
@@ -110,10 +110,24 @@ interface CheckResult {
   issue: string;
 }
 
+/** 网络类瞬时错误（部署窗口/容器 DNS 波动）允许 3s 后重试一次再判失败 */
+async function withTransientRetry<T>(fn: () => Promise<T>): Promise<T> {
+  try {
+    return await fn();
+  } catch (err) {
+    const msg = ((err as Error).message || "").toLowerCase();
+    if (msg.includes("econnrefused") || msg.includes("etimedout") || msg.includes("econnreset") || msg.includes("fetch failed")) {
+      await new Promise((r) => setTimeout(r, 3000));
+      return fn(); // 第二次仍失败则抛给外层
+    }
+    throw err;
+  }
+}
+
 /** 1. 系统健康检查 */
 async function checkSystemHealth(config: ApiConfig): Promise<CheckResult> {
   try {
-    const health = await opsApi.health(config);
+    const health = await withTransientRetry(() => opsApi.health(config));
     const status = String((health as Record<string, unknown>).status || "");
     if (status !== "ok") {
       logger.warn({ status }, "System health check failed");
@@ -132,11 +146,11 @@ async function checkSystemHealth(config: ApiConfig): Promise<CheckResult> {
   }
 }
 
-/** 2. API 延迟检查 */
+/** 2. API 延迟检查（/ready 含 Ozon API 探测，本身 ~2.4s，阈值 5000ms） */
 async function checkApiLatency(config: ApiConfig): Promise<CheckResult> {
   try {
     const start = Date.now();
-    await opsApi.ready(config);
+    await withTransientRetry(() => opsApi.ready(config));
     const latency = Date.now() - start;
 
     if (latency > MAX_API_LATENCY_MS) {
