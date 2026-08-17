@@ -150,11 +150,12 @@ async function checkSystemHealth(config: ApiConfig): Promise<CheckResult> {
   }
 }
 
-/** 2. API 延迟检查（/ready 含 Ozon API 探测，本身 ~2.4s，阈值 5000ms） */
+/** 2. API 延迟检查 — 用轻量 /health（/ready 含 Ozon API 探测本身 2.4s+，
+ *    部署后首个请求实测 14.4s，用它会永远误判"延迟过高"挡下调价） */
 async function checkApiLatency(config: ApiConfig): Promise<CheckResult> {
   try {
     const start = Date.now();
-    await withTransientRetry(() => opsApi.ready(config));
+    await withTransientRetry(() => opsApi.health(config));
     const latency = Date.now() - start;
 
     if (latency > MAX_API_LATENCY_MS) {
