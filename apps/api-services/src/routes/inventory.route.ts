@@ -230,6 +230,34 @@ export function createInventoryRouter(): Router {
         }
       }
 
+      // ★ 先推 Ozon 真实改价（/v1/product/import/prices，店铺合同币种 CNY）。
+      // 只落本地表会"假成功"：product_performance 为空 → 0 行更新，Ozon 价不变，
+      // 决策引擎每轮从实时 fallback 读到同一旧价 → 重复同一调价永不收敛（2026-08-18 实证）。
+      const stores = await getActiveStoreConfigs();
+      const store = stores[0];
+      if (!store) { res.status(503).json({ error: "No active store config" }); return; }
+      const apiKey = isEncrypted(store.apiKey) ? decrypt(store.apiKey) : store.apiKey;
+      const { AuthManager, OzonClient } = await import("@onzo/ozon-api-wrapper");
+      const auth = new AuthManager({ clients: [{ clientId: store.clientId, apiKey, storeId: store.storeId }] });
+      const client = new OzonClient({ auth });
+      const { getExchangeRate } = await import("../services/exchange-rate.js");
+      const cnyToRub = (await getExchangeRate().catch(() => null))?.rate ?? 11.5;
+      const priceCny = (Math.round((price / cnyToRub) * 100) / 100).toFixed(2);
+      const pushResp = await client.request<{
+        result?: Array<{ offer_id?: string; updated?: boolean; errors?: Array<{ description?: string }> }>;
+      }>("POST", "/v1/product/import/prices", {
+        prices: [{ offer_id: offerId, price: priceCny, currency_code: "CNY" }],
+      });
+      const pushItem = (pushResp.result || [])[0];
+      const pushErrors = (pushItem?.errors || []).map((e) => e.description || "unknown");
+      if (!pushItem || pushItem.updated === false || pushErrors.length > 0) {
+        logger.error({ offerId, price, priceCny, pushErrors }, "Ozon price push failed");
+        res.status(502).json({ error: `Ozon price push failed: ${pushErrors.join("; ") || "not updated"}`, offerId });
+        return;
+      }
+
+      // Ozon 推送成功后才落本地表 + 审计
+
       // 更新 product_performance 表价格
       await db.run(
         `UPDATE product_performance SET revenue_rub = ?, updated_at = NOW()
@@ -248,8 +276,8 @@ export function createInventoryRouter(): Router {
         logger.warn({ auditErr }, "Failed to write pricing audit record");
       }
 
-      logger.info({ offerId, oldPrice, newPrice: price }, "Price updated");
-      res.json({ success: true, offerId, oldPrice, newPrice: price });
+      logger.info({ offerId, oldPrice, newPrice: price, priceCny }, "Price updated (Ozon pushed)");
+      res.json({ success: true, offerId, oldPrice, newPrice: price, priceCny });
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
     }

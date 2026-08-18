@@ -69,6 +69,15 @@ sqlite.db.exec(`
     source_1688_url TEXT DEFAULT '',
     purchase_price_cny REAL DEFAULT 0
   );
+  CREATE TABLE promo_pricing_history (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    offer_id TEXT,
+    name TEXT,
+    old_price REAL,
+    new_price REAL,
+    reason TEXT,
+    applied_at TEXT DEFAULT (datetime('now'))
+  );
 `);
 
 /** 默认 Ozon API 应答：3 个商品，其中 OFFER-3 无库存应被过滤 */
@@ -115,7 +124,7 @@ beforeEach(async () => {
   state.ozonRequest.mockClear();
   state.ozonRequest.mockImplementation(defaultOzonRequest);
 
-  sqlite.db.exec("DELETE FROM product_performance; DELETE FROM sku_1688_mapping;");
+  sqlite.db.exec("DELETE FROM product_performance; DELETE FROM sku_1688_mapping; DELETE FROM promo_pricing_history;");
   sqlite.db.prepare(
     "INSERT INTO sku_1688_mapping (id, ozon_offer_id, ozon_sku, purchase_price_cny) VALUES (?, ?, ?, ?)",
   ).run("map-1", "OFFER-1", 101, 50.5);
@@ -214,6 +223,61 @@ describe("GET /api/inventory/:offerId — Ozon fallback", () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ offerId: "OFFER-1", name: "Local Version" });
+    expect(state.ozonRequest).not.toHaveBeenCalled();
+  });
+});
+
+describe("PUT /api/inventory/:offerId/price — 真实推 Ozon 改价", () => {
+  it("推送成功：RUB→CNY 换算后调 /v1/product/import/prices，落库+审计", async () => {
+    state.ozonRequest.mockImplementation((_m: unknown, path: unknown, _b: unknown) => {
+      if (path === "/v1/product/import/prices") {
+        return Promise.resolve({ result: [{ offer_id: "OFFER-1", updated: true, errors: [] }] });
+      }
+      return defaultOzonRequest(_m, path, _b);
+    });
+
+    const res = await request(app).put("/api/inventory/OFFER-1/price").send({ price: 1500 });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ success: true, offerId: "OFFER-1", newPrice: 1500, priceCny: "150.00" });
+
+    // 验证 Ozon 推送载荷：CNY 价 = RUB / 汇率(10)
+    const pushCall = state.ozonRequest.mock.calls.find((c) => c[1] === "/v1/product/import/prices");
+    expect(pushCall?.[2]).toEqual({ prices: [{ offer_id: "OFFER-1", price: "150.00", currency_code: "CNY" }] });
+
+    // 审计记录已写
+    const audit = sqlite.db.prepare("SELECT * FROM promo_pricing_history WHERE offer_id = ?").get("OFFER-1") as Record<string, unknown>;
+    expect(audit).toMatchObject({ offer_id: "OFFER-1", new_price: 1500, reason: "promo-agent auto" });
+  });
+
+  it("Ozon 返回 updated:false + errors 时返回 502，不落审计", async () => {
+    state.ozonRequest.mockImplementation((_m: unknown, path: unknown, _b: unknown) => {
+      if (path === "/v1/product/import/prices") {
+        return Promise.resolve({ result: [{ offer_id: "OFFER-1", updated: false, errors: [{ description: "price too low" }] }] });
+      }
+      return defaultOzonRequest(_m, path, _b);
+    });
+
+    const res = await request(app).put("/api/inventory/OFFER-1/price").send({ price: 100 });
+
+    expect(res.status).toBe(502);
+    expect(res.body.error).toContain("price too low");
+    const audit = sqlite.db.prepare("SELECT * FROM promo_pricing_history WHERE offer_id = ?").get("OFFER-1");
+    expect(audit).toBeUndefined();
+  });
+
+  it("Ozon API 抛异常时返回 500（不假装成功）", async () => {
+    state.ozonShouldFail = true;
+    const res = await request(app).put("/api/inventory/OFFER-1/price").send({ price: 1500 });
+
+    expect(res.status).toBe(500);
+    expect(res.body.error).toContain("ozon api down");
+  });
+
+  it("非法价格返回 400，不触达 Ozon", async () => {
+    const res = await request(app).put("/api/inventory/OFFER-1/price").send({ price: -5 });
+
+    expect(res.status).toBe(400);
     expect(state.ozonRequest).not.toHaveBeenCalled();
   });
 });
