@@ -205,6 +205,36 @@ describe("planActions", () => {
     expect(actions[0].suggestedPrice).toBe(1350);
   });
 
+  it("降价 clamp 向上取整：-10% 不因 round 越过执行侧 10% 上限（6E7 2502.69 实证）", () => {
+    const scored = [{
+      ...baseProduct,
+      priceAdvantage: -28, competitorAvg: 1000, currentPrice: 2502.69,
+      floorPrice: 1000, recommendation: "pricing" as const,
+    }];
+    const actions = planActions(scored);
+    expect(actions).toHaveLength(1);
+    // 目标价 = max(1000, min(2502.69, 970)) = 1000，幅度 60% → clamp 2502.69×0.9=2252.42；
+    // round→2252 时执行侧 diff=10.017% 必拒，必须 ceil→2253
+    expect(actions[0].suggestedPrice).toBe(2253);
+    const diff = Math.abs(actions[0].suggestedPrice! - 2502.69) / 2502.69;
+    expect(diff).toBeLessThanOrEqual(0.10);
+  });
+
+  it("涨价 clamp 向下取整：+10% 不越执行侧上限", () => {
+    const scored = [{
+      ...baseProduct,
+      priceAdvantage: 0, marginPercent: 10, costRub: 1463.04,
+      currentPrice: 1500.55, floorPrice: 1000, recommendation: "pricing" as const,
+    }];
+    const actions = planActions(scored);
+    expect(actions).toHaveLength(1);
+    // 利润修复价 = 1463.04/0.75 ≈ 1950.72 → round 1951，幅度 30% → clamp 1500.55×1.1=1650.605；
+    // round→1651 时执行侧 diff=10.03% 必拒，必须 floor→1650
+    expect(actions[0].suggestedPrice).toBe(1650);
+    const diff = Math.abs(actions[0].suggestedPrice! - 1500.55) / 1500.55;
+    expect(diff).toBeLessThanOrEqual(0.10);
+  });
+
   it("copy推荐生成文案action", () => {
     const scored = [{ ...baseProduct, recommendation: "copy" as const }];
     const actions = planActions(scored);

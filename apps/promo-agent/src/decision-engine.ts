@@ -512,7 +512,10 @@ export function planActions(scored: ProductScore[]): PlannedAction[] {
         // （一次性降到位永远不触发 = 不利品永远卡死，2026-08-15 实证 DOOR 差 28%）
         let diffPct = Math.abs((suggestedPrice - cur) / cur);
         if (diffPct > 0.10) {
-          const clamped = Math.round(suggestedPrice < cur ? cur * 0.90 : cur * 1.10);
+          // 取整方向必须朝现价（降 ceil / 涨 floor）：round 可能把 -10% 压过线
+          // （2502.69×0.9=2252.42→round 2252=10.017%），执行侧 10% 校验必拒 →
+          // 价差最大的品永远卡死（2026-08-18 DOOR/6E7 实证）
+          const clamped = suggestedPrice < cur ? Math.ceil(cur * 0.90) : Math.floor(cur * 1.10);
           if (clamped < floor) {
             logger.warn({ offerId: product.offerId, clamped, floor }, "Clamped price below floor — skipping");
             continue;
@@ -726,6 +729,10 @@ async function executePricingAction(
 
   const diffPct = Math.abs((action.suggestedPrice - action.currentPrice) / action.currentPrice);
   if (diffPct > 0.10) {
+    logger.warn(
+      { offerId: action.offerId, currentPrice: action.currentPrice, suggestedPrice: action.suggestedPrice, diffPct },
+      "Pricing action rejected: diff exceeds 10% at execution",
+    );
     return {
       offerId: action.offerId, name: action.name, type: "pricing", success: false,
       message: `调价幅度超限(10%): ${(diffPct * 100).toFixed(1)}%`, appliedAt,
