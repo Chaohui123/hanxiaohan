@@ -153,8 +153,8 @@ node scripts/download-1688-assets.cjs <1688链接或offerId> [输出根目录]
 
 ### 广告与促销
 - **CPS（按订单付费 22%）已于 8/18 开通**：店铺级启用，当前覆盖 8 个达标在售 SKU（COVER-M/S 38.9%/38.8%、6E7 31.7%、GEN-CARB 28.3%、DOOR 27.4%、6E5 27.1%、61N 19.7%、66T 16.9%——全部 ≥15% 净利达标）；磁吸/摩托支架因开 CPS 即亏（-9%/-4.6%）已归档排除。
-- **CPC**：61N 首开（平均 CPC ≤15₹、1000₹/周），出单有评价后启动；67F 恢复后再开（≤15₹）。
-- **CPC 两次实证止损**（学费 842₹）：磁吸 33706085（CPC 57₹）+ 67F 33938265（CPC 43₹，728₹/0 单）。**铁律：自动策略 MAX_CLICKS 对窄品类长尾件出价失控，冷门件零评价期不投 CPC；正确形态=平均 CPC 策略 ≤15₹（保本线内）**。重开条件：67F 审核恢复 + 任一 SKU 出单有评价。
+- **CPC**：61N 已于 8/18 首开并激活：campaign id 36145753「61N CPC」（用户手动创建），2000₽/周（Ozon 硬性最低，1件商品），搜索与推荐位，周二–周一周期；策略=自动 MAX_CLICKS（用户 8/18 明确拍板保持，仅此例外；监控若平均 CPC 持续 >15₹ 再报用户处置）。监测：temp/cpc-monitor-36145753.cjs + 每日 09:43 cron（01M09PVMZA7GFTV1KQJ78KHV0M）；67F 恢复后再开（≤15₹）。
+- **CPC 两次实证止损**（学费 842₹）：磁吸 33706085（CPC 57₹）+ 67F 33938265（CPC 43₹，728₹/0 单）。**铁律：自动策略 MAX_CLICKS 对窄品类长尾件出价失控，冷门件零评价期不投 CPC；正确形态=平均 CPC 策略 ≤15₹（保本线内）**（8/18 例外：61N 首开用自动策略系用户明确拍板，监控兜底）。重开条件：67F 审核恢复 + 任一 SKU 出单有评价。
 - **破零促销在跑（均"我正在参与"）**：磁吸 4127830（至 8/14）、67F破零（至 8/16）、61N 4154063 + 6E7 4154141（8/6-8/19）。
 - **CPS**：新品期不可用（需 14 天 1 单）。**评价积分 8/4 已停发**——邀评靠平台原生推送。
 - **WOW 大促（9.25-10.15）**：9/3 报名检查提醒（cron a9931c5e），7 SKU 全符合 60 天新品免门槛。
@@ -182,13 +182,14 @@ node scripts/download-1688-assets.cjs <1688链接或offerId> [输出根目录]
 - 采集：`temp/auto-scan.cjs`（Ozon 搜索页批量筛查，13 词 2.5 分钟）、`temp/src1688-scan.py`（1688 搜索+商品页，GBK 编码）、`scripts/download-1688-assets.cjs`、`scripts/filter-images.py`、`temp/wb.py`（WebBridge 通用 POST 助手，请求文件方式防转义）
 - 制作：`temp/make-carousel-videos.py`（轮播视频生成，含 67F/6E7/door/boat-cover/carb-kit/gen-carb 六套 config）、`temp/listing-*/build_images.py`（各品信息图脚本）
 - 上架：`temp/ozon-api.cjs`、`temp/ozon-list-*.cjs`（建品模板）、`temp/upload-frames.mjs`、`scripts/validate-rich-json.cjs`
-- 广告：`temp/perf-api.cjs`、`temp/cpc-monitor-33938265.cjs`（campaign 监测）
+- 广告：`temp/perf-api.cjs`、`temp/cpc-monitor-33938265.cjs` / `temp/cpc-monitor-36145753.cjs`（campaign 监测，只读）
 - **WebBridge 要点**：daemon 卡死用 `kimi-webbridge.exe stop→start`（PID 残留删 ~/.kimi-webbridge/daemon.pid）；链接 slug 尾号用 **sku 不用 product_id**（O11）；session 失效换新 session 名；后台操作 CDP 真实点击+JS 写文件再 evaluate。
 
 ### 活跃 cron 任务
 | id | 时间 | 内容 |
 |---|---|---|
 | a9931c5e | 9/3 10:47 | WOW 大促报名检查（7 SKU 免门槛） |
+| 01M09PVMZA7GFTV1KQJ78KHV0M | 每日 09:43 | 61N CPC（36145753）+ CPS 数据监测：跑 temp/cpc-monitor-36145753.cjs，平均 CPC>15₹ 或周花费近 2000₹ 报警（不改策略） |
 
 ### 下一步待办（按优先级）
 1. **67F 审核恢复** → 立即重开 CPC（**平均 CPC ≤15₹，绝非自动策略**），先小预算 1000₹/周验证 CPC 是否 ≤15₹
