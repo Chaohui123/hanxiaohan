@@ -150,12 +150,15 @@ async function checkSystemHealth(config: ApiConfig): Promise<CheckResult> {
   }
 }
 
-/** 2. API 延迟检查 — 用轻量 /health（/ready 含 Ozon API 探测本身 2.4s+，
- *    部署后首个请求实测 14.4s，用它会永远误判"延迟过高"挡下调价） */
+/** 2. API 延迟检查 — warm-up 先恢复连接（重试等待不计入延迟），再测干净延迟。
+ *    /health 轻量端点（/ready 含 Ozon 探测 2.4s+ 会误判）。 */
 async function checkApiLatency(config: ApiConfig): Promise<CheckResult> {
   try {
-    const start = Date.now();
+    // warm-up：首次调用常因 keep-alive 死连接 ECONNREFUSED，重试恢复连接池
     await withTransientRetry(() => opsApi.health(config));
+    // 连接已恢复，第二次直连测真实延迟
+    const start = Date.now();
+    await opsApi.health(config);
     const latency = Date.now() - start;
 
     if (latency > MAX_API_LATENCY_MS) {
