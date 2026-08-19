@@ -276,6 +276,36 @@ export function createInventoryRouter(): Router {
         logger.warn({ auditErr }, "Failed to write pricing audit record");
       }
 
+      // ★ 价格带跨档自动迁仓（CEL Extra Small ≤135¥ 硬上限；8/19 实证 61N/66T/DOOR
+      // 降价跨档后报"所选配送方式不适用此价格"）。幂等：目标仓=rfbs 总库存、另一仓=0，
+      // 无需知道商品当前在哪个仓。迁仓失败不阻断（价格已改成功，可手动 temp/move-stocks-xs.cjs 兜底）。
+      try {
+        const XS_WAREHOUSE = 1020005021424150;   // CEL陆运（Extra Small，≤135¥）
+        const SMALL_WAREHOUSE = 1020005021424520; // CEL陆运3（Small，>135¥）
+        const cny = parseFloat(priceCny);
+        const stockResp = await client.request<{
+          items?: Array<{ product_id?: number; stocks?: Array<{ type?: string; present?: number }> }>;
+        }>("POST", "/v4/product/info/stocks", { filter: { offer_id: [offerId], visibility: "ALL" }, limit: 10 });
+        const stockItem = (stockResp.items || [])[0];
+        const productId = stockItem?.product_id;
+        const totalStock = (stockItem?.stocks || [])
+          .filter((s) => s.type === "rfbs")
+          .reduce((sum, s) => sum + (Number(s.present) || 0), 0);
+        if (productId && totalStock > 0 && !isNaN(cny)) {
+          const target = cny <= 135 ? XS_WAREHOUSE : SMALL_WAREHOUSE;
+          const other = cny <= 135 ? SMALL_WAREHOUSE : XS_WAREHOUSE;
+          await client.request("POST", "/v2/products/stocks", {
+            stocks: [
+              { offer_id: offerId, product_id: productId, stock: totalStock, warehouse_id: target },
+              { offer_id: offerId, product_id: productId, stock: 0, warehouse_id: other },
+            ],
+          });
+          logger.info({ offerId, priceCny: cny, totalStock, targetWarehouse: target }, "Warehouse auto-migrated by price band");
+        }
+      } catch (whErr) {
+        logger.warn({ offerId, err: (whErr as Error).message }, "Warehouse auto-migration failed (price already updated)");
+      }
+
       logger.info({ offerId, oldPrice, newPrice: price, priceCny }, "Price updated (Ozon pushed)");
       res.json({ success: true, offerId, oldPrice, newPrice: price, priceCny });
     } catch (err) {

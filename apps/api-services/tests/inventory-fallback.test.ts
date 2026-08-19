@@ -106,11 +106,17 @@ function defaultOzonRequest(_method: unknown, path: unknown, _body: unknown) {
   if (path === "/v4/product/info/stocks") {
     return Promise.resolve({
       items: [
-        { offer_id: "OFFER-1", stocks: [{ present: 8 }, { present: 2 }] },
-        { offer_id: "OFFER-2", stocks: [{ present: 5 }] },
-        { offer_id: "OFFER-3", stocks: [{ present: 0 }] },
+        { offer_id: "OFFER-1", product_id: 101, stocks: [{ type: "rfbs", present: 8 }, { type: "rfbs", present: 2 }] },
+        { offer_id: "OFFER-2", product_id: 102, stocks: [{ type: "rfbs", present: 5 }] },
+        { offer_id: "OFFER-3", product_id: 103, stocks: [{ type: "rfbs", present: 0 }] },
       ],
     });
+  }
+  if (path === "/v1/product/import/prices") {
+    return Promise.resolve({ result: [{ offer_id: "OFFER-1", updated: true, errors: [] }] });
+  }
+  if (path === "/v2/products/stocks") {
+    return Promise.resolve({ result: [{ offer_id: "OFFER-1", updated: true, errors: [] }] });
   }
   return Promise.resolve({});
 }
@@ -279,5 +285,47 @@ describe("PUT /api/inventory/:offerId/price — 真实推 Ozon 改价", () => {
 
     expect(res.status).toBe(400);
     expect(state.ozonRequest).not.toHaveBeenCalled();
+  });
+
+  it("跨档自动迁仓：价格 ≤135¥ 迁到 Extra Small 仓（另一仓清零）", async () => {
+    const res = await request(app).put("/api/inventory/OFFER-1/price").send({ price: 1000 }); // 1000₽/10 = 100 CNY ≤135
+
+    expect(res.status).toBe(200);
+    const stockCall = state.ozonRequest.mock.calls.find((c) => c[1] === "/v2/products/stocks");
+    expect(stockCall).toBeDefined();
+    expect(stockCall?.[2]).toEqual({
+      stocks: [
+        { offer_id: "OFFER-1", product_id: 101, stock: 10, warehouse_id: 1020005021424150 }, // XS = rfbs 总库存 8+2
+        { offer_id: "OFFER-1", product_id: 101, stock: 0, warehouse_id: 1020005021424520 },  // Small 清零
+      ],
+    });
+  });
+
+  it("跨档自动迁仓：价格 >135¥ 迁到 Small 仓（另一仓清零）", async () => {
+    const res = await request(app).put("/api/inventory/OFFER-1/price").send({ price: 1500 }); // 150 CNY >135
+
+    expect(res.status).toBe(200);
+    const stockCall = state.ozonRequest.mock.calls.find((c) => c[1] === "/v2/products/stocks");
+    expect(stockCall?.[2]).toEqual({
+      stocks: [
+        { offer_id: "OFFER-1", product_id: 101, stock: 10, warehouse_id: 1020005021424520 }, // Small = 总库存
+        { offer_id: "OFFER-1", product_id: 101, stock: 0, warehouse_id: 1020005021424150 },  // XS 清零
+      ],
+    });
+  });
+
+  it("迁仓失败不阻断：价格仍返回 200", async () => {
+    state.ozonRequest.mockImplementation((_m: unknown, path: unknown, b: unknown) => {
+      if (path === "/v2/products/stocks") return Promise.reject(new Error("warehouse api down"));
+      if (path === "/v1/product/import/prices") {
+        return Promise.resolve({ result: [{ offer_id: "OFFER-1", updated: true, errors: [] }] });
+      }
+      return defaultOzonRequest(_m, path, b);
+    });
+
+    const res = await request(app).put("/api/inventory/OFFER-1/price").send({ price: 1000 });
+
+    expect(res.status).toBe(200);
+    expect(res.body).toMatchObject({ success: true, newPrice: 1000 });
   });
 });
