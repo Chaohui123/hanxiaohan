@@ -34,9 +34,10 @@
 1. 类目：**竞品类目实证**（前台面包屑）+ 后台 type 匹配 + 字典值验证（如 22661=Крыльчатки охлаждения）
 2. 传图：`temp/upload-frames.mjs` → 服务器 URL（M1：必须本地 JPG→服务器，禁 alicdn 直传）
 3. 建品 `/v3/product/import`：CNY 报价、weight 克 int、尺寸 mm、vat "0"、offer_id ≤50 字符
-4. 库存：等 3-5 分钟再设（O4）；`errors:[]` 即成功勿重试（O5）。**选仓按价格带**：**售价 >135¥ 必须走 CEL陆运3（`1020005021424520`，Small 支持，61N/COVER/GEN-CARB 同仓）**；CEL陆运（`1020005021424150`）是 Extra Small 专用（≤135¥ 硬上限，66T 曾误选被 Ozon 报"所选配送方式不使用此价格"，清零迁移解决）；**自动调价跌穿 135¥ 后必须同步迁仓回 Extra Small**（8/19 实证：61N 119¥/66T 121¥/DOOR 101¥ 降穿后报"所选配送方式不适用此价格"，`temp/move-stocks-xs.cjs` 原仓清零+目标仓设库存解决——价格带跨档=价格+仓库两件事）；FBP 仓（Ural/GUOO）库存不可 API 手动更新
+4. 库存：等 3-5 分钟再设（O4）；`errors:[]` 即成功勿重试（O5）。**选仓按价格带**：**售价 >135¥ 必须走 CEL陆运3（`1020005021424520`，Small 支持，61N/COVER/GEN-CARB 同仓）**；CEL陆运（`1020005021424150`）是 Extra Small 专用（≤135¥ 硬上限，66T 曾误选被 Ozon 报"所选配送方式不使用此价格"，清零迁移解决）；**自动调价跌穿 135¥ 后必须同步迁仓回 Extra Small**（8/19 实证：61N 119¥/66T 121¥/DOOR 101¥ 降穿后报"所选配送方式不适用此价格"）——**已自动化（71cfcf4）**：调价路由推送成功后按新价幂等迁仓（目标仓=rfbs 总库存、另一仓清零，失败不阻断），手动兜底工具 `temp/move-stocks-xs.cjs`；FBP 仓（Ural/GUOO）库存不可 API 手动更新
 5. **描述走 attribute 4191**（O9：v3 import 会静默丢 item.description）；**文案禁"оригинал\*"字眼**（O10：FB_ORIGINAL 拦截，用 штатный/аналог）
 6. 补尺寸属性（7956 Длина/8416 Ширина cm 等）提内容评级
+7. **生成 OZN 条形码**（8/24 合同新规：转交货物时卡片未指明所贴条形码→Ozon 可拒付赔偿；9 在售品 8/19 已补齐 `temp/gen-barcodes.cjs`：`POST /v1/barcode/generate {product_ids}`；**发货实物必须贴对应 OZN 码**，码=OZN+sku）
 7. 富内容：CDN 图址就绪后组装 → `scripts/validate-rich-json.cjs` 预检 → 写 11254
 8. **录货源成本+竞品链接（硬性，上架即录）**：①`sku_1688_mapping`：`ozon_offer_id` + `ozon_sku` + `source_1688_url` + `purchase_price_cny`（区间取中位）+ `weight_kg`——缺失则决策引擎利润率评分不成立、出单后采购匹配断链。②`promo_competitor_links`：阶段 1 留档的竞品链接逐条录入（offer_id + competitor_url + competitor_name）——缺失则竞品监控只能靠商品名模糊搜索（不准）。历史 8 SKU 已于 2026-08-13 补录。
 9. **Ozon 后台添加官方竞品链接（硬性，上架 T+0 完成）**：把阶段 1 留档的竞品链接提交到 Ozon 官方"价格指数"竞品库（官方计算价格指数、发"就是这个价"徽章+搜索提升；72h 生效）。操作：价格页该商品行"竞争对手的价格"列"未指定→添加"，或价格管理页 `/app/prices/manager/{product_id}/prices`"Ozon上的竞争对手价格→添加链接"；**批量用 `temp/add-competitor-links.py <offerId>`（价格页）/ `temp/add-links-here.py <url...>`（弹窗就地）**，提交后点"发送以进行审核"。注意：已下架商品无添加入口（恢复后补）；Ozon 自动匹配的跨平台竞品（如 wildberries）不代表我方精准竞品，必须手动补 Ozon 平台内同款。历史 7 SKU 已于 2026-08-14 提交 31 条。
