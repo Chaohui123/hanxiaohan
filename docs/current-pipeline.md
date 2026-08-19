@@ -172,6 +172,7 @@ node scripts/download-1688-assets.cjs <1688链接或offerId> [输出根目录]
 - **建议价**：降=min（现价， 竞品均价×0.97)；涨=min（现价×1.05, 竞品均价）；利润修复=成本₽/0.75（毛利率 25% 水位）
 - **保护**：单次幅度 ≤10%、每商品每日 1 次、全局每日 10 次、交叉验证（系统健康/预算）不通过不执行、执行结果卡片报告
 - **8/18 幻影执行修复（bc86485）**：PUT `/api/inventory/:offerId/price` 原只写空的 product_performance 表（0 行更新）从不推 Ozon → 引擎每轮从实时 fallback 读同一旧价、重复同一调价永不收敛（日志"Auto price updated"全是假成功）。已修：先推 `/v1/product/import/prices`（RUB→CNY 按汇率换算），Ozon 确认 updated 后才落库+审计；失败返回 502 不装成功。测试 11/11 覆盖推送载荷/失败路径
+- **8/19 跨档迁仓（1b7f0e2 取整修复后生效）**：调价跌穿 135¥ 的商品（61N/66T/DOOR）库存同步从 CEL陆运3(Small) 迁回 CEL陆运(Extra Small)——价格带跨档=价格+仓库两件事，否则会报"所选配送方式不适用此价格"。工具：`temp/move-stocks-xs.cjs`
 - **官方指数校准**（待做）：每日抓一次官方价格指数（价格页 WebBridge）与自算口径对比，偏差大时告警
 
 ### 竞品监控双链路（2026-08-14 上线）
