@@ -112,6 +112,11 @@ function defaultOzonRequest(_method: unknown, path: unknown, _body: unknown) {
       ],
     });
   }
+  if (path === "/v4/product/info/attributes") {
+    return Promise.resolve({
+      result: [{ offer_id: "OFFER-1", weight: 150, depth: 300, width: 150, height: 50 }],
+    });
+  }
   if (path === "/v1/product/import/prices") {
     return Promise.resolve({ result: [{ offer_id: "OFFER-1", updated: true, errors: [] }] });
   }
@@ -287,31 +292,60 @@ describe("PUT /api/inventory/:offerId/price — 真实推 Ozon 改价", () => {
     expect(state.ozonRequest).not.toHaveBeenCalled();
   });
 
-  it("跨档自动迁仓：价格 ≤135¥ 迁到 Extra Small 仓（另一仓清零）", async () => {
+  it("跨档自动迁仓：价格 ≤135¥ 迁到 Extra Small 仓（其余仓清零）", async () => {
     const res = await request(app).put("/api/inventory/OFFER-1/price").send({ price: 1000 }); // 1000₽/10 = 100 CNY ≤135
 
     expect(res.status).toBe(200);
     const stockCall = state.ozonRequest.mock.calls.find((c) => c[1] === "/v2/products/stocks");
     expect(stockCall).toBeDefined();
-    expect(stockCall?.[2]).toEqual({
-      stocks: [
-        { offer_id: "OFFER-1", product_id: 101, stock: 10, warehouse_id: 1020005021424150 }, // XS = rfbs 总库存 8+2
-        { offer_id: "OFFER-1", product_id: 101, stock: 0, warehouse_id: 1020005021424520 },  // Small 清零
-      ],
-    });
+    const stocks = (stockCall?.[2] as { stocks: Array<{ warehouse_id: number; stock: number }> }).stocks;
+    const target = stocks.find((s) => s.stock === 10);
+    expect(target?.warehouse_id).toBe(1020005021424150); // XS = rfbs 总库存 8+2
+    expect(stocks.filter((s) => s.stock === 0)).toHaveLength(5); // 其余 5 仓清零
   });
 
-  it("跨档自动迁仓：价格 >135¥ 迁到 Small 仓（另一仓清零）", async () => {
+  it("跨档自动迁仓：价格 >135¥ 迁到 Small 仓（其余仓清零）", async () => {
     const res = await request(app).put("/api/inventory/OFFER-1/price").send({ price: 1500 }); // 150 CNY >135
 
     expect(res.status).toBe(200);
     const stockCall = state.ozonRequest.mock.calls.find((c) => c[1] === "/v2/products/stocks");
-    expect(stockCall?.[2]).toEqual({
-      stocks: [
-        { offer_id: "OFFER-1", product_id: 101, stock: 10, warehouse_id: 1020005021424520 }, // Small = 总库存
-        { offer_id: "OFFER-1", product_id: 101, stock: 0, warehouse_id: 1020005021424150 },  // XS 清零
-      ],
+    const stocks = (stockCall?.[2] as { stocks: Array<{ warehouse_id: number; stock: number }> }).stocks;
+    const target = stocks.find((s) => s.stock === 10);
+    expect(target?.warehouse_id).toBe(1020005021424520); // Small
+    expect(stocks.filter((s) => s.stock === 0)).toHaveLength(5);
+  });
+
+  it("跨档自动迁仓：635¥ 以上且 1-5kg 迁到 Premium Small（CLE陆运5，打窝船场景）", async () => {
+    state.ozonRequest.mockImplementation((_m: unknown, path: unknown, b: unknown) => {
+      if (path === "/v4/product/info/attributes") {
+        return Promise.resolve({ result: [{ offer_id: "OFFER-1", weight: 3746 }] }); // 打窝船 3.7kg
+      }
+      return defaultOzonRequest(_m, path, b);
     });
+    const res = await request(app).put("/api/inventory/OFFER-1/price").send({ price: 10300 }); // 1030 CNY >635
+
+    expect(res.status).toBe(200);
+    const stockCall = state.ozonRequest.mock.calls.find((c) => c[1] === "/v2/products/stocks");
+    const stocks = (stockCall?.[2] as { stocks: Array<{ warehouse_id: number; stock: number }> }).stocks;
+    const target = stocks.find((s) => s.stock === 10);
+    expect(target?.warehouse_id).toBe(1020005027799150); // Premium Small = CLE陆运5
+    expect(stocks.filter((s) => s.stock === 0)).toHaveLength(5);
+  });
+
+  it("跨档自动迁仓：135-635¥ 且 >2kg 迁到 Big 仓（CEL仓库3）", async () => {
+    state.ozonRequest.mockImplementation((_m: unknown, path: unknown, b: unknown) => {
+      if (path === "/v4/product/info/attributes") {
+        return Promise.resolve({ result: [{ offer_id: "OFFER-1", weight: 2500 }] }); // 2.5kg
+      }
+      return defaultOzonRequest(_m, path, b);
+    });
+    const res = await request(app).put("/api/inventory/OFFER-1/price").send({ price: 3000 }); // 300 CNY
+
+    expect(res.status).toBe(200);
+    const stockCall = state.ozonRequest.mock.calls.find((c) => c[1] === "/v2/products/stocks");
+    const stocks = (stockCall?.[2] as { stocks: Array<{ warehouse_id: number; stock: number }> }).stocks;
+    const target = stocks.find((s) => s.stock === 10);
+    expect(target?.warehouse_id).toBe(1020005021424710); // Big
   });
 
   it("迁仓失败不阻断：价格仍返回 200", async () => {

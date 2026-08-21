@@ -276,12 +276,19 @@ export function createInventoryRouter(): Router {
         logger.warn({ auditErr }, "Failed to write pricing audit record");
       }
 
-      // ★ 价格带跨档自动迁仓（CEL Extra Small ≤135¥ 硬上限；8/19 实证 61N/66T/DOOR
-      // 降价跨档后报"所选配送方式不适用此价格"）。幂等：目标仓=rfbs 总库存、另一仓=0，
-      // 无需知道商品当前在哪个仓。迁仓失败不阻断（价格已改成功，可手动 temp/move-stocks-xs.cjs 兜底）。
+      // ★ 价格×重量双维自动迁仓（CEL 官方档位表，8/20 用户供图）：
+      // XS(…150) ≤500g且≤135¥ ｜ Budget(…290, DISABLED) 501g-30kg且≤135¥ ｜ Small(…520) ≤2kg且135-635¥
+      // Big(…710) 2-30kg且135-635¥ ｜ Premium Small(…150 CLE陆运5) 1-5kg且635-22525¥ ｜ Premium Big(…120) ≥5kg且635-22525¥
+      // 幂等：目标仓=rfbs 总库存、其余仓=0。失败不阻断（价格已改成功，可手动 temp/move-stocks-xs.cjs 兜底）。
       try {
-        const XS_WAREHOUSE = 1020005021424150;   // CEL陆运（Extra Small，≤135¥）
-        const SMALL_WAREHOUSE = 1020005021424520; // CEL陆运3（Small，>135¥）
+        const WH = {
+          XS: 1020005021424150,      // CEL陆运 Extra Small
+          BUDGET: 1020005021424290,  // CEL陆运2 Budget（DISABLED，落档需先在后台启用）
+          SMALL: 1020005021424520,   // CEL陆运3 Standard Small
+          BIG: 1020005021424710,     // CEL仓库3 Economy Big
+          PREM_S: 1020005027799150,  // CLE陆运5 Standard Premium Small（打窝船仓，8/20 用户建仓）
+          PREM_B: 1020005027716120,  // CEL陆运4 Standard Premium Big
+        };
         const cny = parseFloat(priceCny);
         const stockResp = await client.request<{
           items?: Array<{ product_id?: number; stocks?: Array<{ type?: string; present?: number }> }>;
@@ -291,16 +298,27 @@ export function createInventoryRouter(): Router {
         const totalStock = (stockItem?.stocks || [])
           .filter((s) => s.type === "rfbs")
           .reduce((sum, s) => sum + (Number(s.present) || 0), 0);
+
+        // 重量（克）与价格共同决定档位
+        let weightG = 0;
+        try {
+          const attrResp = await client.request<{
+            result?: Array<{ weight?: number }>;
+          }>("POST", "/v4/product/info/attributes", { filter: { offer_id: [offerId], visibility: "ALL" }, limit: 1 });
+          weightG = Number((attrResp.result || [])[0]?.weight) || 0;
+        } catch { /* 查不到按 0 处理 */ }
+
         if (productId && totalStock > 0 && !isNaN(cny)) {
-          const target = cny <= 135 ? XS_WAREHOUSE : SMALL_WAREHOUSE;
-          const other = cny <= 135 ? SMALL_WAREHOUSE : XS_WAREHOUSE;
-          await client.request("POST", "/v2/products/stocks", {
-            stocks: [
-              { offer_id: offerId, product_id: productId, stock: totalStock, warehouse_id: target },
-              { offer_id: offerId, product_id: productId, stock: 0, warehouse_id: other },
-            ],
-          });
-          logger.info({ offerId, priceCny: cny, totalStock, targetWarehouse: target }, "Warehouse auto-migrated by price band");
+          let target: number;
+          if (cny <= 135) target = weightG <= 500 ? WH.XS : WH.BUDGET;
+          else if (cny <= 635) target = weightG <= 2000 ? WH.SMALL : WH.BIG;
+          else target = weightG <= 5000 ? WH.PREM_S : WH.PREM_B;
+          const stocks = Object.values(WH).map((wid) => ({
+            offer_id: offerId, product_id: productId,
+            stock: wid === target ? totalStock : 0, warehouse_id: wid,
+          }));
+          await client.request("POST", "/v2/products/stocks", { stocks });
+          logger.info({ offerId, priceCny: cny, totalStock, weightG, targetWarehouse: target }, "Warehouse auto-migrated by price band");
         }
       } catch (whErr) {
         logger.warn({ offerId, err: (whErr as Error).message }, "Warehouse auto-migration failed (price already updated)");
