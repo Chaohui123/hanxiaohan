@@ -39,15 +39,23 @@ describe("getRecommendation — 调价触发", () => {
 });
 
 describe("底价公式（毛利≥20% 与 净利≥10% 双取大）", () => {
-  // 与 decision-engine scoreAllProducts 同公式：floor = max(costRub/0.80, (costRub+300)/0.70)
-  const floor = (costRub: number) => Math.max(costRub / 0.80, (costRub + 300) / 0.70);
+  // 与 decision-engine scoreAllProducts 同公式：floor = max(costRub/0.80, (costRub+物流₽)/0.70)
+  // 物流分档（globalcalculator.ozon.ru China/Dongguan 实测 8/20）：
+  // XS(≤135¥且≤500g) 95₽ ｜ Small(135-635¥且≤2kg) 300₽ ｜ Premium Small(635¥+且≤5kg) 2161₽
+  const logistics = (priceCny: number, weightG: number) =>
+    priceCny <= 135 && weightG <= 500 ? 95
+      : priceCny <= 635 && weightG <= 2000 ? 300
+      : priceCny > 635 && weightG <= 5000 ? 2161
+      : 2161;
+  const floor = (costRub: number, priceCny = 200, weightG = 150) =>
+    Math.max(costRub / 0.80, (costRub + logistics(priceCny, weightG)) / 0.70);
 
-  it("67F 叶轮（成本 16¥ ≈ 197₽）→ 底价 711₽（净利线主导）", () => {
-    const f = floor(16 * 12.34);
-    expect(f).toBeGreaterThan(700);
-    expect(f).toBeLessThan(730);
-    // 现售 1385₽ > 底价 → 有降价空间
-    expect(1384.55).toBeGreaterThan(f);
+  it("67F 叶轮（成本 16¥ ≈ 197₽，XS 档 101¥/52g）→ 底价 418₽（XS 物流 95₽ 净利线主导）", () => {
+    const f = floor(16 * 12.34, 101, 52);
+    expect(f).toBeGreaterThan(410);
+    expect(f).toBeLessThan(430);
+    // 现售 101.3¥≈1273₽ > 底价 → 降价空间厚
+    expect(1273).toBeGreaterThan(f);
   });
 
   it("磁吸清货品（成本 42¥ ≈ 518₽）→ 底价 1169₽，现售 1222₽ 几乎贴线（没空间）", () => {
@@ -59,6 +67,22 @@ describe("底价公式（毛利≥20% 与 净利≥10% 双取大）", () => {
   it("高成本品（成本 1000₽）→ 净利线主导（1857₽，含固定物流 300₽ 摊薄）", () => {
     const f = floor(1000);
     expect(f).toBeCloseTo(1857, 0); // (1000+300)/0.70
+  });
+
+  it("XS 档（61N 119¥/200g）→ 物流 95₽：底价低于旧 300₽ 口径，降价空间更大", () => {
+    const costRub = 32 * 12.57; // 61N 成本 32¥
+    const fNew = floor(costRub, 119, 200);
+    const fOld = Math.max(costRub / 0.80, (costRub + 300) / 0.70);
+    expect(fNew).toBeLessThan(fOld);
+    expect(fNew).toBeCloseTo((costRub + 95) / 0.70, 0);
+  });
+
+  it("Premium Small 档（打窝船 1033¥/3746g）→ 物流 2161₽：底价 10306₽，现售 12990₽ 达标", () => {
+    const costRub = 402 * 12.57; // 5053₽
+    const f = floor(costRub, 1033, 3746);
+    expect(f).toBeCloseTo((costRub + 2161) / 0.70, 0);
+    expect(12990).toBeGreaterThan(f); // 净利 = (12990×0.8−2161−5053)/12990 ≈ 24.5% ≥10%
+    expect(12990 * 0.8 - 2161 - costRub).toBeGreaterThan(12990 * 0.1);
   });
 
   it("底价永远 ≥ 成本", () => {

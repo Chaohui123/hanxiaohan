@@ -375,9 +375,17 @@ export async function scoreAllProducts(config: ApiConfig): Promise<ProductScore[
     const marginScore = scoreMargin(marginPercent);
 
     // 调价底价（2026-08-14 方案）：毛利率≥20% 与 净利率≥10% 双底线取大
-    // 毛利线：(P−C)/P ≥ 20% ⇒ P ≥ C/0.80；净利线：P×(1−佣金20%) − C − 物流300₽ ≥ P×10% ⇒ P ≥ (C+300)/0.70
+    // 毛利线：(P−C)/P ≥ 20% ⇒ P ≥ C/0.80；净利线：P×(1−佣金20%) − C − 物流₽ ≥ P×10% ⇒ P ≥ (C+物流₽)/0.70
+    // 物流项按官方计算器费率表（globalcalculator.ozon.ru，China/Dongguan→Russia，8/20 实测）分档：
+    // XS(≤135¥且≤500g) 95₽ ｜ Small(135-635¥且≤2kg) 300₽ ｜ Premium Small(635¥+且≤5kg) 2161₽
     const costRub = cost * rate;
-    const floorPrice = Math.round(Math.max(costRub / 0.80, (costRub + 300) / 0.70) * 100) / 100;
+    const priceCny = costRub > 0 ? Number(item.price || 0) / rate : 0;
+    const weightG = (Number(item.weight || 0) || 0) * 1000;
+    const logisticsRub = priceCny <= 135 && weightG <= 500 ? 95
+      : priceCny <= 635 && weightG <= 2000 ? 300
+      : priceCny > 635 && weightG <= 5000 ? 2161
+      : 2161; // 超大/超高价暂按 Premium Small 口径，有 Premium Big 品再实测回填
+    const floorPrice = Math.round(Math.max(costRub / 0.80, (costRub + logisticsRub) / 0.70) * 100) / 100;
 
     // 价格优势评分
     const priceAdvantage = competitorAvg > 0

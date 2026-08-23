@@ -17,6 +17,7 @@ interface OzonInventoryItem {
   price: number;
   stock: number;
   cost: number;
+  weight: number; // kg（sku_1688_mapping.weight_kg）
   rating: number;
   orders: number;
   revenue: number;
@@ -85,16 +86,18 @@ async function fetchOzonInventoryItems(): Promise<OzonInventoryItem[]> {
       if (offerId) stockByOffer.set(offerId, (s.stocks || []).reduce((sum, st) => sum + (Number(st.present) || 0), 0));
     }
 
-    // 5. 1688 采购成本（CNY），按 ozon_offer_id 匹配；查不到记 0
+    // 5. 1688 采购成本（CNY）+ 重量（kg），按 ozon_offer_id 匹配；查不到记 0
     const costByOffer = new Map<string, number>();
+    const weightByOffer = new Map<string, number>();
     const db = await getDb().catch(() => null);
     if (db) {
-      const costRows = await db.all<{ ozon_offer_id: string; purchase_price_cny: number }>(
-        `SELECT ozon_offer_id, MAX(purchase_price_cny) AS purchase_price_cny
+      const costRows = await db.all<{ ozon_offer_id: string; purchase_price_cny: number; weight_kg: number }>(
+        `SELECT ozon_offer_id, MAX(purchase_price_cny) AS purchase_price_cny, MAX(weight_kg) AS weight_kg
          FROM sku_1688_mapping GROUP BY ozon_offer_id`,
-      ).catch(() => [] as Array<{ ozon_offer_id: string; purchase_price_cny: number }>);
+      ).catch(() => [] as Array<{ ozon_offer_id: string; purchase_price_cny: number; weight_kg: number }>);
       for (const row of costRows) {
         costByOffer.set(String(row.ozon_offer_id), Number(row.purchase_price_cny) || 0);
+        weightByOffer.set(String(row.ozon_offer_id), Number(row.weight_kg) || 0);
       }
     }
 
@@ -112,6 +115,7 @@ async function fetchOzonInventoryItems(): Promise<OzonInventoryItem[]> {
         price,
         stock,
         cost: costByOffer.get(offerId) || 0,
+        weight: weightByOffer.get(offerId) || 0,
         rating: 0,
         orders: 0,
         revenue: 0,
