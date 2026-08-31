@@ -19,10 +19,16 @@ const OK_STATUSES = new Set(["ok", "ready"]);
 export let lastStatus = "ok";
 export let lastAlertAt = -ALERT_COOLDOWN_MS - 1; // allow first alert
 let patrolTimer: ReturnType<typeof setInterval> | null = null;
+let consecutiveFailures = 0; // flap 防护：连续失败计数（跨境链路间歇超时不再单次翻转告警，8/28 实证）
+let hadAlerted = false; // 只有真告警过才发恢复通知（防抖动恢复卡片）
+let lastAlertedStatus = "ok"; // 最近一次告警的故障状态（仅变化才告警）
 
 export function resetPatrolState(): void {
   lastStatus = "ok";
   lastAlertAt = -ALERT_COOLDOWN_MS - 1; // allow first alert immediately
+  consecutiveFailures = 0;
+  hadAlerted = false;
+  lastAlertedStatus = "ok";
 }
 
 /**
@@ -40,11 +46,21 @@ export async function runPatrolCheck(
     const data = await apiClient.ready(config);
     const currentStatus = String(data.status || "unknown");
 
-    if (!OK_STATUSES.has(currentStatus) && currentStatus !== lastStatus) {
+    if (!OK_STATUSES.has(currentStatus)) {
+      consecutiveFailures++;
+    } else {
+      consecutiveFailures = 0;
+    }
+    // flap 防护：连续 3 次非 ok 才视为真故障（跨境链路间歇超时属正常抖动）
+    const isFault = consecutiveFailures >= 3;
+
+    if (isFault && currentStatus !== lastAlertedStatus) {
       const now = nowOverride ?? Date.now();
       if (now - lastAlertAt < ALERT_COOLDOWN_MS) return result;
       lastAlertAt = now;
+      lastAlertedStatus = currentStatus;
       result.alerted = true;
+      hadAlerted = true;
 
       const checks = (data.checks as Record<string, unknown>) || {};
       const failedEntries = Object.entries(checks).filter(([, c]) => {
@@ -114,9 +130,11 @@ export async function runPatrolCheck(
       }
     }
 
-    if (OK_STATUSES.has(currentStatus) && !OK_STATUSES.has(lastStatus)) {
+    if (OK_STATUSES.has(currentStatus) && !OK_STATUSES.has(lastStatus) && hadAlerted) {
       await bot.sendMessage(config.chatId, "✅ 系统已恢复正常");
       result.recovered = true;
+      hadAlerted = false;
+      lastAlertedStatus = "ok";
     }
 
     lastStatus = currentStatus;

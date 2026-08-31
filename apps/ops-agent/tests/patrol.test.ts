@@ -46,15 +46,31 @@ describe("Patrol", () => {
     expect(result.alerted).toBe(false);
   });
 
-  it("状态从ok变为error时应发送告警", async () => {
+  it("状态从ok连续3次变为error时应发送告警（flap 防护）", async () => {
     vi.mocked(apiClient.ready).mockResolvedValue({
       status: "error",
       checks: { db: { status: "error" } },
     });
     const bot = mockBot();
-    const result = await runPatrolCheck(bot, mockConfig, 6_000_000_000);
-    expect(result.alerted).toBe(true);
+    const base = 6_000_000_000;
+    expect((await runPatrolCheck(bot, mockConfig, base)).alerted).toBe(false); // 1st
+    expect((await runPatrolCheck(bot, mockConfig, base + 1000)).alerted).toBe(false); // 2nd
+    const r3 = await runPatrolCheck(bot, mockConfig, base + 2000); // 3rd → alert
+    expect(r3.alerted).toBe(true);
     expect(bot.sendMessage).toHaveBeenCalled();
+  });
+
+  it("单次/两次抖动不告警（间歇超时属正常）", async () => {
+    const bot = mockBot();
+    vi.mocked(apiClient.ready).mockResolvedValue({ status: "degraded" });
+    expect((await runPatrolCheck(bot, mockConfig, 1)).alerted).toBe(false);
+    expect((await runPatrolCheck(bot, mockConfig, 2000)).alerted).toBe(false);
+    // 中间恢复 ok → 计数清零
+    vi.mocked(apiClient.ready).mockResolvedValue({ status: "ok" });
+    await runPatrolCheck(bot, mockConfig, 4000);
+    vi.mocked(apiClient.ready).mockResolvedValue({ status: "degraded" });
+    expect((await runPatrolCheck(bot, mockConfig, 6000)).alerted).toBe(false);
+    expect(bot.sendMessage).not.toHaveBeenCalled();
   });
 
   it("相同状态不触发重复告警", async () => {
@@ -70,14 +86,17 @@ describe("Patrol", () => {
     const bot = mockBot();
     const baseTime = 1_000_000_000;
 
-    // First status change → alert
+    // 连续 3 次 error → 首次告警
     vi.mocked(apiClient.ready).mockResolvedValue({ status: "error" });
-    const r1 = await runPatrolCheck(bot, mockConfig, baseTime);
+    await runPatrolCheck(bot, mockConfig, baseTime);
+    await runPatrolCheck(bot, mockConfig, baseTime + 1000);
+    const r1 = await runPatrolCheck(bot, mockConfig, baseTime + 2000);
     expect(r1.alerted).toBe(true);
 
-    // Different status within cooldown → blocked
+    // 冷却期内状态变化 → 不再告警
     vi.mocked(apiClient.ready).mockResolvedValue({ status: "degraded" });
-    const r2 = await runPatrolCheck(bot, mockConfig, baseTime + 3 * 60 * 1000);
+    await runPatrolCheck(bot, mockConfig, baseTime + 3 * 60 * 1000);
+    const r2 = await runPatrolCheck(bot, mockConfig, baseTime + 3 * 60 * 1000 + 1000);
     expect(r2.alerted).toBe(false);
   });
 
@@ -87,11 +106,17 @@ describe("Patrol", () => {
 
     vi.mocked(apiClient.ready).mockResolvedValue({ status: "error" });
     await runPatrolCheck(bot, mockConfig, baseTime);
+    await runPatrolCheck(bot, mockConfig, baseTime + 1000);
+    const first = await runPatrolCheck(bot, mockConfig, baseTime + 2000); // 首次告警
+    expect(first.alerted).toBe(true);
 
-    // Outside cooldown, different status → new alert
+    // 冷却期外 + 状态变化（degraded）→ 冷却期后第一次变化即告警
     vi.mocked(apiClient.ready).mockResolvedValue({ status: "degraded" });
     const r2 = await runPatrolCheck(bot, mockConfig, baseTime + 6 * 60 * 1000);
     expect(r2.alerted).toBe(true);
+    // 同故障状态不重复告警
+    const r3 = await runPatrolCheck(bot, mockConfig, baseTime + 6 * 60 * 1000 + 1000);
+    expect(r3.alerted).toBe(false);
   });
 
   it("状态恢复时发送恢复通知", async () => {
@@ -108,7 +133,7 @@ describe("Patrol", () => {
     // Recovery flag only set when transitioning from non-ok to ok
   });
 
-  it("检测到故障时应触发AI诊断", async () => {
+  it("检测到故障时应触发AI诊断（连续 3 次）", async () => {
     vi.mocked(apiClient.ready).mockResolvedValue({
       status: "error",
       checks: { db: { status: "error" } },
@@ -117,7 +142,10 @@ describe("Patrol", () => {
     vi.mocked(aiDiagnose).mockResolvedValue("AI diagnosis result");
 
     const bot = mockBot();
-    const result = await runPatrolCheck(bot, mockConfig, 4_000_000_000);
+    const base = 4_000_000_000;
+    await runPatrolCheck(bot, mockConfig, base);
+    await runPatrolCheck(bot, mockConfig, base + 1000);
+    const result = await runPatrolCheck(bot, mockConfig, base + 2000);
 
     expect(result.alerted).toBe(true);
     expect(result.diagnosed).toBe(true);
