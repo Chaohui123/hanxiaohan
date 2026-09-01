@@ -40,6 +40,9 @@ export interface CoreJobDeps {
 export function registerCoreJobs(deps: CoreJobDeps): void {
   const { db, ozonClient, tokenTracker, logger, config, taskQueue, listingInfra } = deps;
 
+  // OzonOrderSync flap 防护：连续失败周期计数（跨境抖动单次失败不告警）
+  let syncFailStreak = 0;
+
   // Event-driven order flow: webhook is the primary channel.
   // This 6h job is only a deep-reconciliation fallback (was 30min polling).
   registerJob("order-sync", 6 * 3600_000, async () => {
@@ -218,6 +221,7 @@ export function registerCoreJobs(deps: CoreJobDeps): void {
   });
 
   // Ozon Order Sync v2 — every 5 minutes, with Redis distributed lock
+  // flap 防护计数器：连续失败周期数（见下）
   registerJob("ozon-order-sync-v2", 5 * 60_000, async () => {
     if (!db) { logger.warn("OzonOrderSync: DB unavailable, skipping cycle"); return; }
     const { OzonOrderSyncService } = await import("../services/ozon-order-sync.js");
@@ -228,12 +232,21 @@ export function registerCoreJobs(deps: CoreJobDeps): void {
       const service = new OzonOrderSyncService(db as never);
       const result = await service.syncAllStores();
       logger.info({ ...result }, "OzonOrderSync: Scheduled sync completed");
+      // flap 防护：跨境链路（服务器→俄罗斯）间歇超时属正常抖动——连续 3 个周期失败才告警
+      // （9/1 实证：单次 FBO 超时即报 error 级，后续每 5min 全部正常，纯属误报）
       if (result.errors.length > 0) {
+        syncFailStreak++;
+      } else {
+        syncFailStreak = 0;
+      }
+      if (syncFailStreak >= 3) {
         const { emitEvent } = await import("../services/notification-events.js");
         await emitEvent("ORDER_SYNC_FAILED", {
           error: result.errors.slice(0, 3).join("; "),
           storeCount: String(result.storesScanned),
+          streak: String(syncFailStreak),
         });
+        syncFailStreak = 0; // 告警后清零，避免同故障重复轰炸
       }
     } finally {
       await releaseLock("global", lockToken);
