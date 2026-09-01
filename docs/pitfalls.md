@@ -77,6 +77,7 @@
 | D5 | Ozon webhook 全部静默吞掉（零落库零告警） | 接收器假设推送带 X-Ozon-Signature 并据此 401/静默，**实测 Ozon 推送不带签名头**；且报文字段是 message_type/order_number/uuid 而非假设的 event_type/posting_number/event_id | **外部推送格式以实测为准**，别信臆测；无签名防护用 seller_id 白名单+IP 白名单；接收器对"无法处理但已收到"的请求必须打 warn，禁止静默 200 |
 | D6 | 定时任务全瘫但服务"健康" | scheduler leader 锁续约依赖 `cache.getClient()`，而该方法从未挂到 cache 单例上——续约永远失败，leader 每 30s 丢失与 60s job tick 谐振后恒落空 | 跨模块动态调用（`as any` 取方法）要在集成测试验证；**job 报错必须带内容**（只记数量的 errors:1 排查了两天） |
 | D6b | deploy-watch 构建失败后**永远不再重试** | 检测条件是 `HEAD == origin/main 即跳过`，而构建失败时 git 已 reset 到最新——HEAD 追平后判定"已部署" | 部署后必须验证容器 StartedAt/新代码特征（别信 git 状态）；构建失败时手动 `docker compose --profile production --env-file .env.production up -d --build` 重跑；deploy-watch 待改为比较"构建成功标记"而非 git HEAD |
+| D6c | Ozon 预警 webhook"不稳定/响应慢报错"（3 天停推威胁，9/1 实证） | **deploy-watch 部署窗口（api 重建秒级断线）撞上 Ozon 推送/探测的失败累积**——webhook 本体健康（响应 <30ms、事件全 done），预警是部署窗口连接拒绝的历史标记 | ①别被预警吓到：先查 ozon_webhook_log 确认事件都 done（别信 Ozon 状态字面）；②后台"设置→API 集成→通知→编辑地址"实时探测显示"URL 可用"即恢复，保存后状态走"验证中→可用"；③Ozon 推送自带重试（失败后重推成功，事件不丢）；④响应链已 <30ms 无需加速，真正要做的是缩短部署窗口（deploy-watch 已是秒级最小窗口） |
 | D7 | Ozon 订单同步拉到单却写库失败（154 次 errors） | order_id 用 INTEGER，Ozon 订单号 11 位（38394336004）超 PG int4 上限 | **外部平台 ID 一律 BIGINT 或 TEXT**；新链路上线后用一条真实数据端到端验证写库 |
 
 ## 流程与协作
