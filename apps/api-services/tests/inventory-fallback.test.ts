@@ -67,7 +67,8 @@ sqlite.db.exec(`
     ozon_offer_id TEXT NOT NULL,
     ozon_sku INTEGER,
     source_1688_url TEXT DEFAULT '',
-    purchase_price_cny REAL DEFAULT 0
+    purchase_price_cny REAL DEFAULT 0,
+    weight_kg REAL DEFAULT 0.3
   );
   CREATE TABLE promo_pricing_history (
     id INTEGER PRIMARY KEY AUTOINCREMENT,

@@ -137,11 +137,7 @@ export function createWebhookRouter(): Router {
       return;
     }
 
-    // Real Ozon pushes do NOT carry X-Ozon-Signature (observed in production).
-    // Signature is verified when present (inside parseWebhookPayload); when
-    // absent, authenticity rests on:
-    //   1. seller_id match (when the payload carries one), and/or
-    //   2. the optional OZON_WEBHOOK_IPS whitelist (checked above).
+    // seller_id check (fast, no DB) — keep before ack; on mismatch reject (Ozon sees error).
     const sellerId = (rawJson as Record<string, unknown>).seller_id;
     const configuredSellers = (process.env.OZON_CLIENT_IDS || "").split(",").map((s) => s.trim()).filter(Boolean);
     if (sellerId != null && configuredSellers.length > 0 && !configuredSellers.includes(String(sellerId))) {
@@ -154,91 +150,74 @@ export function createWebhookRouter(): Router {
       return;
     }
 
-    const dedupStore = {
-      /**
-       * Atomic dedup: ON CONFLICT(event_id) DO NOTHING skips existing events.
-       * Returns true if already processed (insert ignored = row existed).
-       * This eliminates the race condition between SELECT + INSERT.
-       */
-      async isDuplicate(eventId: string): Promise<boolean> {
-        const db = await getDb().catch(() => null);
-        if (!db) return false;
-        // Atomic dedup: ON CONFLICT DO NOTHING skips existing event_id
-        const result = await db.run(
-          "INSERT INTO webhook_events (event_id, posting_number, event_type, created_at) VALUES (?, NULL, NULL, NOW()) ON CONFLICT(event_id) DO NOTHING",
-          [eventId]
-        );
-        // rowCount === 0 means the row already existed → duplicate (PG returns null for no insert)
-        return result.changes === 0;
-      },
-      async markProcessed(eventId: string, meta?: { postingNumber?: string; eventType?: string }): Promise<void> {
-        const db = await getDb().catch(() => null);
-        if (!db) return;
-        // Update metadata for an already-inserted event (from isDuplicate above)
-        await db.run(
-          "UPDATE webhook_events SET posting_number = ?, event_type = ? WHERE event_id = ?",
-          [meta?.postingNumber ?? null, meta?.eventType ?? null, eventId]
-        );
-      },
-    };
-
-    // Parse + verify + dedup
-    const parsed = await parseWebhookPayload(rawBody, signature, API_SECRET, { dedupStore });
-
-    if (!("eventId" in parsed)) {
-      // VerificationResult — duplicates must ack 200 so Ozon doesn't retry pointlessly
-      const isDuplicate = (parsed.reason ?? "").startsWith("Duplicate event");
-      res.status(isDuplicate ? 200 : 400).json({
-        success: parsed.valid || isDuplicate,
-        reason: parsed.reason,
-        correlationId: req.correlationId,
-      });
-      return;
-    }
-
-    const payload: WebhookPayload = parsed;
-
-    // Log event type for monitoring
-    logger.info({
-      eventType: payload.eventType,
-      postingNumber: payload.postingNumber,
-      orderId: payload.orderId,
-      status: payload.status,
-      correlationId: req.correlationId,
-    }, "Webhook event accepted");
-
-    // Known non-order events (stocks/category-tree/item updates): ack without
-    // queueing — the raw body is already in the logs, and these carry no
-    // actionable order state for the drain job.
-    if (payload.eventType === "ignored") {
-      res.setHeader("Content-Type", "application/json; charset=utf-8");
-      res.status(200).send('{"result":"true"}');
-      return;
-    }
-
-    // ---- Event-driven architecture ----
-    // 1. Persist the RAW request FIRST (audit trail, before any processing)
-    // 2. Enqueue via the log row (process_status='queued') for the drain job
-    // 3. Respond 200 immediately — ALL business logic runs asynchronously
-    const logId = `owl-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
-    const db = await getDb().catch(() => null);
-    if (db) {
-      await db.run(
-        `INSERT INTO ozon_webhook_log (id, event_id, event_type, posting_number, order_id, status, signature, client_ip, payload_json, process_status, received_at)
-         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', NOW())
-         ON CONFLICT(event_id) DO NOTHING`,
-        [logId, payload.eventId, payload.eventType, payload.postingNumber, payload.orderId, payload.status, signature ?? null, clientIp, rawBody]
-      ).catch((err: Error) => logger.warn({ err: err.message }, "ozon_webhook_log insert failed — continuing ack"));
-    } else {
-      logger.error({ correlationId: req.correlationId }, "DB unavailable — webhook event will not be persisted/queued");
-    }
-
-    // Ozon ack template — result is the STRING "true" (verified against
-    // muscobytes/laravel-ozon-seller-webhook and Ozon push docs)
+    // ★ ACK FIRST (9/2 Ozon 2500ms 超时实证)：先秒回 200，dedup/解析/落库全部移到响应后异步执行。
+    // Ozon 端到端耗时 = 纯网络 RTT（不再有应用层等待）；异步失败只记日志，事件不丢（Ozon 有重试）。
     res.setHeader("Content-Type", "application/json; charset=utf-8");
     res.status(200).send('{"result":"true"}');
-    recordWebhookReceived();
-    recordWebhookProcessed(0, true);
+
+    setImmediate(() => {
+      (async () => {
+        try {
+          const dedupStore = {
+            async isDuplicate(eventId: string): Promise<boolean> {
+              const db = await getDb().catch(() => null);
+              if (!db) return false;
+              const result = await db.run(
+                "INSERT INTO webhook_events (event_id, posting_number, event_type, created_at) VALUES (?, NULL, NULL, NOW()) ON CONFLICT(event_id) DO NOTHING",
+                [eventId]
+              );
+              return result.changes === 0;
+            },
+            async markProcessed(eventId: string, meta?: { postingNumber?: string; eventType?: string }): Promise<void> {
+              const db = await getDb().catch(() => null);
+              if (!db) return;
+              await db.run(
+                "UPDATE webhook_events SET posting_number = ?, event_type = ? WHERE event_id = ?",
+                [meta?.postingNumber ?? null, meta?.eventType ?? null, eventId]
+              );
+            },
+          };
+
+          const parsed = await parseWebhookPayload(rawBody, signature, API_SECRET, { dedupStore });
+
+          if (!("eventId" in parsed)) {
+            logger.info({ reason: (parsed as { reason?: string }).reason, correlationId: req.correlationId }, "Webhook payload not parsed (post-ack)");
+            return;
+          }
+
+          const payload: WebhookPayload = parsed;
+          logger.info({
+            eventType: payload.eventType,
+            postingNumber: payload.postingNumber,
+            orderId: payload.orderId,
+            status: payload.status,
+            correlationId: req.correlationId,
+          }, "Webhook event accepted (post-ack)");
+
+          if (payload.eventType === "ignored") {
+            return;
+          }
+
+          const logId = `owl-${Date.now()}-${Math.random().toString(36).slice(2, 10)}`;
+          const db = await getDb().catch(() => null);
+          if (db) {
+            await db.run(
+              `INSERT INTO ozon_webhook_log (id, event_id, event_type, posting_number, order_id, status, signature, client_ip, payload_json, process_status, received_at)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, 'queued', NOW())
+               ON CONFLICT(event_id) DO NOTHING`,
+              [logId, payload.eventId, payload.eventType, payload.postingNumber, payload.orderId, payload.status, signature ?? null, clientIp, rawBody]
+            ).catch((err: Error) => logger.warn({ err: err.message }, "ozon_webhook_log insert failed (post-ack)"));
+          } else {
+            logger.error({ correlationId: req.correlationId }, "DB unavailable — webhook event will not be persisted/queued");
+          }
+
+          recordWebhookReceived();
+          recordWebhookProcessed(0, true);
+        } catch (err) {
+          logger.error({ err: (err as Error).message, correlationId: req.correlationId }, "Webhook post-ack processing failed");
+        }
+      })();
+    });
   });
 
   // Manual replay — re-queue a FAILED webhook event for the drain job.
