@@ -50,13 +50,13 @@ export default function PromoPricingHistory() {
   return (
     <div>
       <Row gutter={[16, 16]}>
-        <Col xs={8}><Card><Statistic title="总调价" value={stats.total} suffix="次" /></Card></Col>
-        <Col xs={8}><Card><Statistic title="平均增量" value={stats.avgIncrease} suffix="单" valueStyle={{ color: Number(stats.avgIncrease) > 0 ? "#10b981" : "#ef4444" }} /></Card></Col>
-        <Col xs={8}><Card><Statistic title="正向占比" value={stats.positiveRate} suffix="%" valueStyle={{ color: Number(stats.positiveRate) >= 50 ? "#10b981" : "#f59e0b" }} /></Card></Col>
+        <Col xs={24} sm={8}><Card><Statistic title="总调价" value={stats.total} suffix="次" /></Card></Col>
+        <Col xs={24} sm={8}><Card><Statistic title="平均增量" value={stats.avgIncrease} suffix="单" valueStyle={{ color: Number(stats.avgIncrease) > 0 ? "#10b981" : "#ef4444" }} /></Card></Col>
+        <Col xs={24} sm={8}><Card><Statistic title="正向占比" value={stats.positiveRate} suffix="%" valueStyle={{ color: Number(stats.positiveRate) >= 50 ? "#10b981" : "#f59e0b" }} /></Card></Col>
       </Row>
 
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-        <Col span={24}>
+        <Col xs={24}>
           <Card title="调价历史" extra={<Input.Search placeholder="搜索商品名/OfferID" onChange={(e) => setSearchText(e.target.value)} style={{ width: 260 }} />}>
             <Table dataSource={filtered.map((item, i) => ({ ...item, key: i }))} columns={columns} pagination={{ pageSize: 20 }} size="small" scroll={{ x: 1000 }} />
           </Card>

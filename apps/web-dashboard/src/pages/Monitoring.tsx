@@ -19,15 +19,15 @@ export default function Monitoring() {
   return (
     <PageContainer title="运行监控" subTitle="Token 用量、汇率、爬虫与管道健康" updatedAt={llmQ.dataUpdatedAt}>
       <Row gutter={[16, 16]}>
-        <Col span={6}><Card><Statistic title="Token用量" value={(Number(l.todayTokens) || 0).toLocaleString()} suffix={`/ ${(Number(l.dailyLimit) || 500000).toLocaleString()}`} />
+        <Col xs={24} sm={12} lg={6}><Card><Statistic title="Token用量" value={(Number(l.todayTokens) || 0).toLocaleString()} suffix={`/ ${(Number(l.dailyLimit) || 500000).toLocaleString()}`} />
           <Progress percent={Math.min(100, ((Number(l.todayTokens) || 0) / (Number(l.dailyLimit) || 500000)) * 100)} size="small" status={Number(l.todayTokens) > Number(l.dailyLimit || 500000) * 0.8 ? "exception" : "active"} /></Card></Col>
-        <Col span={6}><Card><Statistic title="汇率 CNY→RUB" value={Number(f.rate) || 0} suffix={f.reliable ? "✅" : "⚠️"} /></Card></Col>
-        <Col span={6}><Card><Statistic title="爬虫成功率" value={String(s.successRate ?? "N/A")} /></Card></Col>
-        <Col span={6}><Card><Statistic title="死信积压" value={deadList.length} valueStyle={{ color: deadList.length > 5 ? "#ef4444" : "#10b981" }} /></Card></Col>
+        <Col xs={24} sm={12} lg={6}><Card><Statistic title="汇率 CNY→RUB" value={Number(f.rate) || 0} suffix={f.reliable ? "✅" : "⚠️"} /></Card></Col>
+        <Col xs={24} sm={12} lg={6}><Card><Statistic title="爬虫成功率" value={String(s.successRate ?? "N/A")} /></Card></Col>
+        <Col xs={24} sm={12} lg={6}><Card><Statistic title="死信积压" value={deadList.length} valueStyle={{ color: deadList.length > 5 ? "#ef4444" : "#10b981" }} /></Card></Col>
       </Row>
 
       <Row gutter={16} style={{ marginTop: 16 }}>
-        <Col span={12}>
+        <Col xs={24} lg={12}>
           <Card title="外部依赖状态" size="small">
             {components.map((c) => (
               <div key={c.name} style={{ display: "flex", justifyContent: "space-between", padding: "4px 0", borderBottom: "1px solid #f0f0f0" }}>
@@ -37,9 +37,9 @@ export default function Monitoring() {
             ))}
           </Card>
         </Col>
-        <Col span={12}>
+        <Col xs={24} lg={12}>
           <Card title="死信队列" size="small">
-            <Table dataSource={deadList.slice(0, 5)} rowKey="id" size="small" pagination={false}
+            <Table dataSource={deadList.slice(0, 5)} rowKey="id" size="small" pagination={false} scroll={{ x: "max-content" }}
               columns={[
                 { title: "类型", dataIndex: "taskType", width: 80 }, { title: "错误", dataIndex: "errorMessage", ellipsis: true },
                 { title: "重试", dataIndex: "retryCount", width: 50 },

@@ -66,7 +66,7 @@ export default function PromoDecision() {
       </Row>
 
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-        <Col span={24}>
+        <Col xs={24}>
           <Card
             title="当前决策计划"
             extra={
@@ -109,14 +109,14 @@ export default function PromoDecision() {
       </Row>
 
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-        <Col span={24}>
+        <Col xs={24}>
           <Card title="销售排行 Top 20">
             <Table
               dataSource={ranking.slice(0, 20).map((item, i) => ({ ...item, key: i }))}
               columns={columns}
               pagination={false}
               size="small"
-              scroll={{ y: 400 }}
+              scroll={{ x: "max-content", y: 400 }}
             />
           </Card>
         </Col>

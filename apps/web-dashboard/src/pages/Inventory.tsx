@@ -12,7 +12,7 @@ export default function Inventory() {
       <Card title="库存列表" style={{ marginBottom: 16 }}>
         <QueryState query={itemsQuery} emptyText="还没有库存记录" emptyAction={{ label: "去选品上架", to: "/listing" }}>
           {(items) => (
-            <Table dataSource={items} rowKey={(r) => `${String(r.offer_id)}-${String(r.sku)}`} size="small"
+            <Table dataSource={items} rowKey={(r) => `${String(r.offer_id)}-${String(r.sku)}`} size="small" scroll={{ x: "max-content" }}
               columns={[
                 { title: "SKU", dataIndex: "sku" }, { title: "Offer ID", dataIndex: "offer_id", ellipsis: true },
                 { title: "可用", dataIndex: "stock_available", render: (v: number) => <Tag color={v < 5 ? "red" : "green"}>{v}</Tag> },
@@ -25,7 +25,7 @@ export default function Inventory() {
       <Card title="补货建议">
         <QueryState query={alertsQuery} emptyText="✅ 库存充足，暂无补货建议">
           {(alertList) => (
-            <Table dataSource={alertList} rowKey="sku" size="small"
+            <Table dataSource={alertList} rowKey="sku" size="small" scroll={{ x: "max-content" }}
               columns={[
                 { title: "SKU", dataIndex: "sku" }, { title: "当前库存", dataIndex: "currentStock" },
                 { title: "建议补货", dataIndex: "suggestedOrderQuantity" },

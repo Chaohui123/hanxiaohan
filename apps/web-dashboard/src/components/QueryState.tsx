@@ -48,7 +48,7 @@ export default function QueryState<T>({ query, emptyText = "暂无数据", empty
 
   if (data === undefined || data === null || isEmptyData(data)) {
     return (
-      <Empty description={emptyText}>
+      <Empty description={emptyText} imageStyle={{ height: 80 }}>
         {emptyAction && (
           <Button type="primary" onClick={() => navigate(emptyAction.to)}>
             {emptyAction.label}

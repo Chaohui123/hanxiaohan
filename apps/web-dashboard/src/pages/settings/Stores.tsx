@@ -9,7 +9,7 @@ export default function Stores() {
     <Card title="店铺管理">
       <QueryState query={storesQuery} emptyText="暂无店铺配置">
         {(stores) => (
-          <Table dataSource={stores} rowKey="store_id" size="small"
+          <Table dataSource={stores} rowKey="store_id" size="small" scroll={{ x: "max-content" }}
             columns={[
               { title: "店铺ID", dataIndex: "store_id" },
               { title: "名称", dataIndex: "store_name" },

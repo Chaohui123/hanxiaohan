@@ -1,6 +1,6 @@
 import { Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate, useSearchParams, Navigate } from "react-router-dom";
-import { Layout, Menu, Spin, theme, Button, Space, message } from "antd";
+import { Layout, Menu, Spin, theme, Button, Space, Avatar, message } from "antd";
 import type { MenuProps } from "antd";
 import {
   DashboardOutlined, LineChartOutlined, RocketOutlined, DatabaseOutlined,
@@ -142,9 +142,10 @@ function AppLayout() {
             <span onClick={toggleSidebar} style={{ fontSize: 18, cursor: "pointer", marginRight: 16 }}>
               {sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
             </span>
+            <Avatar shape="square" size={24} style={{ backgroundColor: themeToken.colorPrimary, fontSize: 14, marginRight: 8 }}>O</Avatar>
             <span style={{ fontSize: 14, color: themeToken.colorTextSecondary }}>Ozon 跨境电商自动化运营系统</span>
           </span>
-          <Space size="middle">
+          <Space size={16}>
             <StoreSwitcher />
             <AlertBell />
             <Button type="text" icon={<LogoutOutlined />} onClick={handleLogout}>

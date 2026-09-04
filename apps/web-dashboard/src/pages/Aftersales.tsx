@@ -46,7 +46,7 @@ export default function Aftersales() {
       <Card>
         <QueryState query={casesQuery} emptyText="暂无售后工单">
           {(cases) => (
-            <Table dataSource={cases} rowKey="id" size="small"
+            <Table dataSource={cases} rowKey="id" size="small" scroll={{ x: "max-content" }}
               columns={[
                 { title: "订单号", dataIndex: "posting_number", width: 130 },
                 { title: "类型", dataIndex: "type", render: (t: string) => <Tag color={typeColors[t] || "default"}>{t}</Tag> },

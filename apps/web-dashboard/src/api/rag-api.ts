@@ -40,6 +40,15 @@ const kbLabels: Record<string, string> = {
   playbook: "运营经验",
 };
 
+/** /api/rag/stats 返回的键是表名（rag.route.ts stats 端点），映射到前端 kb 短名 */
+const kbStatsKeys: Record<string, string> = {
+  aftersales: "rag_aftersales_scripts",
+  competitor: "rag_competitor_reports",
+  product: "rag_product_knowledge",
+  copy: "rag_copy_templates",
+  playbook: "rag_operations_playbook",
+};
+
 export function useRagStats() {
   return useQuery({ queryKey: ["rag-stats"], queryFn: () => ragApi.stats(), refetchInterval: 30_000 });
 }
@@ -75,4 +84,4 @@ export function useRagImport(kb: string) {
   });
 }
 
-export { kbLabels };
+export { kbLabels, kbStatsKeys };

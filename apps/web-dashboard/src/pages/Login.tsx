@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { Card, Input, Button, message, Space, Typography } from "antd";
+import { Card, Input, Button, message, Space, Typography, Avatar, theme } from "antd";
 import { KeyOutlined, LoginOutlined } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAppStore } from "../stores/app-store";
@@ -13,6 +13,7 @@ export default function Login() {
   const { setApiKey: saveApiKey } = useAppStore();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
+  const { token } = theme.useToken();
 
   const handleLogin = async () => {
     const key = apiKey.trim();
@@ -61,10 +62,10 @@ export default function Login() {
       justifyContent: "center",
       background: "linear-gradient(135deg, #667eea 0%, #764ba2 100%)",
     }}>
-      <Card style={{ width: 400, boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }}>
+      <Card style={{ width: 360, boxShadow: "0 8px 32px rgba(0,0,0,0.2)" }}>
         <Space direction="vertical" size="large" style={{ width: "100%", textAlign: "center" }}>
           <div>
-            <span style={{ fontSize: 48 }}>🛒</span>
+            <Avatar shape="square" size={48} style={{ backgroundColor: token.colorPrimary, fontSize: 24 }}>O</Avatar>
             <Title level={2} style={{ marginTop: 8 }}>ONZO</Title>
             <Text type="secondary">Ozon 跨境电商自动化运营系统</Text>
           </div>

@@ -104,12 +104,12 @@ export default function MarketAnalysis() {
                 </Card>
               </div>
             ) },
-            { key:"categories", label:"🏪 行业类目", children:<Table dataSource={data.categories} columns={categoryColumns} rowKey="name" size="small" pagination={false} /> },
+            { key:"categories", label:"🏪 行业类目", children:<Table dataSource={data.categories} columns={categoryColumns} rowKey="name" size="small" pagination={false} scroll={{ x: "max-content" }} /> },
             { key:"products", label:"📦 单品分析", children:<Table dataSource={data.products} columns={[
-              {title:"商品",dataIndex:"title",key:"t"},{title:"¥",dataIndex:"price",key:"p"},{title:"评分",dataIndex:"score",key:"s",render:(v:number)=><Tag color={v>=60?"green":"orange"}>{v}</Tag>},{title:"月销",dataIndex:"monthlySales",key:"ms"},{title:"利润¥",dataIndex:"profit",key:"pr"}]} rowKey="title" size="small" pagination={false} /> },
-            { key:"keywords", label:"🔑 关键词", children:<Table dataSource={data.keywords} columns={kwColumns} rowKey="word" size="small" pagination={false} /> },
-            { key:"costs", label:"💰 成本拆解", children:<Table dataSource={data.costs} columns={costColumns} rowKey="category" size="small" pagination={false} /> },
-            { key:"competitors", label:"👥 同行比价", children:<Table dataSource={data.competitors} columns={compColumns} rowKey="name" size="small" pagination={false} /> },
+              {title:"商品",dataIndex:"title",key:"t"},{title:"¥",dataIndex:"price",key:"p"},{title:"评分",dataIndex:"score",key:"s",render:(v:number)=><Tag color={v>=60?"green":"orange"}>{v}</Tag>},{title:"月销",dataIndex:"monthlySales",key:"ms"},{title:"利润¥",dataIndex:"profit",key:"pr"}]} rowKey="title" size="small" pagination={false} scroll={{ x: "max-content" }} /> },
+            { key:"keywords", label:"🔑 关键词", children:<Table dataSource={data.keywords} columns={kwColumns} rowKey="word" size="small" pagination={false} scroll={{ x: "max-content" }} /> },
+            { key:"costs", label:"💰 成本拆解", children:<Table dataSource={data.costs} columns={costColumns} rowKey="category" size="small" pagination={false} scroll={{ x: "max-content" }} /> },
+            { key:"competitors", label:"👥 同行比价", children:<Table dataSource={data.competitors} columns={compColumns} rowKey="name" size="small" pagination={false} scroll={{ x: "max-content" }} /> },
           ]} />
         )}
       </QueryState>

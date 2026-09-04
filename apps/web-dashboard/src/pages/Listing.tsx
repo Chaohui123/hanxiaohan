@@ -124,7 +124,7 @@ export default function Listing() {
 
       {/* ---- Listing records ---- */}
       <Card title="上架记录">
-        <Table dataSource={records} rowKey="id" size="small" pagination={{ pageSize: 20 }}
+        <Table dataSource={records} rowKey="id" size="small" pagination={{ pageSize: 20 }} scroll={{ x: "max-content" }}
           columns={[
             { title: "URL", dataIndex: "sourceUrl", ellipsis: true },
             { title: "来源", dataIndex: "source", width: 80, render: (s: string) => <Tag color={s === "plugin" ? "purple" : "blue"}>{s === "plugin" ? "插件" : "大盘"}</Tag> },

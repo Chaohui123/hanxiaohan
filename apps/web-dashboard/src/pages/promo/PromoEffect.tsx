@@ -87,7 +87,7 @@ export default function PromoEffect() {
                   { title: "原价", dataIndex: "oldPrice", key: "oldPrice", width: 80 },
                   { title: "新价", dataIndex: "newPrice", key: "newPrice", width: 80 },
                 ]}
-                pagination={false} size="small"
+                pagination={false} size="small" scroll={{ x: "max-content" }}
               />
             )}
           </Card>
@@ -103,7 +103,7 @@ export default function PromoEffect() {
                 { title: "商品", dataIndex: "name", key: "name", ellipsis: true },
                 { title: "俄语标题", dataIndex: "titleRu", key: "titleRu", ellipsis: true },
               ]}
-              pagination={false} size="small"
+              pagination={false} size="small" scroll={{ x: "max-content" }}
             />
           </Card>
         </Col>

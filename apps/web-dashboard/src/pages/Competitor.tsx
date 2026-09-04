@@ -44,13 +44,13 @@ export default function Competitor() {
   return (
     <PageContainer title="竞品监控" subTitle="监控竞品价格变动与降价告警" updatedAt={watchQuery.dataUpdatedAt}>
       <Row gutter={[16, 16]}>
-        <Col span={24}>
+        <Col xs={24}>
           <Card title="竞品监控列表" extra={
             <Button type="primary" icon={<PlusOutlined />} onClick={() => setModalOpen(true)}>添加监控</Button>
           }>
             <QueryState query={watchQuery} emptyText="还没有监控竞品，点击右上角「添加监控」开始">
               {(watchList) => (
-                <Table dataSource={watchList.map((item, i) => ({ ...item, key: i }))} columns={columns} pagination={false} size="small" />
+                <Table dataSource={watchList.map((item, i) => ({ ...item, key: i }))} columns={columns} pagination={false} size="small" scroll={{ x: "max-content" }} />
               )}
             </QueryState>
           </Card>
@@ -59,7 +59,7 @@ export default function Competitor() {
 
       {selectedOfferId && chartData.length > 0 && (
         <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-          <Col span={24}>
+          <Col xs={24}>
             <Card title={`价格趋势 — ${selectedOfferId}`}>
               <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={chartData}>
@@ -76,7 +76,7 @@ export default function Competitor() {
       )}
 
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-        <Col span={24}>
+        <Col xs={24}>
           <Card title="降价告警">
             <QueryState query={eventsQuery} emptyText="暂无降价告警">
               {(eventList) => (
@@ -92,7 +92,7 @@ export default function Competitor() {
                     { title: "降幅", dataIndex: "drop", key: "drop", render: (v: string) => <Tag color="red">{v}%</Tag> },
                     { title: "时间", dataIndex: "time", key: "time" },
                   ]}
-                  pagination={false} size="small"
+                  pagination={false} size="small" scroll={{ x: "max-content" }}
                 />
               )}
             </QueryState>

@@ -77,7 +77,7 @@ export default function PluginGuide() {
       >
         <QueryState query={pluginQuery} emptyText="暂无插件采集记录，打开 1688 商品页点击「同步至ERP」开始">
           {(list) => (
-            <Table dataSource={list.map((p, i) => ({ ...p, key: String(i) }))} columns={columns} size="small" pagination={{ pageSize: 20 }} />
+            <Table dataSource={list.map((p, i) => ({ ...p, key: String(i) }))} columns={columns} size="small" pagination={{ pageSize: 20 }} scroll={{ x: "max-content" }} />
           )}
         </QueryState>
       </Card>

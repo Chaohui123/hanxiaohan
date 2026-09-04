@@ -167,7 +167,7 @@ export default function PurchasePay() {
       </Row>
 
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-        <Col span={24}>
+        <Col xs={24}>
           <Card
             title="采购支付列表"
             extra={
@@ -182,7 +182,7 @@ export default function PurchasePay() {
               </Space>
             }
           >
-            <Table dataSource={items.map((item) => ({ ...item, key: item.id }))} columns={columns} pagination={{ pageSize: 20 }} size="small" scroll={{ y: 500 }}
+            <Table dataSource={items.map((item) => ({ ...item, key: item.id }))} columns={columns} pagination={{ pageSize: 20 }} size="small" scroll={{ x: "max-content", y: 500 }}
               rowSelection={{ selectedRowKeys, onChange: (keys) => setSelectedRowKeys(keys) }} />
           </Card>
         </Col>

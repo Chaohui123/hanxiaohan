@@ -1,7 +1,7 @@
 import { useState } from "react";
 import { Row, Col, Card, Statistic, Table, Input, Select, Button, Space, Tag, Spin, message, Tabs, Form, Modal } from "antd";
 import { SearchOutlined, ImportOutlined, PlusOutlined } from "@ant-design/icons";
-import { useRagStats, useRagSearch, useRagAdd, useRagImport, kbLabels } from "../api/rag-api";
+import { useRagStats, useRagSearch, useRagAdd, useRagImport, kbLabels, kbStatsKeys } from "../api/rag-api";
 
 const kbOptions = Object.entries(kbLabels).map(([value, label]) => ({ value, label }));
 
@@ -17,6 +17,8 @@ export default function RagKnowledge() {
   const [form] = Form.useForm();
 
   const stats = statsData || {};
+  // stats 的键是后端表名（rag_*），按 kbStatsKeys 映射到 kb 短名取数
+  const statOf = (key: string) => stats[kbStatsKeys[key] ?? key] || 0;
 
   const handleSearch = () => {
     if (!searchQuery.trim()) { message.warning("请输入查询文本"); return; }
@@ -38,19 +40,19 @@ export default function RagKnowledge() {
         {Object.entries(kbLabels).map(([key, label]) => (
           <Col xs={12} sm={6} lg={4} key={key}>
             <Card>
-              <Statistic title={label} value={stats[key] || 0} loading={statsLoading} />
+              <Statistic title={label} value={statOf(key)} loading={statsLoading} />
             </Card>
           </Col>
         ))}
         <Col xs={12} sm={6} lg={4}>
           <Card>
-            <Statistic title="总计" value={Object.values(stats).reduce((s, n) => s + (n || 0), 0)} loading={statsLoading} valueStyle={{ color: "#3b82f6" }} />
+            <Statistic title="总计" value={Object.keys(kbLabels).reduce((s, k) => s + statOf(k), 0)} loading={statsLoading} valueStyle={{ color: "#3b82f6" }} />
           </Card>
         </Col>
       </Row>
 
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-        <Col span={24}>
+        <Col xs={24}>
           <Card title="向量搜索测试" extra={
             <Space>
               <Select value={searchKb} onChange={setSearchKb} options={kbOptions} style={{ width: 120 }} />
@@ -69,6 +71,7 @@ export default function RagKnowledge() {
               columns={searchColumns}
               pagination={false}
               size="small"
+              scroll={{ x: "max-content" }}
               loading={searchLoading}
               locale={{ emptyText: activeQuery ? "无匹配结果" : "输入查询后搜索" }}
             />
@@ -77,7 +80,7 @@ export default function RagKnowledge() {
       </Row>
 
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-        <Col span={24}>
+        <Col xs={24}>
           <Card title="数据管理" extra={
             <Space>
               <Button icon={<ImportOutlined />} onClick={() => importMutation.mutate(undefined as unknown as void, { onSuccess: (d: unknown) => message.success(`已导入 ${(d as Record<string, number>).imported || 0} 条`) })} loading={importMutation.isPending}>
@@ -87,7 +90,7 @@ export default function RagKnowledge() {
             </Space>
           }>
             <Tabs items={Object.entries(kbLabels).map(([key, label]) => ({
-              key, label: `${label} (${stats[key] || 0})`,
+              key, label: `${label} (${statOf(key)})`,
               children: <div style={{ padding: 24, textAlign: "center", color: "#94a3b8" }}>
                 选择知识库后在搜索面板中查询，或点击"添加文档"手动录入
               </div>,

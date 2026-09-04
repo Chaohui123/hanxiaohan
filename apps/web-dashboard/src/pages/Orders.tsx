@@ -342,6 +342,7 @@ export default function Orders() {
                 dataSource={reconcileResult.discrepancies}
                 rowKey="orderId"
                 size="small"
+                scroll={{ x: "max-content" }}
                 pagination={{ pageSize: 10 }}
                 columns={[
                   { title: "订单号", dataIndex: "orderId", width: 120 },
