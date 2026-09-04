@@ -257,8 +257,8 @@ export function createAftersalesRouter(): Router {
     }
   });
 
-  // RAG-enhanced auto reply
-  router.post("/aftersales/:id/auto-reply", async (req, res) => {
+  // RAG-enhanced auto reply（路径与 cases 系列对齐：/api/aftersales/cases/:id/auto-reply）
+  router.post("/cases/:id/auto-reply", async (req, res) => {
     try {
       const caseItem = await aftersalesManager.getCase(req.params.id);
       if (!caseItem) {

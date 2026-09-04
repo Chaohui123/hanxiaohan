@@ -73,6 +73,8 @@ export const orderApi = {
     api.post("/api/orders/ship", { postingNumber, trackingNumber, products }),
   batchShip: () => api.post("/api/orders/batch-ship", {}),
   metrics: () => api.get("/api/orders/metrics"),
+  reconcile: (dateFrom: string, dateTo: string) => api.post("/api/orders/reconcile", { dateFrom, dateTo }),
+  reconcileLatest: () => api.get("/api/orders/reconcile/latest"),
 };
 
 // ---- Tasks ----
@@ -113,7 +115,10 @@ export const monitorApi = {
 export const aftersalesApi = {
   list: () => api.get("/api/aftersales/cases"),
   create: (data: Record<string, unknown>) => api.post("/api/aftersales/cases", data),
-  update: (id: string, data: Record<string, unknown>) => api.post(`/api/aftersales/cases/${id}`, data),
+  update: (id: string, data: Record<string, unknown>) => api.put(`/api/aftersales/cases/${id}`, data), // 后端是 PUT（曾错配为 POST）
+  resolve: (id: string, resolutionNote: string) => api.post(`/api/aftersales/cases/${id}/resolve`, { resolutionNote }),
+  reject: (id: string, resolutionNote: string) => api.post(`/api/aftersales/cases/${id}/reject`, { resolutionNote }),
+  autoReply: (id: string) => api.post(`/api/aftersales/cases/${id}/auto-reply`),
 };
 
 // ---- Analyze ----

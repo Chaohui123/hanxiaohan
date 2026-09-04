@@ -1,8 +1,8 @@
 import { useState } from "react";
-import { Card, Input, Button, Table, Tag, message, Space, Modal, Divider, Tabs } from "antd";
-import { LinkOutlined, RocketOutlined, SearchOutlined, ChromeOutlined, ScheduleOutlined } from "@ant-design/icons";
+import { Card, Input, Button, Table, Tag, message, Space, Modal, Divider, Tabs, Upload } from "antd";
+import { LinkOutlined, RocketOutlined, SearchOutlined, ChromeOutlined, ScheduleOutlined, InboxOutlined } from "@ant-design/icons";
 import { listingApi, taskApi } from "../api/client";
-import { useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
 
 export default function Listing() {
@@ -13,12 +13,30 @@ export default function Listing() {
   const [selectResult, setSelectResult] = useState<Record<string, unknown> | null>(null);
   const { data: listings, refetch } = useQuery({ queryKey: ["listings-full"], queryFn: () => taskApi.listings() });
   const [dataSource, setDataSource] = useState("scheduled");
-  const { data: pluginData } = useQuery({
-    queryKey: ["plugin-products"],
-    queryFn: () => api.get("/api/crawl/plugin-list") as Promise<{ data?: Array<Record<string, string>> }>,
-    refetchInterval: 15000,
+
+  // 批量导入：xlsx / csv 读为 base64 后走对应后端端点（axios 实例自动带 X-API-Key）
+  const importMutation = useMutation({
+    mutationFn: (args: { endpoint: string; fileBase64: string }) => api.post(args.endpoint, { fileBase64: args.fileBase64 }),
+    onSuccess: (resp) => {
+      const d = (resp as { data?: { enqueued?: number } })?.data;
+      message.success(`已入队 ${d?.enqueued ?? 0} 个商品`);
+      refetch();
+    },
+    onError: (e: Error) => message.error(e.message),
   });
-  const pluginProducts = pluginData?.data || [];
+
+  const handleImportFile = (file: File) => {
+    const endpoint = /\.csv$/i.test(file.name) ? "/api/bulk/import/csv" : "/api/bulk/import/xlsx";
+    const reader = new FileReader();
+    reader.onload = () => {
+      const base64 = String(reader.result || "").split(",")[1] || "";
+      if (!base64) { message.error("文件读取失败"); return; }
+      importMutation.mutate({ endpoint, fileBase64: base64 });
+    };
+    reader.onerror = () => message.error("文件读取失败");
+    reader.readAsDataURL(file);
+    return false; // 阻止 antd 默认上传，统一走 api 实例
+  };
 
   // Manual URL listing
   const submitUrl = async () => {
@@ -75,7 +93,36 @@ export default function Listing() {
           <Input prefix={<LinkOutlined />} placeholder="粘贴 1688 商品链接 https://detail.1688.com/offer/..." value={url} onChange={(e) => setUrl(e.target.value)} onPressEnter={submitUrl} size="large" />
           <Button type="primary" size="large" loading={loading} onClick={submitUrl}>一键上架</Button>
         </Space.Compact>
-        {/* 批量导入 CSV/Excel 待后端导入端点就绪后恢复（原 Upload 按钮无实际处理，已移除避免误导） */}
+        {/* ---- 批量导入（xlsx / csv，后端 /api/bulk/import 已就绪） ---- */}
+        <Upload.Dragger
+          accept=".xlsx,.csv"
+          showUploadList={false}
+          disabled={importMutation.isPending}
+          beforeUpload={(file) => handleImportFile(file)}
+          style={{ marginTop: 12, padding: "8px 0" }}
+        >
+          <p style={{ margin: 4 }}><InboxOutlined style={{ fontSize: 24, color: "#3b82f6" }} /></p>
+          <p style={{ margin: 4, fontSize: 13 }}>点击或拖拽文件到此处，批量导入商品（.xlsx / .csv，单次最多 100 条）</p>
+          <p style={{ margin: 4, fontSize: 12, color: "#888" }}>
+            {importMutation.isPending ? "导入中..." : "需包含 标题、价格(元) 列，可选 图片URL、规格、描述"}
+          </p>
+        </Upload.Dragger>
+        <Button type="link" size="small" style={{ paddingLeft: 0 }} onClick={async () => {
+          // window.open 不带 X-API-Key 会 401 — 用 axios blob 下载后触发浏览器保存
+          try {
+            const blob = await api.get("/api/bulk/template", { responseType: "blob" }) as unknown as Blob;
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement("a");
+            a.href = url;
+            a.download = "onzo-bulk-import-template.csv";
+            a.click();
+            URL.revokeObjectURL(url);
+          } catch (e) {
+            message.error(`模板下载失败: ${(e as Error).message}`);
+          }
+        }}>
+          下载模板
+        </Button>
       </Card>
 
       {/* ---- Listing records ---- */}
