@@ -3,6 +3,12 @@ export interface Violation {
   reason: string;
   severity: "block" | "warn";
   replacement?: string;
+  /**
+   * true = 整词匹配（Unicode 字母环视），只命中独立单词，不命中更长词的子串。
+   * 用于短词和词根：如 "оригинал" 只拦名词（正品声明），放行形容词
+   * "оригинальный"（兼容件行业通用表达："аналог оригинальной детали"）。
+   */
+  boundary?: boolean;
 }
 
 export const RUSSIAN_AD_LAW: Violation[] = [
@@ -28,8 +34,8 @@ export const RUSSIAN_AD_LAW: Violation[] = [
   { word: "похудение", reason: "禁止减肥效果声明", severity: "block" },
   { word: "сертифицировано", reason: "禁止无依据的认证声明", severity: "block" },
   { word: "FDA", reason: "禁止未经核实的 FDA 声明", severity: "block" },
-  { word: "CE", reason: "禁止未经核实的 CE 声明", severity: "warn" },
-  { word: "ISO", reason: "禁止未经核实的 ISO 声明", severity: "warn" },
+  { word: "CE", reason: "禁止未经核实的 CE 声明", severity: "warn", boundary: true },
+  { word: "ISO", reason: "禁止未经核实的 ISO 声明", severity: "warn", boundary: true },
   { word: "дешевле чем", reason: "禁止与竞品价格对比", severity: "block" },
   { word: "дешевле, чем", reason: "禁止与竞品价格对比", severity: "block" },
 ];
@@ -42,7 +48,7 @@ export const OZON_PLATFORM_RULES: Violation[] = [
   { word: "акция", reason: "非官方促销活动禁止使用'促销'", severity: "warn", replacement: "" },
   { word: "распродажа", reason: "非官方促销活动禁止使用'清仓'", severity: "warn", replacement: "" },
   { word: "новинка", reason: "非新品禁止标注'新品'", severity: "warn", replacement: "" },
-  { word: "оригинал", reason: "非品牌授权禁止标注'原装'", severity: "block" },
+  { word: "оригинал", reason: "非品牌授权禁止标注'原装'", severity: "block", boundary: true },
   { word: "подлинный", reason: "非品牌授权禁止标注'正品'", severity: "block" },
   { word: "реплика", reason: "Ozon 禁止销售仿品", severity: "block" },
   { word: "копия", reason: "Ozon 禁止销售仿品", severity: "block" },

@@ -708,9 +708,15 @@ async function executeCopyAction(
 
     if (!titleAudit.passed || !descAudit.passed) {
       const blocked = titleAudit.blockedCount + descAudit.blockedCount;
+      // 把具体阻断词写进消息和日志 — 否则飞书只看到"N条阻断"，无法定位（2026-09-04 实证）
+      const blockedDetails = [...titleAudit.findings, ...descAudit.findings]
+        .filter((f) => f.violation.severity === "block")
+        .map((f) => `"${f.violation.word}" (${f.violation.reason})`)
+        .join("; ");
+      logger.error({ offerId: action.offerId, blocked, blockedDetails }, "Copy blocked by compliance audit");
       return {
         offerId: action.offerId, name: action.name, type: "copy", success: false,
-        message: `合规审计未通过: ${blocked}条阻断`, appliedAt,
+        message: `合规审计未通过: ${blocked}条阻断 [${blockedDetails}]`, appliedAt,
       };
     }
 
@@ -777,6 +783,8 @@ function resetDailyCountIfNeeded(): void {
 /** 网络错误判断 */
 function isRetryableError(err: unknown): boolean {
   const msg = (err as Error).message?.toLowerCase() || "";
+  // Ozon 业务拒绝（改价被平台驳回等）— 重试同样的请求只会再被拒，不算网络错误
+  if (msg.includes("ozon price push failed")) return false;
   return (
     msg.includes("fetch failed") ||
     msg.includes("timeout") ||

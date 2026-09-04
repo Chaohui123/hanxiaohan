@@ -253,10 +253,18 @@ export function createInventoryRouter(): Router {
         prices: [{ offer_id: offerId, price: priceCny, currency_code: "CNY" }],
       });
       const pushItem = (pushResp.result || [])[0];
-      const pushErrors = (pushItem?.errors || []).map((e) => e.description || "unknown");
+      // Ozon errors 元素结构不固定（description/code/message 都可能缺）— 全字段保留，否则只剩 "unknown" 无法定位
+      const pushErrors = (pushItem?.errors || []).map((e) => {
+        const rec = e as Record<string, unknown>;
+        return [e.description, rec.code, rec.message].filter(Boolean).join("/") || JSON.stringify(e);
+      });
       if (!pushItem || pushItem.updated === false || pushErrors.length > 0) {
-        logger.error({ offerId, price, priceCny, pushErrors }, "Ozon price push failed");
-        res.status(502).json({ error: `Ozon price push failed: ${pushErrors.join("; ") || "not updated"}`, offerId });
+        logger.error({ offerId, price, priceCny, pushItem }, "Ozon price push failed");
+        res.status(502).json({
+          error: `Ozon price push failed: ${pushErrors.join("; ") || "not updated"}`,
+          offerId,
+          ozonResponse: pushItem ?? null,
+        });
         return;
       }
 

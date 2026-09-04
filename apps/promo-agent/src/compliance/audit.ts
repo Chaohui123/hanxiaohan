@@ -20,17 +20,43 @@ const SCORE_BASE = 100;
 const SCORE_BLOCK_PENALTY = 15;
 const SCORE_WARN_PENALTY = 5;
 
+function escapeRegExp(s: string): string {
+  return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+}
+
+/**
+ * 查找词在文本中的所有出现位置。
+ * boundary=true 时用 Unicode 字母/数字环视做整词匹配（覆盖西里尔与拉丁字母），
+ * 避免 "оригинал" 命中 "оригинальный"、"CE" 命中 "service" 这类子串误伤。
+ */
+function findOccurrences(lowerText: string, word: string, boundary?: boolean): number[] {
+  const lowerWord = word.toLowerCase();
+  if (!boundary) {
+    const positions: number[] = [];
+    let searchFrom = 0;
+    while (true) {
+      const idx = lowerText.indexOf(lowerWord, searchFrom);
+      if (idx === -1) break;
+      positions.push(idx);
+      searchFrom = idx + 1;
+    }
+    return positions;
+  }
+  const re = new RegExp(`(?<![\\p{L}\\p{N}])${escapeRegExp(lowerWord)}(?![\\p{L}\\p{N}])`, "gu");
+  const positions: number[] = [];
+  for (const m of lowerText.matchAll(re)) {
+    positions.push(m.index ?? 0);
+  }
+  return positions;
+}
+
 export function auditText(text: string, extraViolations?: Violation[]): AuditResult {
   const violations = extraViolations ? [...ALL_VIOLATIONS, ...extraViolations] : ALL_VIOLATIONS;
   const findings: AuditFinding[] = [];
   const lowerText = text.toLowerCase();
 
   for (const v of violations) {
-    const lowerWord = v.word.toLowerCase();
-    let searchFrom = 0;
-    while (true) {
-      const idx = lowerText.indexOf(lowerWord, searchFrom);
-      if (idx === -1) break;
+    for (const idx of findOccurrences(lowerText, v.word, v.boundary)) {
       const contextStart = Math.max(0, idx - 20);
       const contextEnd = Math.min(text.length, idx + v.word.length + 20);
       findings.push({
@@ -38,7 +64,6 @@ export function auditText(text: string, extraViolations?: Violation[]): AuditRes
         position: idx,
         context: text.slice(contextStart, contextEnd),
       });
-      searchFrom = idx + 1;
     }
   }
 
@@ -88,13 +113,14 @@ function auditTextInternal(text: string, violations: Violation[]): AuditFinding[
   const lowerText = text.toLowerCase();
   const remaining: AuditFinding[] = [];
   for (const v of violations) {
-    if (lowerText.includes(v.word.toLowerCase())) {
+    const first = findOccurrences(lowerText, v.word, v.boundary)[0];
+    if (first !== undefined) {
       remaining.push({
         violation: v,
-        position: lowerText.indexOf(v.word.toLowerCase()),
+        position: first,
         context: text.slice(
-          Math.max(0, lowerText.indexOf(v.word.toLowerCase()) - 20),
-          lowerText.indexOf(v.word.toLowerCase()) + v.word.length + 20,
+          Math.max(0, first - 20),
+          first + v.word.length + 20,
         ),
       });
     }
