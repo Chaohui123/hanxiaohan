@@ -170,6 +170,41 @@ export function createInventoryRouter(): Router {
     }
   });
 
+  /**
+   * GET /api/inventory/items — 库存行级列表（dashboard 库存页）
+   * 必须定义在 /:offerId 之前，否则 "items" 被通配捕获（曾导致库存页永远 404 为空，2026-09-04 实证）
+   * 主源：inventory 表 LEFT JOIN sku_1688_mapping（成本/重量）；空表回退 Ozon 实时在售
+   */
+  router.get("/items", async (req, res) => {
+    try {
+      const db = await getDb().catch(() => null);
+      if (!db) { res.status(503).json({ error: "DB unavailable" }); return; }
+
+      const rows = await db.all(
+        `SELECT i.offer_id, i.sku, i.stock_available, i.stock_reserved, i.updated_at,
+                m.purchase_price_cny AS cost_cny, m.weight_kg, m.source_1688_url
+         FROM inventory i
+         LEFT JOIN sku_1688_mapping m ON m.ozon_offer_id = i.offer_id AND m.ozon_sku = i.sku
+         ORDER BY i.updated_at DESC
+         LIMIT 500`,
+      ).catch(() => [] as Array<Record<string, unknown>>);
+
+      if (rows.length > 0) { res.json({ data: rows }); return; }
+
+      // 本地无库存记录 → Ozon 实时在售合成（sku 未知显示 0，前端展示为 —）
+      const fallback = await fetchOzonInventoryItems();
+      res.json({
+        data: fallback.map((f) => ({
+          offer_id: f.offerId, sku: 0, name: f.name,
+          stock_available: f.stock, stock_reserved: 0,
+          cost_cny: f.cost, weight_kg: f.weight, updated_at: null,
+        })),
+      });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
   /** GET /api/inventory/:offerId — 按 offerId 查询单个商品（promoApi.getProduct） */
   router.get("/:offerId", async (req, res) => {
     try {

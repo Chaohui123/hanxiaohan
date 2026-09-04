@@ -71,6 +71,10 @@ const healthServer = createServer(async (req, res) => {
       autoDecision: isAutoDecisionEnabled(),
       lastPlanId: plan?.id || null,
       lastPlanStatus: plan?.status || null,
+      // dashboard「当前决策计划」卡片需要的摘要字段（此前只透传 id/status，前端恒显示"—"）
+      lastPlanCreatedAt: plan?.createdAt || null,
+      lastPlanActionCount: plan?.actions?.length ?? 0,
+      lastPlanExecutedAt: plan?.executedAt || null,
       uptime: process.uptime(),
       memory: Math.round(process.memoryUsage().heapUsed / 1024 / 1024) + "MB",
     }));

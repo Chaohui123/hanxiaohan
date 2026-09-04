@@ -113,6 +113,9 @@ RUN chmod +x /app/scripts/fix-symlinks.sh
 # Template files (跨境巴士 export, etc.)
 COPY assets/ /app/assets/
 
+# 1688 采集插件源码（GET /api/crawl/plugin-download 打包下载）
+COPY extensions/ /app/extensions/
+
 EXPOSE 3000
 
 # Chromium remote debugging port (P2: chrome-remote-interface)

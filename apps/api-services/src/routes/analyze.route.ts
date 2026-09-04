@@ -11,8 +11,8 @@ export function createAnalyzeRouter(ozonClient?: OzonClient): Router {
   const analyzer = new ProductAnalyzer();
   const pricingEngine = new PricingEngine();
 
-  // GET /analyze/blue-ocean — dynamic blue ocean analysis (24h cache)
-  router.get("/analyze/blue-ocean", async (req, res) => {
+  // GET /api/analyze/blue-ocean — dynamic blue ocean analysis (24h cache)
+  router.get("/blue-ocean", async (req, res) => {
     try {
       const results = await analyzeBlueOcean(ozonClient);
       res.json({ success: true, data: results, count: results.length, correlationId: req.correlationId });
@@ -21,14 +21,14 @@ export function createAnalyzeRouter(ozonClient?: OzonClient): Router {
     }
   });
 
-  // POST /analyze/blue-ocean/refresh — force refresh
-  router.post("/analyze/blue-ocean/refresh", (_req, res) => {
+  // POST /api/analyze/blue-ocean/refresh — force refresh
+  router.post("/blue-ocean/refresh", (_req, res) => {
     clearBlueOceanCache();
     res.json({ success: true, message: "Cache cleared — next request will re-analyze", correlationId: _req.correlationId });
   });
 
-  // POST /analyze — product analysis
-  router.post("/analyze", async (req, res) => {
+  // POST /api/analyze — product analysis
+  router.post("/", async (req, res) => {
     try {
       const { products, competitors, options } = req.body as {
         products: Array<{ sourceUrl: string; title: string; categoryPath: string[]; price: { currentMin: number; currentMax: number }; specifications?: Record<string, string> }>;
@@ -54,8 +54,8 @@ export function createAnalyzeRouter(ozonClient?: OzonClient): Router {
     }
   });
 
-  // GET /analyze/russia-market — Russian market analysis
-  router.get("/analyze/russia-market", (req, res) => {
+  // GET /api/analyze/russia-market — Russian market analysis
+  router.get("/russia-market", (req, res) => {
     try {
       const query = (req.query.query as string) || "";
       const analysis = analyzeProductForRussia(query, "", [], 0.5);
@@ -67,8 +67,8 @@ export function createAnalyzeRouter(ozonClient?: OzonClient): Router {
     }
   });
 
-  // POST /analyze/return-risk — return risk analysis
-  router.post("/analyze/return-risk", (req, res) => {
+  // POST /api/analyze/return-risk — return risk analysis
+  router.post("/return-risk", (req, res) => {
     try {
       const { category, productType, hasSizeVariants, hasColorVariants, isElectronic } = req.body as {
         category?: string; productType?: string; hasSizeVariants?: boolean; hasColorVariants?: boolean; isElectronic?: boolean;
@@ -81,8 +81,8 @@ export function createAnalyzeRouter(ozonClient?: OzonClient): Router {
     }
   });
 
-  // POST /analyze/return-cost — return cost calculation
-  router.post("/analyze/return-cost", (req, res) => {
+  // POST /api/analyze/return-cost — return cost calculation
+  router.post("/return-cost", (req, res) => {
     try {
       const { productPriceRub, weightKg, category } = req.body as { productPriceRub: number; weightKg?: number; category?: string };
       const cost = calculateReturnCost(productPriceRub, weightKg, category);

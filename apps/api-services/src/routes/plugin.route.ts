@@ -161,5 +161,29 @@ export function createPluginRouter(): Router {
     }
   });
 
+  // GET /api/crawl/plugin-download — 下载 1688 采集插件（zip，浏览器「加载已解压的扩展程序」安装）
+  // extensions/1688-assistant 由 Dockerfile COPY 进镜像
+  router.get("/crawl/plugin-download", async (_req, res) => {
+    try {
+      const { existsSync } = await import("node:fs");
+      const dir = "/app/extensions/1688-assistant";
+      const fallbackDir = `${process.cwd()}/extensions/1688-assistant`; // 本地 dev
+      const srcDir = existsSync(dir) ? dir : fallbackDir;
+      if (!existsSync(srcDir)) {
+        res.status(404).json({ success: false, error: { code: "NOT_FOUND", message: "插件包未内置于本服务" } });
+        return;
+      }
+      const AdmZip = (await import("adm-zip")).default;
+      const zip = new AdmZip();
+      zip.addLocalFolder(srcDir, "1688-assistant");
+      res.setHeader("Content-Type", "application/zip");
+      res.setHeader("Content-Disposition", 'attachment; filename="1688-assistant-plugin.zip"');
+      res.send(zip.toBuffer());
+    } catch (err) {
+      logger.error({ err: (err as Error).message }, "Plugin download failed");
+      res.status(500).json({ success: false, error: { code: "PLUGIN_DOWNLOAD_ERROR", message: (err as Error).message } });
+    }
+  });
+
   return router;
 }

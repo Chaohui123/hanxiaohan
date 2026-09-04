@@ -162,6 +162,30 @@ export async function insertCopyHistory(entry: { offerId: string; name: string; 
   await d.run("INSERT INTO promo_copy_history (offer_id, name, title_ru) VALUES (?, ?, ?)", [entry.offerId, entry.name, entry.titleRu]);
 }
 
+/** 决策动作真实统计（dashboard「今日决策」卡片）— pricing+copy 历史表即成功动作落库 */
+export async function queryDecisionStats(): Promise<{ todayActions: number; weekActions: number; lastActionAt: string | null }> {
+  const d = await db();
+  const today = new Date().toISOString().slice(0, 10);
+  const rows = await d.all<{ today_actions: number; week_actions: number; last_action: string | null }>(
+    `SELECT
+       SUM(CASE WHEN applied_at >= ? THEN 1 ELSE 0 END) AS today_actions,
+       COUNT(*) AS week_actions,
+       MAX(applied_at) AS last_action
+     FROM (
+       SELECT applied_at FROM promo_pricing_history WHERE applied_at >= ?
+       UNION ALL
+       SELECT applied_at FROM promo_copy_history WHERE applied_at >= ?
+     ) t`,
+    [today, new Date(Date.now() - 7 * 86400_000).toISOString(), new Date(Date.now() - 7 * 86400_000).toISOString()],
+  );
+  const r = rows[0];
+  return {
+    todayActions: Number(r?.today_actions) || 0,
+    weekActions: Number(r?.week_actions) || 0,
+    lastActionAt: r?.last_action || null,
+  };
+}
+
 // ---- Decisions & Audit ----
 
 export async function insertDecision(id: string, planJson: string): Promise<void> {

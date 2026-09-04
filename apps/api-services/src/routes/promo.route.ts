@@ -8,7 +8,7 @@ import { cache } from "@onzo/cache";
 import { requireDb } from "../middleware/db.middleware.js";
 import { createWatchRouter } from "./promo-watch.router.js";
 import { createPromoDataRouter } from "./promo-data.router.js";
-import { insertDecision, insertAuditLog, queryWatchList } from "../db/promo-db.js";
+import { insertDecision, insertAuditLog, queryWatchList, queryDecisionStats } from "../db/promo-db.js";
 
 // ---- Ozon Search Helpers ----
 interface CategoryCache {
@@ -109,8 +109,26 @@ export function createPromoRouter(): Router {
       res.json({ autoEnabled: null, lastPlanId: null, lastPlanStatus: null, agentReachable: false });
       return;
     }
-    const h = await upstream.json() as { autoDecision?: boolean; lastPlanId?: string | null; lastPlanStatus?: string | null };
-    res.json({ autoEnabled: h.autoDecision ?? null, lastPlanId: h.lastPlanId ?? null, lastPlanStatus: h.lastPlanStatus ?? null, agentReachable: true });
+    const h = await upstream.json() as {
+      autoDecision?: boolean; lastPlanId?: string | null; lastPlanStatus?: string | null;
+      lastPlanCreatedAt?: string | null; lastPlanActionCount?: number; lastPlanExecutedAt?: string | null;
+    };
+    res.json({
+      autoEnabled: h.autoDecision ?? null,
+      lastPlanId: h.lastPlanId ?? null,
+      lastPlanStatus: h.lastPlanStatus ?? null,
+      lastPlanCreatedAt: h.lastPlanCreatedAt ?? null,
+      lastPlanActionCount: h.lastPlanActionCount ?? 0,
+      lastPlanExecutedAt: h.lastPlanExecutedAt ?? null,
+      agentReachable: true,
+    });
+  });
+
+  // dashboard「今日决策」卡片真实数据（替代硬编码 1次/92%）— pricing+copy 历史表即成功动作落库
+  router.get("/promo/decision-stats", async (_req, res) => {
+    try {
+      res.json(await queryDecisionStats());
+    } catch (err) { res.status(500).json({ error: (err as Error).message }); }
   });
 
   // ---- Action Validation ----
