@@ -1,4 +1,4 @@
-import { Row, Col, Card, Statistic, Table, Spin } from "antd";
+import { Row, Col, Card, Statistic, Table, Spin, Tooltip as AntTooltip, Typography } from "antd";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from "recharts";
 import { usePromoCost, usePricingHistory, useCopyHistory } from "../api/promo-api";
 
@@ -54,7 +54,7 @@ export default function PromoEffect() {
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="周趋势: 花费 vs 增量收入">
+          <Card title="周趋势: 花费 vs 增量收入" extra={<AntTooltip title="硬编码示例，待接入真实接口"><Typography.Text type="secondary">示例数据</Typography.Text></AntTooltip>}>
             <ResponsiveContainer width="100%" height={300}>
               <LineChart data={weeklyTrend}>
                 <CartesianGrid strokeDasharray="3 3" />

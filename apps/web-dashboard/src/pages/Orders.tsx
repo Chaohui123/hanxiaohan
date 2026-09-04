@@ -118,7 +118,7 @@ export default function Orders() {
           pagination={{
             current: page,
             pageSize,
-            total: orders.length >= 100 ? 200 : orders.length, // backend LIMIT 100
+            total: orders.length, // backend fixed LIMIT 100, no pagination params
             showSizeChanger: true,
             pageSizeOptions: ["10", "20", "50", "100"],
             onChange: (p, ps) => { setPage(p); setPageSize(ps); },
@@ -145,6 +145,9 @@ export default function Orders() {
             },
           ]}
         />
+        {orders.length >= 100 && (
+          <div style={{ marginTop: 8, color: "#888", fontSize: 12 }}>仅显示最近 100 条，更多请用筛选条件</div>
+        )}
       </Card>
 
       <Modal

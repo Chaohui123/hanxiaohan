@@ -1,6 +1,7 @@
-import { useState, useEffect } from "react";
+import { useState, useEffect, useRef } from "react";
 import { Card, Row, Col, Statistic, Table, Tag, Tabs, Button, Space, DatePicker, Spin, Empty, message } from "antd";
 import { ReloadOutlined, ExportOutlined, RocketOutlined, DollarOutlined } from "@ant-design/icons";
+import { useNavigate } from "react-router-dom";
 import { api } from "../api/client";
 import dayjs from "dayjs";
 
@@ -24,14 +25,20 @@ export default function MarketAnalysis() {
   const [loading, setLoading] = useState(false);
   const [data, setData] = useState<MarketDetail | null>(null);
   const [snapshots, setSnapshots] = useState<SnapshotItem[]>([]);
+  const navigate = useNavigate();
+  // Request sequence — stale responses (slow old-date request) must not overwrite newer data
+  const reqSeq = useRef(0);
+  const dateRef = useRef(date);
+  const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const fetchData = async (d: string) => {
+    const seq = ++reqSeq.current;
     setLoading(true);
     try {
       const resp = await api.get(`/api/market/detail/${d}`) as unknown as { data?: MarketDetail };
-      setData(resp.data || null);
-    } catch { setData(null); }
-    finally { setLoading(false); }
+      if (seq === reqSeq.current) setData(resp.data || null);
+    } catch { if (seq === reqSeq.current) setData(null); }
+    finally { if (seq === reqSeq.current) setLoading(false); }
   };
 
   const fetchSnapshots = async () => {
@@ -46,15 +53,17 @@ export default function MarketAnalysis() {
       message.loading("正在执行大盘分析...");
       const resp = await api.post("/api/task/run-market") as unknown as { data?: { id: string; status: string } };
       message.success(`任务已启动: ${resp.data?.id || ""}`);
-      setTimeout(() => fetchData(date), 5000);
+      if (pollTimer.current) clearTimeout(pollTimer.current);
+      pollTimer.current = setTimeout(() => fetchData(dateRef.current), 5000);
     } catch (e) { message.error((e as Error).message); }
   };
 
   const exportExcel = () => {
-    window.open(`/api/market/report/${date}?format=csv`, "_blank");
+    window.open(`/api/market/report-by-date/${date}`, "_blank");
   };
 
-  useEffect(() => { fetchData(date); fetchSnapshots(); }, [date]);
+  useEffect(() => { dateRef.current = date; fetchData(date); fetchSnapshots(); }, [date]);
+  useEffect(() => () => { if (pollTimer.current) clearTimeout(pollTimer.current); }, []);
 
   // ---- Tab: 大盘总览 ----
   const overviewTab = (
@@ -116,8 +125,8 @@ export default function MarketAnalysis() {
         <DatePicker value={dayjs(date)} onChange={(d) => setDate(d?.format("YYYY-MM-DD") || date)} allowClear={false} />
         <Button type="primary" icon={<ReloadOutlined />} onClick={runMarketPoll}>立即更新大盘</Button>
         <Button icon={<ExportOutlined />} onClick={exportExcel}>导出Excel</Button>
-        <Button icon={<RocketOutlined />} onClick={() => window.location.hash = "/listing"}>去上架</Button>
-        <Button icon={<DollarOutlined />} onClick={() => window.location.hash = "/pricing"}>去调价</Button>
+        <Button icon={<RocketOutlined />} onClick={() => navigate("/listing")}>去上架</Button>
+        <Button icon={<DollarOutlined />} onClick={() => navigate("/pricing-history")}>去调价</Button>
         {snapshots.length > 0 && (
           <span style={{color:"#888",fontSize:12}}>上次执行: {snapshots[0]?.created_at?.slice(0,19)||"—"}</span>
         )}

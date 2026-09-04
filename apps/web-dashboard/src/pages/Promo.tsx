@@ -1,7 +1,7 @@
-import { useState } from "react";
-import { Row, Col, Card, Statistic, Table, Tag, Button, Space, Spin, message } from "antd";
+import { useEffect, useState } from "react";
+import { Row, Col, Card, Statistic, Table, Tag, Button, Space, Spin, Tooltip, Typography, message } from "antd";
 import { PlayCircleOutlined, PauseCircleOutlined, ReloadOutlined } from "@ant-design/icons";
-import { useDecision, useSalesRanking, usePromoCost, useAutoDecisionToggle } from "../api/promo-api";
+import { promoApi, useDecision, useSalesRanking, usePromoCost, useAutoDecisionToggle } from "../api/promo-api";
 
 export default function Promo() {
   const { data: decision, isLoading: dLoading } = useDecision();
@@ -9,6 +9,13 @@ export default function Promo() {
   const { data: costData } = usePromoCost();
   const toggleMutation = useAutoDecisionToggle();
   const [autoOn, setAutoOn] = useState(true);
+  const [triggering, setTriggering] = useState(false);
+
+  // Sync from backend if the decision endpoint ever returns a switch field (currently none)
+  useEffect(() => {
+    const v = (decision as Record<string, unknown> | undefined)?.autoEnabled;
+    if (typeof v === "boolean") setAutoOn(v);
+  }, [decision]);
 
   if (dLoading) return <Spin size="large" style={{ display: "block", margin: "100px auto" }} />;
 
@@ -18,6 +25,15 @@ export default function Promo() {
 
   const statusColor: Record<string, string> = {
     pending: "default", validated: "processing", executing: "warning", completed: "green", failed: "red",
+  };
+
+  const handleTrigger = async () => {
+    setTriggering(true);
+    try {
+      await promoApi.triggerDecision();
+      message.success("手动触发已提交");
+    } catch (e) { message.error((e as Error).message); }
+    finally { setTriggering(false); }
   };
 
   const columns = [
@@ -30,8 +46,8 @@ export default function Promo() {
   return (
     <div>
       <Row gutter={[16, 16]}>
-        <Col xs={12} sm={6}><Card><Statistic title="今日决策" value={1} suffix="次" /></Card></Col>
-        <Col xs={12} sm={6}><Card><Statistic title="执行成功率" value={92} suffix="%" valueStyle={{ color: "#10b981" }} /></Card></Col>
+        <Col xs={12} sm={6}><Card extra={<Tooltip title="硬编码示例，待接入真实接口"><Typography.Text type="secondary">示例数据</Typography.Text></Tooltip>}><Statistic title="今日决策" value={1} suffix="次" /></Card></Col>
+        <Col xs={12} sm={6}><Card extra={<Tooltip title="硬编码示例，待接入真实接口"><Typography.Text type="secondary">示例数据</Typography.Text></Tooltip>}><Statistic title="执行成功率" value={92} suffix="%" valueStyle={{ color: "#10b981" }} /></Card></Col>
         <Col xs={12} sm={6}><Card><Statistic title="推广花费" value={Number(cost?.adSpend || 0)} prefix="₽" /></Card></Col>
         <Col xs={12} sm={6}><Card><Statistic title="ROI" value={Number(cost?.roi || 0).toFixed(2)} suffix="x" valueStyle={{ color: Number(cost?.roi) >= 2 ? "#10b981" : "#f59e0b" }} /></Card></Col>
       </Row>
@@ -48,15 +64,21 @@ export default function Promo() {
                 <Button
                   type={autoOn ? "default" : "primary"}
                   icon={autoOn ? <PauseCircleOutlined /> : <PlayCircleOutlined />}
+                  loading={toggleMutation.isPending}
                   onClick={() => {
-                    toggleMutation.mutate(!autoOn);
-                    setAutoOn(!autoOn);
-                    message.success(autoOn ? "已暂停自主决策" : "已启用自主决策");
+                    const next = !autoOn;
+                    toggleMutation.mutate(next, {
+                      onSuccess: () => {
+                        setAutoOn(next);
+                        message.success(next ? "已启用自主决策" : "已暂停自主决策");
+                      },
+                      onError: (e) => message.error((e as Error).message),
+                    });
                   }}
                 >
                   {autoOn ? "暂停" : "启用"}
                 </Button>
-                <Button icon={<ReloadOutlined />} onClick={() => message.info("手动触发已提交")}>
+                <Button icon={<ReloadOutlined />} loading={triggering} onClick={handleTrigger}>
                   手动触发
                 </Button>
               </Space>

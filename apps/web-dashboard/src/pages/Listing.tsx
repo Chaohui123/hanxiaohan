@@ -1,6 +1,6 @@
 import { useState } from "react";
-import { Card, Input, Button, Table, Tag, message, Space, Upload, Modal, Divider, Tabs } from "antd";
-import { UploadOutlined, LinkOutlined, RocketOutlined, SearchOutlined, ChromeOutlined, ScheduleOutlined } from "@ant-design/icons";
+import { Card, Input, Button, Table, Tag, message, Space, Modal, Divider, Tabs } from "antd";
+import { LinkOutlined, RocketOutlined, SearchOutlined, ChromeOutlined, ScheduleOutlined } from "@ant-design/icons";
 import { listingApi, taskApi } from "../api/client";
 import { useQuery } from "@tanstack/react-query";
 import { api } from "../api/client";
@@ -75,11 +75,7 @@ export default function Listing() {
           <Input prefix={<LinkOutlined />} placeholder="粘贴 1688 商品链接 https://detail.1688.com/offer/..." value={url} onChange={(e) => setUrl(e.target.value)} onPressEnter={submitUrl} size="large" />
           <Button type="primary" size="large" loading={loading} onClick={submitUrl}>一键上架</Button>
         </Space.Compact>
-        <div style={{ marginTop: 12 }}>
-          <Upload accept=".csv,.xlsx" showUploadList={false} beforeUpload={() => false}>
-            <Button icon={<UploadOutlined />}>批量导入 CSV/Excel</Button>
-          </Upload>
-        </div>
+        {/* 批量导入 CSV/Excel 待后端导入端点就绪后恢复（原 Upload 按钮无实际处理，已移除避免误导） */}
       </Card>
 
       {/* ---- Listing records ---- */}

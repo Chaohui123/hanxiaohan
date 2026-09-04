@@ -2,6 +2,7 @@
 // Market Analysis Routes — Ozon 7-module market intelligence
 // POST /api/market/analysis — execute full analysis
 // GET  /api/market/report/:id — query/download report
+// GET  /api/market/report-by-date/:date — download CSV report by date
 // ============================================================
 
 import { Router } from "express";
@@ -80,6 +81,27 @@ export function createMarketRouter(): Router {
     } else {
       res.json({ success: true, data: report, correlationId: req.correlationId });
     }
+  });
+
+  // ---- GET /api/market/report-by-date/:date — download CSV report by date (YYYY-MM-DD) ----
+  router.get("/market/report-by-date/:date", (req, res) => {
+    const date = req.params.date;
+    // Reports carry no explicit date field — match on createdAt (UTC ISO); latest of the day wins
+    const report = Array.from(_reportStore.values())
+      .filter((r) => r.createdAt.slice(0, 10) === date)
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt))[0];
+
+    if (!report) {
+      return res.status(404).json({
+        success: false,
+        error: { code: "NOT_FOUND", message: "该日期暂无分析报告" },
+        correlationId: req.correlationId,
+      });
+    }
+
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Content-Disposition", `attachment; filename="market-${date}.csv"`);
+    res.send("﻿" + report.csv);
   });
 
   // ---- GET /api/market/list-snapshot — paginated snapshot list ----
