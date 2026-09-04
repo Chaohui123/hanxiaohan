@@ -226,7 +226,8 @@ async function runPricingCycle(
       competitorAvg,
       exchangeRate: rate,
       marginPercent: Math.round(newMargin * 10) / 10,
-      changePercent: Math.round(diffPct * 1000) / 10,
+      // 带符号变化率（负=降价）— 绝对值仅用于上面的阈值判断；恒为正会把降价卡片显示成"📈+x%"（2026-09-04 审查实证）
+      changePercent: Math.round(((suggested - currentPrice) / currentPrice) * 1000) / 10,
       needsExtraConfirm,
       reason,
     });

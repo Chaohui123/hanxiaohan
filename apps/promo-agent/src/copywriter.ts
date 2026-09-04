@@ -408,7 +408,8 @@ export async function applyCopy(
     ].join("\n");
   } catch (err) {
     logger.error({ err, offerId }, "Failed to apply copy");
-    return `❌ 更新失败: ${(err as Error).message}`;
+    // 必须抛出 — 返回错误文本会被 decision-engine 当成功上报（全链路谎报，2026-09-04 实证）
+    throw new Error(`更新失败: ${(err as Error).message}`);
   }
 }
 

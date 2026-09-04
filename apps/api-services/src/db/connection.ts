@@ -11,6 +11,11 @@ export interface DbAdapter {
   exec(sql: string): Promise<void>;
   run(sql: string, params?: unknown[]): Promise<{ changes: number; lastInsertRowid?: number | bigint }>;
   all<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>;
+  /**
+   * 在单条连接上执行事务：BEGIN → fn(同一连接的 adapter) → COMMIT，异常 ROLLBACK。
+   * 切勿用 db.run("BEGIN") — 池化适配器每次 run 换连接，事务语义失效且脏连接回池（2026-09-04 实证）。
+   */
+  tx?<T>(fn: (db: DbAdapter) => Promise<T>): Promise<T>;
 }
 
 let pool: pg.Pool | null = null;
@@ -296,6 +301,23 @@ function createPgAdapter(p: pg.Pool): DbAdapter {
     return sql.replace(/\?/g, () => `$${++paramIndex}`);
   }
 
+  /** 绑定单条连接的 adapter（事务内所有语句落在同一连接上） */
+  function forClient(client: pg.PoolClient): DbAdapter {
+    return {
+      async exec(sql: string): Promise<void> {
+        await client.query(sql);
+      },
+      async run(sql: string, params?: unknown[]): Promise<{ changes: number; lastInsertRowid?: number | bigint }> {
+        const result = await client.query(convertQuery(sql), params || []);
+        return { changes: result.rowCount ?? 0 };
+      },
+      async all<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]> {
+        const result = await client.query(convertQuery(sql), params || []);
+        return result.rows as T[];
+      },
+    };
+  }
+
   return {
     async exec(sql: string): Promise<void> {
       const client = await p.connect();
@@ -314,6 +336,20 @@ function createPgAdapter(p: pg.Pool): DbAdapter {
         const result = await client.query(convertQuery(sql), params || []);
         return result.rows as T[];
       } finally { client.release(); }
+    },
+    async tx<T>(fn: (db: DbAdapter) => Promise<T>): Promise<T> {
+      const client = await p.connect();
+      try {
+        await client.query("BEGIN");
+        const result = await fn(forClient(client));
+        await client.query("COMMIT");
+        return result;
+      } catch (err) {
+        await client.query("ROLLBACK").catch(() => {});
+        throw err;
+      } finally {
+        client.release();
+      }
     },
   };
 }
@@ -367,6 +403,23 @@ function createSqliteAdapter(db: unknown): DbAdapter {
     async all<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]> {
       const stmt = d.prepare(sqliteCompat(sql));
       return stmt.all(...(params || [])) as T[];
+    },
+    async tx<T>(fn: (db: DbAdapter) => Promise<T>): Promise<T> {
+      // better-sqlite3 单连接同步 — BEGIN/COMMIT 天然落在同一连接
+      d.exec("BEGIN");
+      try {
+        const self: DbAdapter = {
+          exec: this.exec.bind(this),
+          run: this.run.bind(this),
+          all: this.all.bind(this),
+        };
+        const result = await fn(self);
+        d.exec("COMMIT");
+        return result;
+      } catch (err) {
+        try { d.exec("ROLLBACK"); } catch { /* already rolled back */ }
+        throw err;
+      }
     },
   };
 }

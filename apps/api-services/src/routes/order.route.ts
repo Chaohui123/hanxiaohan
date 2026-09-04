@@ -16,6 +16,7 @@ import { writeToDeadLetter } from "../services/dead-letter.js";
 import { getSyncMetrics } from "@onzo/ozon-order";
 import { getWebhookMetrics } from "../services/order-processor.js";
 import { reconcileFinance } from "../services/finance-reconciler.js";
+import { nowDb } from "../utils/time.js";
 
 export function createOrderRouter(ozonClient: OzonClient): Router {
   const router = Router();
@@ -138,7 +139,7 @@ export function createOrderRouter(ozonClient: OzonClient): Router {
       const params: (string | number)[] = [];
 
       if (status) { conditions.push("status = ?"); params.push(status); }
-      if (days > 0) { conditions.push("created_at >= datetime('now', ?)"); params.push(`-${days} days`); }
+      if (days > 0) { conditions.push("created_at >= ?"); params.push(nowDb(-days*86400_000)); }
 
       if (conditions.length > 0) sql += " WHERE " + conditions.join(" AND ");
       sql += " ORDER BY created_at DESC LIMIT 100";

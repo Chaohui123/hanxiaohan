@@ -9,6 +9,7 @@ import { cache } from "@onzo/cache";
 import { logger } from "@onzo/logger";
 import { getExchangeRate } from "./exchange-rate.js";
 import { calculateProfit } from "./profit-calc.js";
+import { nowDb } from "../utils/time.js";
 
 // ---- Types ----
 
@@ -70,8 +71,8 @@ export async function runRiskCheck(input: RiskCheckInput, db: DbAdapter | null):
     try {
       const priceRows = await db.all<{ avg_price: number }>(
         `SELECT AVG(price_rub) as avg_price FROM price_history
-         WHERE source_url = ? AND captured_at >= datetime('now', '-7 days')`,
-        [input.source1688Url || ""]
+         WHERE source_url = ? AND captured_at >= ?`,
+        [input.source1688Url || "", nowDb(-7*86400_000)]
       );
       if (priceRows.length > 0 && priceRows[0].avg_price > 0) {
         const avgCostCny = priceRows[0].avg_price / exchangeRate;

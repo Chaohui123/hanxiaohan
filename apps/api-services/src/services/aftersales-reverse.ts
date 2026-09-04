@@ -6,6 +6,7 @@ import type { DbAdapter } from "../db/connection.js";
 import type { OzonClient } from "@onzo/ozon-api-wrapper";
 import { logger } from "@onzo/logger";
 import { emitEvent, EVENT_KEYS } from "./notification-events.js";
+import { nowDb } from "../utils/time.js";
 
 // ---- Types ----
 
@@ -49,7 +50,7 @@ export class AftersalesReverseService {
     // Step 1: Update local_orders → cancelled/returned
     result.step = "update_status";
     await this.db.run(
-      "UPDATE local_orders SET status = 'cancelled', updated_at = datetime('now') WHERE posting_number = ?",
+      "UPDATE local_orders SET status = 'cancelled', updated_at = NOW() WHERE posting_number = ?",
       [order.postingNumber]
     );
 
@@ -112,7 +113,7 @@ export class AftersalesReverseService {
 
         // Update purchase_1688 → refunded
         await this.db.run(
-          "UPDATE purchase_1688 SET payment_status = 'refunded', pay_error = '买家退货', updated_at = datetime('now') WHERE id = ?",
+          "UPDATE purchase_1688 SET payment_status = 'refunded', pay_error = '买家退货', updated_at = NOW() WHERE id = ?",
           [purchase.id]
         );
 
@@ -120,7 +121,7 @@ export class AftersalesReverseService {
       } else {
         // Mark for manual refund
         await this.db.run(
-          "UPDATE purchase_1688 SET pay_error = ?, updated_at = datetime('now') WHERE id = ?",
+          "UPDATE purchase_1688 SET pay_error = ?, updated_at = NOW() WHERE id = ?",
           [`待人工退款: ¥${refundAmountCny}`, purchase.id]
         );
         await emitEvent(EVENT_KEYS.PURCHASE_PAY_FAILED, {
@@ -138,8 +139,8 @@ export class AftersalesReverseService {
     const today = new Date().toISOString().slice(0, 10);
     await this.db.run(
       `INSERT INTO daily_sales (date, orders, revenue_rub, profit_rub, avg_order_value, updated_at)
-       VALUES (?, 0, 0, -?, 0, datetime('now'))
-       ON CONFLICT(date) DO UPDATE SET profit_rub = profit_rub - ?, updated_at = datetime('now')`,
+       VALUES (?, 0, 0, -?, 0, NOW())
+       ON CONFLICT(date) DO UPDATE SET profit_rub = profit_rub - ?, updated_at = NOW()`,
       [today, order.refundAmountRub, order.refundAmountRub]
     );
 
@@ -158,8 +159,9 @@ export class AftersalesReverseService {
     // Get cancelled/returned Ozon orders from last 7 days
     const rows = await this.db.all<{ posting_number: string }>(
       `SELECT posting_number FROM local_orders
-       WHERE status = 'cancelled' AND updated_at > datetime('now', '-7 days')
-       AND posting_number NOT IN (SELECT ozon_posting_number FROM purchase_1688 WHERE payment_status = 'refunded')`
+       WHERE status = 'cancelled' AND updated_at > ?
+       AND posting_number NOT IN (SELECT ozon_posting_number FROM purchase_1688 WHERE payment_status = 'refunded')`,
+      [nowDb(-7*86400_000)]
     );
 
     let processed = 0;

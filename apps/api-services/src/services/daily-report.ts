@@ -5,6 +5,7 @@
 import type { DbAdapter } from "../db/connection.js";
 import { logger } from "@onzo/logger";
 import { emitEvent, EVENT_KEYS } from "./notification-events.js";
+import { nowDb } from "../utils/time.js";
 
 // ---- Types ----
 
@@ -94,8 +95,8 @@ export class DailyReportService {
     if (!this.db) return;
     await this.db.run(
       `INSERT INTO daily_sales (date, orders, revenue_rub, profit_rub, avg_order_value, updated_at)
-       VALUES (?, ?, ?, ?, ?, datetime('now'))
-       ON CONFLICT(date) DO UPDATE SET orders=EXCLUDED.orders, revenue_rub=EXCLUDED.revenue_rub, profit_rub=EXCLUDED.profit_rub, avg_order_value=EXCLUDED.avg_order_value, updated_at=datetime('now')`,
+       VALUES (?, ?, ?, ?, ?, NOW())
+       ON CONFLICT(date) DO UPDATE SET orders=EXCLUDED.orders, revenue_rub=EXCLUDED.revenue_rub, profit_rub=EXCLUDED.profit_rub, avg_order_value=EXCLUDED.avg_order_value, updated_at=NOW()`,
       [report.date, report.totalOrders, report.ozonRevenueRub, report.netProfitRub,
        report.totalOrders > 0 ? Math.round(report.ozonRevenueRub / report.totalOrders) : 0]
     );
@@ -133,7 +134,8 @@ export class DailyReportService {
     // Alert 1: Ozon orders without 1688 source match (last 24h)
     try {
       const noSourceRows = await this.db.all<{ posting_number: string }>(
-        `SELECT posting_number FROM ozon_orders WHERE has_1688_source = 0 AND synced_at > datetime('now', '-24 hours')`
+        `SELECT posting_number FROM ozon_orders WHERE has_1688_source = 0 AND synced_at > ?`,
+        [nowDb(-24*3600_000)]
       );
       if (noSourceRows.length > 0) {
         alerts.push({ type: "NO_1688_SOURCE", level: "error", postingNumber: noSourceRows[0].posting_number, message: `${noSourceRows.length} 个Ozon订单无1688货源匹配`, detail: { count: noSourceRows.length } });
@@ -143,7 +145,8 @@ export class DailyReportService {
     // Alert 2: Negative profit purchases (1688 price surge)
     try {
       const negRows = await this.db.all<{ posting_number: string }>(
-        `SELECT ozon_posting_number as posting_number FROM purchase_1688 WHERE payment_status = 'paid' AND pay_error LIKE '%margin%' AND pay_time > datetime('now', '-24 hours')`
+        `SELECT ozon_posting_number as posting_number FROM purchase_1688 WHERE payment_status = 'paid' AND pay_error LIKE '%margin%' AND pay_time > ?`,
+        [nowDb(-24*3600_000)]
       );
       if (negRows.length > 0) {
         alerts.push({ type: "NEGATIVE_PROFIT", level: "critical", postingNumber: negRows[0].posting_number, message: `${negRows.length} 个采购单利润为负`, detail: { count: negRows.length } });
@@ -155,7 +158,8 @@ export class DailyReportService {
     // Alert 4: Freight forwarder no tracking / parcel lost (paid >7d, no logistics_tracking)
     try {
       const lostRows = await this.db.all<{ posting_number: string }>(
-        `SELECT ozon_posting_number as posting_number FROM purchase_1688 WHERE payment_status = 'paid' AND (logistics_tracking IS NULL OR logistics_tracking = '') AND pay_time < datetime('now', '-7 days')`
+        `SELECT ozon_posting_number as posting_number FROM purchase_1688 WHERE payment_status = 'paid' AND (logistics_tracking IS NULL OR logistics_tracking = '') AND pay_time < ?`,
+        [nowDb(-7*86400_000)]
       );
       if (lostRows.length > 0) {
         alerts.push({ type: "PARCEL_LOST", level: "critical", postingNumber: lostRows[0].posting_number, message: `${lostRows.length} 个包裹超7天无物流 — 可能丢失`, detail: { count: lostRows.length } });
@@ -168,7 +172,8 @@ export class DailyReportService {
         `SELECT p.ozon_posting_number as posting_number, p.logistics_tracking as tracking
          FROM purchase_1688 p LEFT JOIN local_orders o ON p.ozon_posting_number = o.posting_number
          WHERE p.payment_status = 'paid' AND p.logistics_tracking IS NOT NULL AND o.status = 'awaiting_deliver'
-         AND p.pay_time < datetime('now', '-3 days')`
+         AND p.pay_time < ?`,
+        [nowDb(-3*86400_000)]
       );
       if (overdueRows.length > 0) {
         alerts.push({ type: "SHIP_BACKFILL_FAILED", level: "error", postingNumber: overdueRows[0].posting_number, message: `${overdueRows.length} 个订单Ozon回填失败/逾期`, detail: { count: overdueRows.length, sample: overdueRows[0].tracking } });

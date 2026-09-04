@@ -28,6 +28,11 @@ export interface DbAdapter {
   all<T = Record<string, unknown>>(sql: string, params?: unknown[]): Promise<T[]>;
 }
 
+/** UTC cutoff in canonical DB format 'YYYY-MM-DD HH:MM:SS'（PG TIMESTAMP 与 SQLite TEXT 比较均正确） */
+function dbCutoff(offsetMs: number): string {
+  return new Date(Date.now() + offsetMs).toISOString().slice(0, 19).replace("T", " ");
+}
+
 /**
  * Price comparison logic — no external API calls in Phase 2.
  * Accepts already-scraped price data and stores/compares it.
@@ -53,14 +58,18 @@ export class PriceScanner {
 
         if (existing.length === 0) {
           result.newPrices++;
+          await this.db.run(
+            "INSERT INTO price_history (product_sku, platform, price_rub, source_url, captured_at) VALUES (?, ?, ?, ?, ?)",
+            [p.productSku, p.platform, p.priceRub, p.url, p.capturedAt]
+          );
         } else if (existing[0].price_rub !== p.priceRub) {
           result.updatedPrices++;
+          await this.db.run(
+            "INSERT INTO price_history (product_sku, platform, price_rub, source_url, captured_at) VALUES (?, ?, ?, ?, ?)",
+            [p.productSku, p.platform, p.priceRub, p.url, p.capturedAt]
+          );
         }
-
-        await this.db.run(
-          "INSERT INTO price_history (product_sku, platform, price_rub, source_url, captured_at) VALUES (?, ?, ?, ?, ?)",
-          [p.productSku, p.platform, p.priceRub, p.url, p.capturedAt]
-        );
+        // 同价同日已有记录 — 跳过，避免 price_history 重复行稀释 AVG/COUNT（2026-09-04 审查）
       } catch (err) {
         result.errors.push(`${p.productSku}: ${(err as Error).message}`);
       }
@@ -71,16 +80,18 @@ export class PriceScanner {
 
   /** Get price trend for a SKU over N days. */
   async getPriceTrend(productSku: string, days: number = 30): Promise<Array<{ date: string; platform: string; avgPrice: number; minPrice: number; maxPrice: number; count: number }>> {
+    // datetime('now',...) 是 SQLite 方言（PG 不存在该函数）— 用参数化 cutoff，两侧兼容；
+    // 别名加双引号防 PG 折叠为小写（avgPrice → avgprice 取不到值）
     return this.db.all(
       `SELECT date(captured_at) as date, platform,
-              ROUND(AVG(price_rub), 2) as avgPrice,
-              MIN(price_rub) as minPrice, MAX(price_rub) as maxPrice,
-              COUNT(*) as count
+              ROUND(CAST(AVG(price_rub) AS numeric), 2) as "avgPrice",
+              MIN(price_rub) as "minPrice", MAX(price_rub) as "maxPrice",
+              COUNT(*) as "count"
        FROM price_history
-       WHERE product_sku = ? AND captured_at >= datetime('now', '-' || ? || ' days')
+       WHERE product_sku = ? AND captured_at >= ?
        GROUP BY date(captured_at), platform
        ORDER BY date DESC`,
-      [productSku, days]
+      [productSku, dbCutoff(-days * 86400_000)]
     ) as Promise<Array<{ date: string; platform: string; avgPrice: number; minPrice: number; maxPrice: number; count: number }>>;
   }
 
@@ -88,9 +99,9 @@ export class PriceScanner {
   async compareAcrossPlatforms(productSku: string): Promise<Array<{ platform: string; latestPrice: number; weekAvg: number; trend: "up" | "down" | "stable" }>> {
     const rows = await this.db.all(
       `SELECT platform, price_rub, captured_at FROM price_history
-       WHERE product_sku = ? AND captured_at >= datetime('now', '-7 days')
+       WHERE product_sku = ? AND captured_at >= ?
        ORDER BY captured_at DESC`,
-      [productSku]
+      [productSku, dbCutoff(-7 * 86400_000)]
     ) as Array<{ platform: string; price_rub: number; captured_at: string }>;
 
     const platforms = new Map<string, Array<{ price_rub: number; captured_at: string }>>();

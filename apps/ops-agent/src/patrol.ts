@@ -22,6 +22,8 @@ let patrolTimer: ReturnType<typeof setInterval> | null = null;
 let consecutiveFailures = 0; // flap 防护：连续失败计数（跨境链路间歇超时不再单次翻转告警，8/28 实证）
 let hadAlerted = false; // 只有真告警过才发恢复通知（防抖动恢复卡片）
 let lastAlertedStatus = "ok"; // 最近一次告警的故障状态（仅变化才告警）
+let networkFailures = 0; // 网络层失败独立计数（API 宕机时 ready() 直接抛异常）
+let patrolInFlight = false; // 防巡检周期并发（慢链路时单轮可超过 60s 间隔）
 
 export function resetPatrolState(): void {
   lastStatus = "ok";
@@ -29,6 +31,8 @@ export function resetPatrolState(): void {
   consecutiveFailures = 0;
   hadAlerted = false;
   lastAlertedStatus = "ok";
+  networkFailures = 0;
+  patrolInFlight = false;
 }
 
 /**
@@ -42,6 +46,10 @@ export async function runPatrolCheck(
 ): Promise<{ alerted: boolean; diagnosed: boolean; recovered: boolean }> {
   const result = { alerted: false, diagnosed: false, recovered: false };
 
+  // 防并发：ready 超时 90s + 诊断链路 > 60s 间隔，上一轮未结束直接跳过本轮（2026-09-04 审查修复）
+  if (patrolInFlight) return result;
+  patrolInFlight = true;
+
   try {
     const data = await apiClient.ready(config);
     const currentStatus = String(data.status || "unknown");
@@ -51,16 +59,13 @@ export async function runPatrolCheck(
     } else {
       consecutiveFailures = 0;
     }
+    networkFailures = 0; // 网络层恢复
     // flap 防护：连续 3 次非 ok 才视为真故障（跨境链路间歇超时属正常抖动）
     const isFault = consecutiveFailures >= 3;
 
     if (isFault && currentStatus !== lastAlertedStatus) {
       const now = nowOverride ?? Date.now();
       if (now - lastAlertAt < ALERT_COOLDOWN_MS) return result;
-      lastAlertAt = now;
-      lastAlertedStatus = currentStatus;
-      result.alerted = true;
-      hadAlerted = true;
 
       const checks = (data.checks as Record<string, unknown>) || {};
       const failedEntries = Object.entries(checks).filter(([, c]) => {
@@ -73,6 +78,21 @@ export async function runPatrolCheck(
         failedEntries.some(([name]) => name === "db");
       const severity = isCritical ? "critical" : "warn";
       const prefix = isCritical ? "🔴🔴 严重告警" : "🟡 系统提醒";
+
+      // Quiet hours 提前判断：被抑制则不落账不发送 — 故障持续时到非静默时段仍会触发告警；
+      // 原逻辑先落账后抑制，告警彻底丢失且恢复时还会莫名发"恢复正常"（2026-09-04 审查修复）
+      const quietRange = (process.env.OPS_AGENT_QUIET_HOURS || "22:00-07:00").split("-");
+      const hour = new Date().getUTCHours();
+      const inQuiet = hour >= parseInt(quietRange[0]) || hour < parseInt(quietRange[1]);
+      if (inQuiet && !isCritical) {
+        logger.info({ severity, inQuiet: true }, "Patrol alert suppressed by quiet hours");
+        return result;
+      }
+
+      lastAlertAt = now;
+      lastAlertedStatus = currentStatus;
+      result.alerted = true;
+      hadAlerted = true;
 
       logger.warn({ status: currentStatus, severity }, "Patrol detected status change");
 
@@ -102,15 +122,7 @@ export async function runPatrolCheck(
         }
       }
 
-      // Quiet hours: non-critical alerts suppressed during 22:00-07:00 UTC
-      const quietRange = (process.env.OPS_AGENT_QUIET_HOURS || "22:00-07:00").split("-");
-      const hour = new Date().getUTCHours();
-      const inQuiet = hour >= parseInt(quietRange[0]) || hour < parseInt(quietRange[1]);
-      if (!inQuiet || isCritical) {
-        await bot.sendMessage(config.chatId, alertMsg);
-      } else {
-        logger.info({ severity, inQuiet: true }, "Patrol alert suppressed by quiet hours");
-      }
+      await bot.sendMessage(config.chatId, alertMsg);
 
       writeRag(config, "playbook", {
         title: `巡检异常: ${failedNames}`, scenario: "ops",
@@ -139,7 +151,25 @@ export async function runPatrolCheck(
 
     lastStatus = currentStatus;
   } catch (err) {
-    logger.error({ err: (err as Error).message }, "Patrol check failed");
+    // 网络层失败（API 宕机/全部 401）— 原逻辑只记日志，最严重的故障恰好零告警（2026-09-04 审查修复）
+    networkFailures++;
+    logger.error({ err: (err as Error).message, networkFailures }, "Patrol check failed");
+    if (networkFailures >= 3) {
+      const now = nowOverride ?? Date.now();
+      if (now - lastAlertAt >= ALERT_COOLDOWN_MS) {
+        lastAlertAt = now;
+        lastAlertedStatus = "unreachable";
+        hadAlerted = true;
+        result.alerted = true;
+        await bot.sendMessage(
+          config.chatId,
+          `🔴🔴 严重告警\nAPI 服务不可达：连续 ${networkFailures} 次巡检请求失败\n错误: ${(err as Error).message}\n\n订单同步/调价/webhook 可能已全部中断，⚡ @所有人 请立即处理`,
+        ).catch(() => {});
+      }
+    }
+    lastStatus = "unreachable"; // 恢复时走正常"系统已恢复正常"路径
+  } finally {
+    patrolInFlight = false;
   }
 
   return result;

@@ -58,7 +58,7 @@ export async function createPurchaseNode(
           pay_channel, logistics_status, freight_address, risk_check_json,
           created_at, updated_at)
          VALUES (?, ?, ?, ?, ?, ?, ?, ?, 'pending_payment',
-          'manual_pay', 'idle', ?, ?, datetime('now'), datetime('now'))`,
+          'manual_pay', 'idle', ?, ?, NOW(), NOW())`,
         [
           purchaseId,
           state.storeId || "store_1",

@@ -167,7 +167,7 @@ export async function pollLogistics(): Promise<{
         // Update purchase record with tracking info
         await db.run(
           `UPDATE purchase_1688
-           SET logistics_tracking = ?, logistics_status = ?, updated_at = datetime('now')
+           SET logistics_tracking = ?, logistics_status = ?, updated_at = NOW()
            WHERE id = ?`,
           [tracking.trackingNumber, tracking.status, row.id],
         );

@@ -192,7 +192,7 @@ export async function processCallbackMessage(
       // Update purchase_1688 status → pending (order created on 1688 side)
       if (!message.orderId) return { matched: false, action: "none", error: "Missing orderId" };
       const result = await db.run(
-        "UPDATE purchase_1688 SET payment_status = 'pending', updated_at = datetime('now') WHERE ozon_posting_number LIKE ? AND payment_status = 'pending'",
+        "UPDATE purchase_1688 SET payment_status = 'pending', updated_at = NOW() WHERE ozon_posting_number LIKE ? AND payment_status = 'pending'",
         [`%${message.orderId.slice(-12)}%`]
       );
       return { matched: result.changes > 0, action: "set_pending", error: result.changes === 0 ? "No matching purchase record" : undefined };
@@ -201,7 +201,7 @@ export async function processCallbackMessage(
     case "ORDER_PAID": {
       if (!message.paySerial) return { matched: false, action: "none", error: "Missing paySerial" };
       const result = await db.run(
-        "UPDATE purchase_1688 SET payment_status = 'paid', pay_serial = ?, pay_time = ?, updated_at = datetime('now') WHERE pay_serial = ? AND payment_status != 'paid'",
+        "UPDATE purchase_1688 SET payment_status = 'paid', pay_serial = ?, pay_time = ?, updated_at = NOW() WHERE pay_serial = ? AND payment_status != 'paid'",
         [message.paySerial, message.timestamp, message.paySerial]
       );
       if (result.changes > 0) {
@@ -217,7 +217,7 @@ export async function processCallbackMessage(
     case "SUPPLIER_SHIPPED": {
       if (!message.trackingNumber) return { matched: false, action: "none", error: "Missing trackingNumber" };
       const result = await db.run(
-        "UPDATE purchase_1688 SET logistics_status = 'shipped', logistics_tracking = ?, updated_at = datetime('now') WHERE logistics_tracking IS NULL AND payment_status = 'paid'",
+        "UPDATE purchase_1688 SET logistics_status = 'shipped', logistics_tracking = ?, updated_at = NOW() WHERE logistics_tracking IS NULL AND payment_status = 'paid'",
         [message.trackingNumber]
       );
       if (result.changes > 0) {
@@ -232,7 +232,7 @@ export async function processCallbackMessage(
     case "LOGISTICS_UPDATE": {
       if (!message.trackingNumber) return { matched: false, action: "none", error: "Missing trackingNumber" };
       const result = await db.run(
-        "UPDATE purchase_1688 SET logistics_status = ?, logistics_tracking = ?, updated_at = datetime('now') WHERE logistics_tracking = ?",
+        "UPDATE purchase_1688 SET logistics_status = ?, logistics_tracking = ?, updated_at = NOW() WHERE logistics_tracking = ?",
         [message.logisticsStatus || "in_transit", message.trackingNumber, message.trackingNumber]
       );
       return { matched: result.changes > 0, action: "logistics_update", error: result.changes === 0 ? "No matching tracking" : undefined };
@@ -241,7 +241,7 @@ export async function processCallbackMessage(
     case "ORDER_CANCELLED": {
       if (!message.orderId) return { matched: false, action: "none", error: "Missing orderId" };
       const result = await db.run(
-        "UPDATE purchase_1688 SET payment_status = 'cancelled', pay_error = '1688订单取消', updated_at = datetime('now') WHERE ozon_posting_number LIKE ? AND payment_status = 'pending'",
+        "UPDATE purchase_1688 SET payment_status = 'cancelled', pay_error = '1688订单取消', updated_at = NOW() WHERE ozon_posting_number LIKE ? AND payment_status = 'pending'",
         [`%${message.orderId.slice(-12)}%`]
       );
       return { matched: result.changes > 0, action: "cancel", error: result.changes === 0 ? "No matching purchase" : undefined };
@@ -250,7 +250,7 @@ export async function processCallbackMessage(
     case "REFUND_COMPLETED": {
       if (!message.paySerial) return { matched: false, action: "none", error: "Missing paySerial" };
       const result = await db.run(
-        "UPDATE purchase_1688 SET payment_status = 'refunded', pay_error = '1688退款', updated_at = datetime('now') WHERE pay_serial = ?",
+        "UPDATE purchase_1688 SET payment_status = 'refunded', pay_error = '1688退款', updated_at = NOW() WHERE pay_serial = ?",
         [message.paySerial]
       );
       return { matched: result.changes > 0, action: "refund", error: result.changes === 0 ? "No matching payment" : undefined };

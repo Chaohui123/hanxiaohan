@@ -9,7 +9,11 @@ vi.mock("../../src/db/connection.js", () => ({
   serializedWrite: vi.fn((fn: () => Promise<unknown>) => fn()),
 }));
 vi.mock("@onzo/ozon-order/inventory", () => ({
-  InventoryManager: vi.fn(() => ({ deduct: vi.fn().mockResolvedValue({ success: true }), restore: vi.fn() })),
+  InventoryManager: vi.fn(() => ({
+    deduct: vi.fn().mockResolvedValue({ success: true }),
+    restore: vi.fn(),
+    getStock: vi.fn().mockResolvedValue(null), // 本地无记录 → 跳过 Ozon 库存同步
+  })),
 }));
 vi.mock("../../src/services/notifier.js", () => ({ notifier: { notify: vi.fn().mockResolvedValue(undefined) } }));
 

@@ -4,7 +4,7 @@
 // Automated checks: price sanity, category compliance, image count.
 // ------------------------------------------------------------
 // Called by: stepOpsReview() in listing-pipeline.ts
-// Port: OPS_REVIEW_PORT (default 8181)
+// Port: OPS_REVIEW_PORT (default 8183 — 8181 is the FeishuBot callback server)
 // ============================================================
 
 import express from "express";

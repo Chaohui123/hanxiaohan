@@ -5,6 +5,7 @@
 import { getDb } from "../db/connection.js";
 import { logger } from "@onzo/logger";
 import { EmbeddingClient } from "@onzo/embedding";
+import { nowDb } from "../utils/time.js";
 
 export class RagIndexer {
   private embeddingClient: EmbeddingClient;
@@ -102,10 +103,10 @@ export class RagIndexer {
              MAX(cp.price) as max_price
       FROM promo_watch_list pw
       JOIN promo_competitor_prices cp ON cp.offer_id = pw.offer_id
-      WHERE cp.captured_at >= datetime('now', '-30 days')
+      WHERE cp.captured_at >= ?
       GROUP BY pw.offer_id, pw.name
       HAVING COUNT(cp.id) >= 5
-    `) as Array<Record<string, unknown>>;
+    `, [nowDb(-30*86400_000)]) as Array<Record<string, unknown>>;
 
     if (watchItems.length === 0) return 0;
 
@@ -177,7 +178,7 @@ export class RagIndexer {
            ON CONFLICT (id) DO UPDATE SET
              content = EXCLUDED.content,
              embedding = EXCLUDED.embedding,
-             updated_at = datetime('now')`,
+             updated_at = NOW()`,
           [
             id,
             o.category_id,

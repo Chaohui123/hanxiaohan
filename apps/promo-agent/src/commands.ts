@@ -86,10 +86,15 @@ export function registerCommands(bot: FeishuBot, config: ApiConfig): void {
     }
 
     // "yes copy <offerId>" 确认文案上架
-    const copyMatch = lower.match(/^(?:yes|是)\s+copy\s+(\S+)/);
+    // 用原始 text 匹配（i 标志兼容大小写）— offerId 大小写敏感，对 lower 取参会把 DOOR-X 变成 door-x 404（2026-09-04 实证）
+    const copyMatch = text.match(/^(?:yes|是)\s+copy\s+(\S+)/i);
     if (copyMatch) {
-      const result = await applyCopy(bot, ctx.chatId, config, copyMatch[1]);
-      await bot.sendMessage(ctx.chatId, stripMarkdown(result));
+      try {
+        const result = await applyCopy(bot, ctx.chatId, config, copyMatch[1]);
+        await bot.sendMessage(ctx.chatId, stripMarkdown(result));
+      } catch (err) {
+        await bot.sendMessage(ctx.chatId, `❌ 更新失败: ${(err as Error).message}`);
+      }
       return;
     }
 
@@ -98,8 +103,9 @@ export function registerCommands(bot: FeishuBot, config: ApiConfig): void {
       return; // 非命令消息静默
     }
 
-    const args = parseArgs(lower);
-    const sub = args[0];
+    // 命令名小写匹配，参数（offerId 等）保留原始大小写
+    const args = parseArgs(text);
+    const sub = args[0]?.toLowerCase();
 
     switch (sub) {
       case "competitors":

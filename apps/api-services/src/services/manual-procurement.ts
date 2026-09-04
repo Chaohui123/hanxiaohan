@@ -19,6 +19,7 @@ import { notifier } from "./notifier.js";
 import { acquireLock, releaseLock } from "./redis-lock.js";
 import { FREIGHT_ADDRESS } from "../config/freight-address.js";
 import { createPurchaseOrder as create1688Order } from "./alibaba-openplatform.js";
+import { nowDb } from "../utils/time.js";
 
 // ---- Types ----
 
@@ -425,7 +426,7 @@ export class ManualProcurementService {
             logistics_status, logistics_tracking, logistics_carrier,
             freight_address, risk_check_json,
             created_at, updated_at)
-           VALUES (?, 'store_1', ?, ?, ?, ?, ?, ?, 'pending_payment', 'manual_pay', NULL, ?, 'idle', '', '', ?, ?, datetime('now'), datetime('now'))`,
+           VALUES (?, 'store_1', ?, ?, ?, ?, ?, ?, 'pending_payment', 'manual_pay', NULL, ?, 'idle', '', '', ?, ?, NOW(), NOW())`,
           [
             purchaseId, order.postingNumber, order.orderId,
             skuList[0]?.sourceUrl || "",
@@ -621,8 +622,9 @@ export class ManualProcurementService {
       `SELECT id, ozon_posting_number, total_amount_cny, created_at
        FROM purchase_1688
        WHERE payment_status = 'pending_payment'
-       AND datetime(created_at) < datetime('now', '-24 hours')
-       LIMIT 50`
+       AND created_at < ?
+       LIMIT 50`,
+      [nowDb(-24*3600_000)]
     );
 
     for (const r of rows) {
@@ -680,7 +682,7 @@ export class ManualProcurementService {
     if (messageType === "ORDER_PAID" || payload.payStatus === "paid") {
       await this.db.run(
         `UPDATE purchase_1688
-         SET payment_status = 'paid', pay_serial = ?, pay_time = ?, updated_at = datetime('now')
+         SET payment_status = 'paid', pay_serial = ?, pay_time = ?, updated_at = NOW()
          WHERE (id = ? OR ozon_posting_number = ?)`,
         [payload.paySerial || "", payload.payTime || new Date().toISOString(), orderId, orderId]
       );
@@ -697,7 +699,7 @@ export class ManualProcurementService {
     if (messageType === "SUPPLIER_SHIPPED" || payload.logisticsStatus === "shipped") {
       await this.db.run(
         `UPDATE purchase_1688
-         SET logistics_status = 'shipped', logistics_tracking = ?, updated_at = datetime('now')
+         SET logistics_status = 'shipped', logistics_tracking = ?, updated_at = NOW()
          WHERE (id = ? OR ozon_posting_number = ?)`,
         [payload.logisticsTracking || "", orderId, orderId]
       );
@@ -747,7 +749,7 @@ export class ManualProcurementService {
         // Auto-complete when Ozon order is fully delivered
         if (ozonStatus === "delivered") {
           await this.db.run(
-            `UPDATE purchase_1688 SET payment_status = 'completed', logistics_status = 'delivered', updated_at = datetime('now') WHERE id = ?`,
+            `UPDATE purchase_1688 SET payment_status = 'completed', logistics_status = 'delivered', updated_at = NOW() WHERE id = ?`,
             [p.id]
           );
           logger.info({ id: p.id, postingNumber: p.ozon_posting_number, ozonStatus },

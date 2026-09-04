@@ -23,6 +23,7 @@ import { logger } from "@onzo/logger";
 import { notifier } from "./notifier.js";
 import { acquireLock, releaseLock } from "./redis-lock.js";
 import { emitEvent, EVENT_KEYS } from "./notification-events.js";
+import { nowDb } from "../utils/time.js";
 
 // ---- Types ----
 
@@ -174,8 +175,8 @@ export class LogisticsOrchestrator {
                  logistics_carrier = ?,
                  logistics_cost_rub = ?,
                  logistics_label_url = ?,
-                 logistics_created_at = datetime('now'),
-                 updated_at = datetime('now')
+                 logistics_created_at = NOW(),
+                 updated_at = NOW()
              WHERE ozon_posting_number = ?`,
             [
               shipmentResult.trackingNumber,
@@ -190,7 +191,7 @@ export class LogisticsOrchestrator {
         // 7. Backfill to Ozon
         try {
           await this.db.run(
-            `UPDATE ozon_orders SET tracking_number = ?, updated_at = datetime('now')
+            `UPDATE ozon_orders SET tracking_number = ?, updated_at = NOW()
              WHERE posting_number = ?`,
             [shipmentResult.trackingNumber, input.postingNumber]
           );
@@ -292,7 +293,7 @@ export class LogisticsOrchestrator {
          SET logistics_status = ?,
              logistics_last_event = ?,
              logistics_last_event_at = ?,
-             updated_at = datetime('now')
+             updated_at = NOW()
          WHERE logistics_tracking = ?`,
         [internalStatus, webhook.statusDescription, webhook.timestamp, webhook.trackingNumber]
       )
@@ -352,8 +353,9 @@ export class LogisticsOrchestrator {
        WHERE payment_status = 'paid'
        AND (logistics_status = 'idle' OR logistics_status IS NULL)
        AND pay_time IS NOT NULL
-       AND datetime(pay_time) < datetime('now', '-48 hours')
-       LIMIT 50`
+       AND pay_time < ?
+       LIMIT 50`,
+      [nowDb(-48*3600_000)]
     );
 
     for (const row of noPickup) {
@@ -394,8 +396,9 @@ export class LogisticsOrchestrator {
        FROM purchase_1688
        WHERE logistics_status = 'customs_hold'
        AND logistics_updated_at IS NOT NULL
-       AND datetime(logistics_updated_at) < datetime('now', '-72 hours')
-       LIMIT 50`
+       AND logistics_updated_at < ?
+       LIMIT 50`,
+      [nowDb(-72*3600_000)]
     );
 
     for (const row of customsHold) {
@@ -452,7 +455,7 @@ export class LogisticsOrchestrator {
       `UPDATE local_orders
        SET shipping_cost_rub = ?,
            shipping_carrier = ?,
-           updated_at = datetime('now')
+           updated_at = NOW()
        WHERE posting_number = ?`,
       [p.logistics_cost_rub || 0, p.logistics_carrier, postingNumber]
     ).catch(() => {});
@@ -469,7 +472,7 @@ export class LogisticsOrchestrator {
         `UPDATE ozon_orders
          SET total_profit_rub = total_price_rub - ? - ?,
              total_cost_cny = total_cost_cny + ?,
-             updated_at = datetime('now')
+             updated_at = NOW()
          WHERE posting_number = ?`,
         [Math.round(costRub), shippingRub, Math.round(shippingRub / rate), postingNumber]
       ).catch(() => {});
@@ -538,8 +541,9 @@ export class LogisticsOrchestrator {
        WHERE payment_status = 'paid'
        AND (logistics_status = 'idle' OR logistics_status IS NULL)
        AND pay_time IS NOT NULL
-       AND datetime(pay_time) < datetime('now', '-48 hours')
-       LIMIT 100`
+       AND pay_time < ?
+       LIMIT 100`,
+      [nowDb(-48*3600_000)]
     );
 
     const delayedOrders = delayedRows.map((r) => ({

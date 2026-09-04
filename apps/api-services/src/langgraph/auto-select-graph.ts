@@ -211,7 +211,7 @@ async function crossValidateNode(s: typeof AutoSelectState.State): Promise<Parti
     const db = await getDb().catch(() => null);
     if (db) {
       db.exec("CREATE TABLE IF NOT EXISTS auto_select_diagnosis (id TEXT PRIMARY KEY, task_id TEXT, keyword TEXT, top_score INTEGER, top_products_json TEXT, fail_type TEXT, issues_json TEXT, created_at TEXT DEFAULT (datetime('now')))");
-      await db.run("INSERT INTO auto_select_diagnosis (id, task_id, keyword, top_score, top_products_json, fail_type, issues_json, created_at) VALUES (?,?,?,?,?,?,?,datetime('now'))",
+      await db.run("INSERT INTO auto_select_diagnosis (id, task_id, keyword, top_score, top_products_json, fail_type, issues_json, created_at) VALUES (?,?,?,?,?,?,?,NOW())",
         [`diag_${Date.now()}`, s.manualPublishId || s.keyword, s.keyword, s.topScore, JSON.stringify(s.secondarySort || []), failType, JSON.stringify(issues)]
       );
     }

@@ -21,7 +21,11 @@ export async function queryWatchList(): Promise<Array<{ offerId: string; name: s
 
 export async function insertWatchItem(offerId: string, name: string): Promise<void> {
   const d = await db();
-  await d.run("INSERT OR REPLACE INTO promo_watch_list (offer_id, name) VALUES (?, ?)", [offerId, name]);
+  // INSERT OR REPLACE 是 SQLite 方言，PG 必报语法错误；ON CONFLICT 两侧兼容
+  await d.run(
+    "INSERT INTO promo_watch_list (offer_id, name) VALUES (?, ?) ON CONFLICT(offer_id) DO UPDATE SET name=EXCLUDED.name",
+    [offerId, name],
+  );
 }
 
 export async function deleteWatchItem(offerId: string): Promise<void> {
@@ -162,7 +166,11 @@ export async function insertCopyHistory(entry: { offerId: string; name: string; 
 
 export async function insertDecision(id: string, planJson: string): Promise<void> {
   const d = await db();
-  await d.run("INSERT OR REPLACE INTO promo_decisions (id, plan_json, status) VALUES (?, ?, 'submitted')", [id, planJson]);
+  // INSERT OR REPLACE 是 SQLite 方言，PG 必报语法错误；ON CONFLICT 两侧兼容
+  await d.run(
+    "INSERT INTO promo_decisions (id, plan_json, status) VALUES (?, ?, 'submitted') ON CONFLICT(id) DO UPDATE SET plan_json=EXCLUDED.plan_json, status=EXCLUDED.status",
+    [id, planJson],
+  );
 }
 
 export async function insertAuditLog(entry: { actionType: string; offerId: string | null; details: Record<string, unknown>; operator?: string }): Promise<void> {

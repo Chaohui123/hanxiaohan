@@ -9,6 +9,7 @@ import { OzonOrderClient } from "@onzo/ozon-order";
 import { logger } from "@onzo/logger";
 import { emitEvent, EVENT_KEYS } from "./notification-events.js";
 import { cache } from "@onzo/cache";
+import { nowDb } from "../utils/time.js";
 
 // ---- Types ----
 
@@ -59,14 +60,14 @@ export class FreightForwarderService {
 
     // 1. Update purchase_1688 with tracking info
     await this.db.run(
-      `UPDATE purchase_1688 SET logistics_status = 'shipped', logistics_tracking = ?, updated_at = datetime('now')
+      `UPDATE purchase_1688 SET logistics_status = 'shipped', logistics_tracking = ?, updated_at = NOW()
        WHERE ozon_posting_number = ? AND payment_status = 'paid'`,
       [input.trackingNumber, input.postingNumber]
     );
 
     // 2. Update ozon_orders with tracking
     await this.db.run(
-      `UPDATE ozon_orders SET tracking_number = ?, updated_at = datetime('now')
+      `UPDATE ozon_orders SET tracking_number = ?, updated_at = NOW()
        WHERE posting_number = ?`,
       [input.trackingNumber, input.postingNumber]
     ).catch(() => {});
@@ -90,7 +91,7 @@ export class FreightForwarderService {
 
       // 4. Update local_orders status
       await this.db.run(
-        `UPDATE local_orders SET status = 'delivering', tracking_number = ?, updated_at = datetime('now')
+        `UPDATE local_orders SET status = 'delivering', tracking_number = ?, updated_at = NOW()
          WHERE posting_number = ?`,
         [input.trackingNumber, input.postingNumber]
       ).catch(() => {});
@@ -144,7 +145,8 @@ export class FreightForwarderService {
        FROM purchase_1688
        WHERE payment_status = 'paid' AND logistics_status = 'idle'
        AND pay_time IS NOT NULL
-       AND datetime(pay_time) < datetime('now', '-48 hours')`
+       AND pay_time < ?`,
+      [nowDb(-48*3600_000)]
     );
 
     const alerts: LogisticsDelayAlert[] = [];

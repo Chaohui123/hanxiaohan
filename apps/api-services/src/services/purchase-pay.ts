@@ -369,7 +369,7 @@ export class PurchasePayService {
   async retryFailedPayment(purchaseId: string, input: PayOrderInput): Promise<PayResult> {
     if (this.db) {
       await this.db.run(
-        "UPDATE purchase_1688 SET payment_status = 'paying', retry_count = retry_count + 1, updated_at = datetime('now') WHERE id = ?",
+        "UPDATE purchase_1688 SET payment_status = 'paying', retry_count = retry_count + 1, updated_at = NOW() WHERE id = ?",
         [purchaseId]
       );
     }

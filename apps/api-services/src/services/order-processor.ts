@@ -68,15 +68,20 @@ export async function processNewOrder(
           logger.warn({ postingNumber: order.postingNumber, sku: product.sku, reason: deductResult.reason },
             "Inventory deduction failed — continuing without blocking order");
         } else {
-          // Sync updated stock level back to Ozon (fire-and-forget)
-          const { InventoryManager: LocalInventoryMgr } = await import("./inventory-manager.js");
-          const localMgr = new LocalInventoryMgr();
-          const currentStock = await localMgr.getItem(product.offerId, product.sku);
-          const newStock = (currentStock?.stockAvailable ?? product.quantity) - product.quantity;
-          localMgr.syncStockToOzon(product.offerId, product.sku, Math.max(0, newStock)).catch((err) => {
-            logger.warn({ offerId: product.offerId, sku: product.sku, err: (err as Error).message },
-              "Failed to sync stock to Ozon after order deduction");
-          });
+          // Sync updated stock level back to Ozon (fire-and-forget).
+          // deduct() 已扣过数量 — 直接读扣后真实值推送，严禁再减一次；
+          // 本地无记录时跳过（绝不能推 0，否则每来一单 Ozon 在售库存被清零 → 停售，2026-09-04 审查实证）
+          const stock = await inventoryMgr.getStock(product.offerId, product.sku);
+          if (!stock) {
+            logger.warn({ offerId: product.offerId, sku: product.sku }, "No local inventory row after deduct — skipping Ozon stock sync");
+          } else {
+            const { InventoryManager: LocalInventoryMgr } = await import("./inventory-manager.js");
+            const localMgr = new LocalInventoryMgr();
+            localMgr.syncStockToOzon(product.offerId, product.sku, Math.max(0, stock.stockAvailable)).catch((err) => {
+              logger.warn({ offerId: product.offerId, sku: product.sku, err: (err as Error).message },
+                "Failed to sync stock to Ozon after order deduction");
+            });
+          }
         }
       }
     }

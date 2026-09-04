@@ -8,6 +8,7 @@ import { join } from "node:path";
 import { getDb } from "../db/connection.js";
 import { logger } from "@onzo/logger";
 import { authMiddleware } from "../middleware/auth.js";
+import { nowDb } from "../utils/time.js";
 
 export function createOpsRouter(): Router {
   const router = Router();
@@ -65,7 +66,8 @@ export function createOpsRouter(): Router {
       const db = await getDb().catch(() => null);
       if (db) {
         const r = await db.run(
-          "DELETE FROM failed_tasks WHERE status IN ('done','failed') AND completed_at IS NOT NULL AND completed_at < datetime('now','-7 days')",
+          "DELETE FROM failed_tasks WHERE status IN ('done','failed') AND completed_at IS NOT NULL AND completed_at < ?",
+          [nowDb(-7*86400_000)],
         );
         result.failedTasks.deleted = r.changes;
       }

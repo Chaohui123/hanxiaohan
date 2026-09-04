@@ -179,7 +179,7 @@ export class InventoryManager {
     const db = await getDb().catch(() => null);
     if (db) {
       await serializedWrite(() =>
-        db.run("INSERT INTO inventory (offer_id,sku,stock_available,stock_reserved,updated_at) VALUES (?,?,?,?,datetime('now')) ON CONFLICT(offer_id,sku) DO UPDATE SET stock_available=?,stock_reserved=?,updated_at=datetime('now')",
+        db.run("INSERT INTO inventory (offer_id,sku,stock_available,stock_reserved,updated_at) VALUES (?,?,?,?,NOW()) ON CONFLICT(offer_id,sku) DO UPDATE SET stock_available=?,stock_reserved=?,updated_at=NOW()",
           [item.offerId, item.sku, item.stockAvailable, item.stockReserved, item.stockAvailable, item.stockReserved])
       );
     }

@@ -352,7 +352,7 @@ export async function stepOpsReview(
   processed: ProcessedProduct,
 ): Promise<OpsReviewResult> {
   try {
-    const opsApiBase = process.env.OPS_AGENT_API || "http://ops-agent:8181";
+    const opsApiBase = process.env.OPS_AGENT_API || "http://ops-agent:8183"; // review-server 端口（8181 是 FeishuBot 回调，勿混）
     const resp = await fetch(`${opsApiBase}/api/review/listing`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },

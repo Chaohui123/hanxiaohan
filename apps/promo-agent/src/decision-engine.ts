@@ -380,7 +380,9 @@ export async function scoreAllProducts(config: ApiConfig): Promise<ProductScore[
     // XS(≤135¥且≤500g) 95₽ ｜ Small(135-635¥且≤2kg) 300₽ ｜ Premium Small(635¥+且≤5kg) 2161₽
     const costRub = cost * rate;
     const priceCny = costRub > 0 ? Number(item.price || 0) / rate : 0;
-    const weightG = (Number(item.weight || 0) || 0) * 1000;
+    // weight 缺失按重货保守档计底价 — 缺失=0 会落最轻档(95₽)把底价方向性低估，重货可能亏本卖（2026-09-04 审查）
+    const rawWeight = Number(item.weight || 0) || 0;
+    const weightG = rawWeight > 0 ? rawWeight * 1000 : Number.POSITIVE_INFINITY;
     const logisticsRub = priceCny <= 135 && weightG <= 500 ? 95
       : priceCny <= 635 && weightG <= 2000 ? 300
       : priceCny > 635 && weightG <= 5000 ? 2161

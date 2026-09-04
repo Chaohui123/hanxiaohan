@@ -210,7 +210,7 @@ async function saveSnapshot(s: typeof State.State): Promise<Partial<typeof State
     };
 
     await db.run(
-      "INSERT OR REPLACE INTO market_snapshots (id, date, data_json, listed_count, created_at) VALUES (?,?,?,?,datetime('now'))",
+      "INSERT INTO market_snapshots (id, date, data_json, listed_count, created_at) VALUES (?,?,?,?,NOW()) ON CONFLICT(id) DO UPDATE SET date=EXCLUDED.date, data_json=EXCLUDED.data_json, listed_count=EXCLUDED.listed_count",
       [id, s.date, JSON.stringify(structured), String(s.listedCount)]
     );
     return { snapshotId: id };

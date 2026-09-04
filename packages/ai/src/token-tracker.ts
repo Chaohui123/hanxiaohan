@@ -33,6 +33,12 @@ export class TokenTracker {
 
   /** Check BEFORE making an API call. Throws if daily limit exceeded. */
   checkLimit(): void {
+    // 日期已变更时先解除阻塞 — 原逻辑只在 record() 里重置，但调用顺序是
+    // checkLimit → 请求 → record，blocked 一旦置位 record 永远跑不到，进程永久阻塞（2026-09-04 实证）
+    const today = new Date().toISOString().split("T")[0];
+    if (this.blocked && this.dailyUsage.get(today) === undefined) {
+      this.blocked = false;
+    }
     if (this.blocked) {
       throw new TokenLimitExceededError(
         `Daily token limit (${this.dailyLimit}) exceeded. All AI calls blocked until midnight UTC.`

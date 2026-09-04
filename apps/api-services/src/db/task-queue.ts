@@ -235,6 +235,13 @@ export class TaskQueue {
 
     if (task.retryCount >= task.maxRetries) return null;
 
+    // 释放并发槽位 — dequeue 时 +1，只有 markDone/markFailed 会 -1；
+    // 不释放的话累计 maxConcurrency 次重试后队列永久停摆（2026-09-04 审查发现）
+    if (this.processingSet.has(taskId)) {
+      this.processingSet.delete(taskId);
+      this.activeWorkers = Math.max(0, this.activeWorkers - 1);
+    }
+
     task.status = "queued";
     task.retryCount++;
     task.errorMessage = null;

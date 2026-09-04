@@ -17,6 +17,7 @@ import type { OzonClient } from "@onzo/ozon-api-wrapper";
 import { OzonOrderClient } from "@onzo/ozon-order";
 import { logger } from "@onzo/logger";
 import { notifier } from "./notifier.js";
+import { nowDb } from "../utils/time.js";
 
 // ---- Abstract Adapter (future CDEK/API migration path) ----
 
@@ -343,7 +344,7 @@ export class TransitionLogisticsService {
         await serializedWrite(async () => {
           // Update ozon_orders
           await this.db!.run(
-            `UPDATE ozon_orders SET tracking_number = ?, updated_at = datetime('now') WHERE posting_number = ?`,
+            `UPDATE ozon_orders SET tracking_number = ?, updated_at = NOW() WHERE posting_number = ?`,
             [row.trackingNumber, row.postingNumber]
           );
 
@@ -354,15 +355,15 @@ export class TransitionLogisticsService {
                  logistics_tracking = ?,
                  logistics_carrier = ?,
                  logistics_cost_rub = COALESCE(?, logistics_cost_rub),
-                 logistics_updated_at = datetime('now'),
-                 updated_at = datetime('now')
+                 logistics_updated_at = NOW(),
+                 updated_at = NOW()
              WHERE ozon_posting_number = ?`,
             [row.trackingNumber, row.carrier || "kuajingbus", row.costRub ?? 0, row.postingNumber]
           ).catch(() => {});
 
           // Update local_orders
           await this.db!.run(
-            `UPDATE local_orders SET tracking_number = ?, status = 'delivering', updated_at = datetime('now') WHERE posting_number = ?`,
+            `UPDATE local_orders SET tracking_number = ?, status = 'delivering', updated_at = NOW() WHERE posting_number = ?`,
             [row.trackingNumber, row.postingNumber]
           ).catch(() => {});
         });
@@ -453,7 +454,7 @@ export class TransitionLogisticsService {
         `UPDATE purchase_1688
          SET logistics_cost_rub = ?,
              logistics_carrier = COALESCE(NULLIF(?, ''), logistics_carrier),
-             updated_at = datetime('now')
+             updated_at = NOW()
          WHERE ozon_posting_number = ?`,
         [bill.costRub, bill.carrier || "", match.posting_number]
       ).catch(() => {});
@@ -475,7 +476,7 @@ export class TransitionLogisticsService {
 
         await this.db.run(
           `UPDATE ozon_orders
-           SET total_profit_rub = ?, margin_percent = ?, updated_at = datetime('now')
+           SET total_profit_rub = ?, margin_percent = ?, updated_at = NOW()
            WHERE posting_number = ?`,
           [Math.round(profitRub), marginPercent, match.posting_number]
         ).catch(() => {});
@@ -553,8 +554,9 @@ export class TransitionLogisticsService {
       `SELECT COUNT(*) AS cnt FROM purchase_1688
        WHERE payment_status = 'paid'
        AND pay_time IS NOT NULL
-       AND datetime(pay_time) < datetime('now', '-24 hours')
-       AND (logistics_tracking IS NULL OR logistics_tracking = '')`
+       AND pay_time < ?
+       AND (logistics_tracking IS NULL OR logistics_tracking = '')`,
+      [nowDb(-24*3600_000)]
     );
     empty.overdue24h = overdue24hRow[0]?.cnt || 0;
 
@@ -564,8 +566,9 @@ export class TransitionLogisticsService {
        JOIN ozon_orders o ON p.ozon_posting_number = o.posting_number
        WHERE p.payment_status = 'paid'
        AND p.pay_time IS NOT NULL
-       AND datetime(p.pay_time) < datetime('now', '-48 hours')
-       AND o.tracking_number IS NULL`
+       AND p.pay_time < ?
+       AND o.tracking_number IS NULL`,
+      [nowDb(-48*3600_000)]
     );
     empty.overdue48h = overdue48hRow[0]?.cnt || 0;
 
@@ -588,10 +591,11 @@ export class TransitionLogisticsService {
        FROM purchase_1688
        WHERE payment_status = 'paid'
        AND pay_time IS NOT NULL
-       AND datetime(pay_time) < datetime('now', '-24 hours')
+       AND pay_time < ?
        AND (logistics_tracking IS NULL OR logistics_tracking = '')
        AND logistics_status = 'idle'
-       LIMIT 50`
+       LIMIT 50`,
+      [nowDb(-24*3600_000)]
     );
 
     if (rows.length === 0) return 0;
@@ -627,9 +631,10 @@ export class TransitionLogisticsService {
        JOIN ozon_orders o ON p.ozon_posting_number = o.posting_number
        WHERE p.payment_status = 'paid'
        AND p.pay_time IS NOT NULL
-       AND datetime(p.pay_time) < datetime('now', '-48 hours')
+       AND p.pay_time < ?
        AND o.tracking_number IS NULL
-       LIMIT 50`
+       LIMIT 50`,
+      [nowDb(-48*3600_000)]
     );
 
     if (rows.length === 0) return 0;

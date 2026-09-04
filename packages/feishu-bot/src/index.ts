@@ -10,6 +10,8 @@ export interface FeishuConfig {
   /** Identity tag prepended to every outgoing message (e.g. "运维" / "推广")
    *  so users can tell agents apart when they share one bot identity. */
   tag?: string;
+  /** 飞书事件订阅 Verification Token — 配置后所有回调强制校验，防止伪造事件（含伪造卡片"确认"） */
+  verificationToken?: string;
 }
 
 export interface MsgContext {
@@ -195,14 +197,27 @@ export class FeishuBot {
     try {
       const payload = JSON.parse(rawBody) as {
         schema?: string;
+        token?: string; // v1 verification token
         header?: {
           event_type?: string;
           event_id?: string;
           app_id?: string;
+          token?: string; // v2 verification token
         };
         event?: Record<string, unknown>;
         challenge?: string;
       };
+
+      // Verification token check (when configured) — 防伪造回调执行 pending 危险操作
+      if (this.config.verificationToken) {
+        const token = payload.header?.token || payload.token || "";
+        // url_verification 握手也带 token，同样校验
+        if (token !== this.config.verificationToken) {
+          logger.warn({ eventType: payload.header?.event_type }, "Feishu callback rejected — bad verification token");
+          res.writeHead(401).end();
+          return;
+        }
+      }
 
       // URL verification challenge (v1: type=url_verification, v2: header.event_type=url_verification)
       if (
@@ -284,7 +299,10 @@ export class FeishuBot {
       senderOpenId: sender?.sender_id?.open_id || "",
     };
 
-    this.msgHandler?.(ctx);
+    // handler 异常必须捕获 — 浮空 Promise 的 unhandledRejection 会打挂整个进程
+    void Promise.resolve(this.msgHandler?.(ctx)).catch((err) =>
+      logger.error({ err, chatId }, "Feishu message handler error")
+    );
   }
 
   private handleCardActionEvent(event: Record<string, unknown>): void {
@@ -299,12 +317,20 @@ export class FeishuBot {
 
     if (!action?.value?.action) return;
 
+    // Chat ID authorization — 与消息路径一致；卡片按钮可触发 pending 危险操作，必须鉴权
+    if (this.config.chatId && chatId !== this.config.chatId) {
+      logger.warn({ chatId, action: action.value.action }, "Unauthorized card action rejected");
+      return;
+    }
+
     const ctx: CardActionCtx = {
       chatId,
       action: action.value.action,
       value: action.value as Record<string, unknown>,
     };
 
-    this.cardHandler?.(ctx);
+    void Promise.resolve(this.cardHandler?.(ctx)).catch((err) =>
+      logger.error({ err, chatId }, "Feishu card handler error")
+    );
   }
 }
