@@ -9,6 +9,7 @@
 
 import crypto from "node:crypto";
 import type { Request, Response, NextFunction } from "express";
+import { verifyDashboardToken } from "../routes/auth.route.js";
 
 /** Primary API key (backward compat) */
 const API_KEY = process.env.API_KEY || "";
@@ -35,6 +36,7 @@ const PUBLIC_PATHS = [
   "/ready",
   "/ready/pipeline",
   "/images",
+  "/api/auth/login",
   "/api/webhook/ozon",
   "/api/v1/webhook/ozon",
   "/ozon/webhook",
@@ -58,6 +60,10 @@ function constantTimeCompare(a: string, b: string): boolean {
 }
 
 function isValidToken(token: string): boolean {
+  // Dashboard 登录 token（独立密码模式，HMAC 自包含，7 天有效）
+  if (token.startsWith("v1.")) {
+    return verifyDashboardToken(token);
+  }
   for (const validKey of API_KEYS) {
     if (constantTimeCompare(token, validKey)) return true;
   }

@@ -10,6 +10,7 @@ import type { AppConfig } from "../config.js";
 import { createHealthRouter } from "./health.route.js";
 import { createStatsRouter } from "./stats.route.js";
 import { createBackupRouter } from "./backup.route.js";
+import { createAuthRouter } from "./auth.route.js";
 import { createOrderRouter } from "./order.route.js";
 import { createWebhookRouter } from "./webhook.route.js";
 import { createBulkRouter } from "./bulk.route.js";
@@ -65,6 +66,8 @@ export async function mountAllRoutes(app: express.Express, deps: RouteDeps): Pro
   // ---- Basic routes (no deps required) ----
   mountApi("", createStatsRouter());
   mountApi("", createBackupRouter());
+  // Dashboard 独立密码登录（/api/auth/login 在 PUBLIC_PATHS 白名单内）
+  mountApi("", createAuthRouter());
 
   // Webhook: mounted directly (no mountApi) to avoid deprecation headers interfering with Ozon
   app.use("/api", createWebhookRouter());

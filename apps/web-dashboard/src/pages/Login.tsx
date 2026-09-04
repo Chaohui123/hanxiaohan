@@ -3,52 +3,43 @@ import { Card, Input, Button, message, Space, Typography, Avatar, theme } from "
 import { KeyOutlined, LoginOutlined } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAppStore } from "../stores/app-store";
-import { dashboardApi } from "../api/dashboard-api";
+import { api } from "../api/client";
 
 const { Title, Text } = Typography;
 
 export default function Login() {
-  const [apiKey, setApiKey] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
-  const { setApiKey: saveApiKey } = useAppStore();
+  const { setApiKey: saveToken } = useAppStore();
   const navigate = useNavigate();
   const [searchParams] = useSearchParams();
   const { token } = theme.useToken();
 
   const handleLogin = async () => {
-    const key = apiKey.trim();
-    if (!key) {
-      message.warning("请输入 API Key");
+    const pwd = password.trim();
+    if (!pwd) {
+      message.warning("请输入登录密码");
       return;
     }
 
     setLoading(true);
     try {
-      // Store key first so the API client can use it
-      saveApiKey(key);
+      // 独立密码模式：密码换 dashboard token（7 天有效），不再接触主 API Key
+      const resp = await api.post("/api/auth/login", { password: pwd });
+      const data = (resp as { data?: { token?: string } })?.data;
+      if (!data?.token) throw new Error("登录响应异常，请重试");
 
-      // Verify by calling /health (bypasses auth) then /api/dashboard (requires auth)
-      const health = await dashboardApi.health();
-      if (!health) throw new Error("无法连接到服务器");
-
-      // Try authenticated endpoint to verify key
-      try {
-        await dashboardApi.stats();
-      } catch (err) {
-        // If 401, the interceptor would have redirected. If other error, key might still be wrong.
-        const msg = (err as Error).message;
-        if (msg.includes("401") || msg.includes("UNAUTHORIZED") || msg.includes("Invalid")) {
-          throw new Error("API Key 无效，请检查后重试");
-        }
-        // Other errors could be backend issues — allow entry
-      }
-
-      message.success("认证成功");
+      saveToken(data.token);
+      message.success("登录成功");
       navigate("/", { replace: true });
     } catch (err) {
-      const { logout } = useAppStore.getState();
-      logout();
-      message.error((err as Error).message || "认证失败");
+      const msg = (err as Error).message || "登录失败";
+      // axios 拦截器对 401 会清 key 跳 /login——登录页原地无影响
+      if (msg.includes("密码错误")) {
+        message.error("密码错误，请重试");
+      } else {
+        message.error(msg);
+      }
     } finally {
       setLoading(false);
     }
@@ -78,9 +69,9 @@ export default function Login() {
 
           <Input.Password
             prefix={<KeyOutlined />}
-            placeholder="输入 API Key"
-            value={apiKey}
-            onChange={(e) => setApiKey(e.target.value)}
+            placeholder="输入登录密码"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
             onPressEnter={handleLogin}
             size="large"
             autoFocus
@@ -98,7 +89,7 @@ export default function Login() {
           </Button>
 
           <Text type="secondary" style={{ fontSize: 12 }}>
-            在 .env 中设置 API_KEY，登录时输入相同的密钥
+            登录密码由管理员设置（服务器环境变量 DASHBOARD_PASSWORD）
           </Text>
         </Space>
       </Card>
