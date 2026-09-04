@@ -12,7 +12,7 @@
 //   HALF_OPEN -(probe fails)→ OPEN
 // ============================================================
 
-import { CircuitBreakerOpenError } from "./errors.js";
+import { CircuitBreakerOpenError, FatalError } from "./errors.js";
 
 export enum CircuitState {
   CLOSED = "CLOSED",
@@ -98,7 +98,11 @@ export class CircuitBreaker {
       this.onSuccess();
       return result;
     } catch (error) {
-      this.onFailure(error instanceof Error ? error : new Error(String(error)));
+      // 业务/配置错误（4xx FatalError：参数错/密钥错/不存在）不计入熔断 —
+      // 连续几个坏草稿或密钥失效就熔断 30s，会把局部错误放大成全局 API 停摆（2026-09-04 审查实证）
+      if (!(error instanceof FatalError)) {
+        this.onFailure(error instanceof Error ? error : new Error(String(error)));
+      }
       throw error;
     } finally {
       this.pendingProbes--;

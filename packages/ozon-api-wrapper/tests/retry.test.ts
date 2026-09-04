@@ -63,7 +63,11 @@ describe("RetryPolicy", () => {
 
     expect(policy.isRetryable(new RetryableError("test", 429))).toBe(true);
     expect(policy.isRetryable(new FatalError("test", 400))).toBe(false);
-    expect(policy.isRetryable(new TypeError("network error"))).toBe(true);
+    // fetch 网络层失败可重试；超时（AbortSignal.timeout 抛 TimeoutError）可重试
+    expect(policy.isRetryable(new TypeError("fetch failed"))).toBe(true);
+    expect(policy.isRetryable(Object.assign(new Error("timed out"), { name: "TimeoutError" }))).toBe(true);
+    // 其他 TypeError 多为代码 bug — 不可重试（旧行为全匹配会白重试掩盖问题）
+    expect(policy.isRetryable(new TypeError("Cannot read properties of undefined"))).toBe(false);
   });
 
   it("calculateDelayMs follows exponential pattern", () => {

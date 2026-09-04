@@ -153,6 +153,18 @@ export class RedisCache {
     return val;
   }
 
+  /** 按任意整数值自增（金额累计等场景；内存 fallback 与 incr 一致给 1h 默认过期） */
+  async incrBy(key: string, amount: number): Promise<number> {
+    const client = await getClient();
+    if (client) {
+      try { return await client.incrby(key, amount); } catch {}
+    }
+    const entry = memoryStore.get(key);
+    const val = (entry ? parseInt(entry.value) : 0) + amount;
+    memoryStore.set(key, { value: String(val), expiresAt: Date.now() + 3600_000 });
+    return val;
+  }
+
   async expire(key: string, ttlSeconds: number): Promise<void> {
     const client = await getClient();
     if (client) { try { await client.expire(key, ttlSeconds); return; } catch {} }

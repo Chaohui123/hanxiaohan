@@ -223,7 +223,8 @@ export class ManualProcurementService {
 
     // Sum up all costs
     const totalPurchaseCny = skuMatches.reduce((sum, m) => sum + m.purchasePriceCny * (order.products.find((p) => p.sku === m.sku)?.quantity || 1), 0);
-    const totalWeightKg = skuMatches.reduce((sum, m) => sum + m.weightKg, 0);
+    // 重量必须乘购买数量 — 否则多件订单物流成本被低估、利润率虚高，亏损单被放行（2026-09-04 审查实证）
+    const totalWeightKg = skuMatches.reduce((sum, m) => sum + m.weightKg * (order.products.find((p) => p.sku === m.sku)?.quantity || 1), 0);
 
     // Estimate logistics cost: ~500 RUB/kg average
     const estimatedLogisticsRub = totalWeightKg * 500;

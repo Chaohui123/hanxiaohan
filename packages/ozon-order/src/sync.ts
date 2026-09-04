@@ -132,7 +132,13 @@ export async function syncOrders(
 
         // New order — delegate to processPosting callback
         if (options?.processPosting) {
-          await options.processPosting(p, { idempotencyKey, storeId });
+          try {
+            await options.processPosting(p, { idempotencyKey, storeId });
+          } catch (err) {
+            // 毒订单不阻塞整批同步 — 记入 errors 后继续（2026-09-04 审查实证）
+            errors.push(`${p.postingNumber}: ${(err as Error).message}`);
+            continue;
+          }
         }
 
         upsertedCount++;

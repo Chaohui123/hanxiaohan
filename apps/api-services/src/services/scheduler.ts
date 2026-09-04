@@ -174,9 +174,16 @@ async function runJob(job: ScheduledJob): Promise<void> {
 
   const timeoutMs = job.timeoutMs ?? getDefaultTimeout(job.intervalMs);
 
+  // running 锁跟随 handler 真实结束 — 原实现 finally 里立即复位，超时后 handler 仍在后台跑，
+  // 下一轮会并发启动同一任务（重复采购/重复同步，2026-09-04 审查实证）
+  const handlerPromise = job.handler();
+  void handlerPromise
+    .catch(() => { /* 错误由 race 分支统一记录 */ })
+    .finally(() => { job.running = false; });
+
   try {
     logger.info({ job: job.name }, "Running scheduled job");
-    await Promise.race([job.handler(), timeout(timeoutMs)]);
+    await Promise.race([handlerPromise, timeout(timeoutMs)]);
     const durationMs = Date.now() - startTime;
     job.consecutiveFailures = 0;
     logger.info({ job: job.name, durationMs }, "Scheduled job completed");
@@ -196,7 +203,5 @@ async function runJob(job: ScheduledJob): Promise<void> {
         consecutiveFailures: job.consecutiveFailures,
       }, "CIRCUIT_BREAKER_OPEN — job has failed 3 consecutive times, investigate immediately");
     }
-  } finally {
-    job.running = false;
   }
 }

@@ -82,7 +82,10 @@ export async function runRiskCheck(input: RiskCheckInput, db: DbAdapter | null):
           failures.push(`价格涨幅 ${Math.round(surge * 100)}% > ${MAX_PRICE_SURGE * 100}%`);
         }
       }
-    } catch { /* price_history may not exist */ }
+    } catch (err) {
+      // 静默吞错会让涨价拦截从不生效且无迹可查（2026-09-04 审查实证）
+      logger.warn({ err: (err as Error).message, postingNumber: input.ozonPostingNumber }, "PurchaseRisk: price surge check failed — skipped");
+    }
   }
 
   // 4. Per-order limit
@@ -91,16 +94,20 @@ export async function runRiskCheck(input: RiskCheckInput, db: DbAdapter | null):
     failures.push(`单笔金额 ¥${input.costCny.toFixed(2)} > ¥${MAX_ORDER_CY} 上限`);
   }
 
-  // 5. Daily limit (Redis-backed)
+  // 5. Daily limit (Redis-backed) — 按实际金额累计（分），原"计数×当笔金额"算法严重失真：
+  // 高价单被误杀、真超支被放行（2026-09-04 审查实证）
   try {
     const today = new Date().toISOString().slice(0, 10);
     const dailyKey = `purchase:daily:${input.storeId}:${today}`;
-    const current = await cache.incr(dailyKey);
-    await cache.expire(dailyKey, 86400); // expire after 24h
-    const projected = current * input.costCny; // rough: count * current order
-    if (projected > DAILY_LIMIT_CY) {
+    const orderCents = Math.round(input.costCny * 100);
+    const currentCents = await cache.incrBy(dailyKey, orderCents);
+    if (currentCents === orderCents) {
+      await cache.expire(dailyKey, 86400); // 仅首次创建时设 TTL — 每次刷新会永不按自然日重置
+    }
+    const projectedCny = currentCents / 100;
+    if (projectedCny > DAILY_LIMIT_CY) {
       checks.dailyLimitOk = false;
-      failures.push(`今日累计预估 ¥${projected.toFixed(2)} > ¥${DAILY_LIMIT_CY} 日限额`);
+      failures.push(`今日累计预估 ¥${projectedCny.toFixed(2)} > ¥${DAILY_LIMIT_CY} 日限额`);
     }
   } catch { /* Redis unavailable — skip daily limit check */ }
 

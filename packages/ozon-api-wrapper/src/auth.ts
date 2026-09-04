@@ -89,6 +89,8 @@ export class AuthManager {
     if (clientId) {
       const client = this.clients.get(clientId);
       if (client) return client;
+      // 显式指定的凭证不存在时严禁静默降级 — 会拿别的店铺的 key 发请求（串店事故，2026-09-04 审查）
+      throw new Error(`Ozon client credentials not found for clientId: ${clientId}`);
     }
 
     // Try default

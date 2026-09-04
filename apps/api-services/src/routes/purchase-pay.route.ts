@@ -11,6 +11,26 @@ export function createPurchasePayRouter(db: DbAdapter | null): Router {
   const router = Router();
   const service = new PurchasePayService(db);
 
+  /** 从订单表查回真实售价 — sellingPriceRub=0 会让风控跳过利润校验（亏损单照付，2026-09-04 审查实证） */
+  async function resolveSellingPriceRub(postingNumber: string): Promise<number> {
+    if (!db) return 0;
+    const rows = await db.all(
+      "SELECT total_price_rub FROM ozon_orders WHERE posting_number = ? OR posting_number LIKE ? || '-%' LIMIT 1",
+      [postingNumber, postingNumber],
+    ).catch(() => [] as Array<Record<string, unknown>>);
+    return Number((rows[0] as Record<string, unknown> | undefined)?.total_price_rub) || 0;
+  }
+
+  /** 从 SKU 映射查真实重量（用于利润校验的物流项） */
+  async function resolveWeightKg(offerId: string | undefined): Promise<number> {
+    if (!db || !offerId) return 0.5;
+    const rows = await db.all(
+      "SELECT weight_kg FROM sku_1688_mapping WHERE ozon_offer_id = ? LIMIT 1",
+      [offerId],
+    ).catch(() => [] as Array<Record<string, unknown>>);
+    return Number((rows[0] as Record<string, unknown> | undefined)?.weight_kg) || 0.5;
+  }
+
   /** POST /api/purchase/pay — trigger auto-payment for an Ozon order */
   router.post("/purchase/pay", async (req, res) => {
     try {
@@ -70,8 +90,8 @@ export function createPurchasePayRouter(db: DbAdapter | null): Router {
         ozonPostingNumber: rec.ozon_posting_number as string,
         ozonOrderId: rec.ozon_order_id as number,
         costCny: rec.total_amount_cny as number,
-        sellingPriceRub: 0,
-        weightKg: 0.5,
+        sellingPriceRub: await resolveSellingPriceRub(rec.ozon_posting_number as string),
+        weightKg: await resolveWeightKg(rec.offer_id as string || undefined),
         source1688Url: rec.source_1688_url as string || undefined,
         skuList,
         offerId: rec.offer_id as string || undefined,
@@ -161,8 +181,8 @@ export function createPurchasePayRouter(db: DbAdapter | null): Router {
             ozonPostingNumber: r.ozon_posting_number as string,
             ozonOrderId: r.ozon_order_id as number,
             costCny: r.total_amount_cny as number,
-            sellingPriceRub: 0,
-            weightKg: 0.5,
+            sellingPriceRub: await resolveSellingPriceRub(r.ozon_posting_number as string),
+            weightKg: await resolveWeightKg(r.offer_id as string || undefined),
             source1688Url: r.source_1688_url as string || undefined,
             skuList,
             offerId: r.offer_id as string || undefined,

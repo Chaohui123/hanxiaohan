@@ -72,7 +72,13 @@ export class RetryPolicy {
 
   isRetryable(error: Error): boolean {
     // Network errors are always retryable
-    if (error.name === "NetworkError" || error.name === "TypeError" || error.name === "AbortError") {
+    if (error.name === "NetworkError" || error.name === "AbortError" || error.name === "TimeoutError") {
+      return true;
+    }
+
+    // fetch 网络层失败是 TypeError("fetch failed")；其余 TypeError 多为代码 bug，
+    // 白重试 3 次会掩盖问题并拖慢失败暴露（2026-09-04 审查）
+    if (error.name === "TypeError" && /fetch failed/i.test(error.message)) {
       return true;
     }
 

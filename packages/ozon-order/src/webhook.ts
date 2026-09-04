@@ -81,15 +81,6 @@ async function isDuplicate(eventId: string, dedupStore?: WebhookDedupStore): Pro
   return false;
 }
 
-function markProcessed(eventId: string, dedupStore?: WebhookDedupStore): void {
-  if (dedupStore) {
-    void dedupStore.markProcessed(eventId);
-    return;
-  }
-
-  processedEvents.set(eventId, Date.now() + EVENT_TTL_MS);
-}
-
 /**
  * Verify Ozon webhook signature.
  * Ozon signs with HMAC-SHA256 using the API key as secret.
@@ -180,9 +171,12 @@ export async function parseWebhookPayload(
     return { valid: false, reason: "Missing posting_number" };
   }
 
-  markProcessed(eventId, options?.dedupStore);
+  // 只调一次带 meta 的版本 — 原代码先 fire-and-forget 调 markProcessed(eventId)（无 meta），
+  // 竞态下可能把第二次写入的 posting_number/event_type 覆盖回 NULL（2026-09-04 审查实证）
   if (options?.dedupStore) {
     await options.dedupStore.markProcessed(eventId, { postingNumber, eventType });
+  } else {
+    processedEvents.set(eventId, Date.now() + EVENT_TTL_MS); // 内存 fallback 去重
   }
 
   return {
