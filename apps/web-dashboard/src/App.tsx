@@ -1,16 +1,18 @@
 import { Suspense, lazy } from "react";
-import { BrowserRouter, Routes, Route, Link, useLocation, Navigate } from "react-router-dom";
-import { Layout, Menu, Spin, theme } from "antd";
+import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate, useSearchParams, Navigate } from "react-router-dom";
+import { Layout, Menu, Spin, theme, Button, Space, message } from "antd";
+import type { MenuProps } from "antd";
 import {
-  DashboardOutlined, UploadOutlined, ShoppingCartOutlined,
-  InboxOutlined, CustomerServiceOutlined, ShopOutlined,
-  MonitorOutlined, MenuFoldOutlined, MenuUnfoldOutlined,
-  RocketOutlined, EyeOutlined, LineChartOutlined, FundOutlined, DatabaseOutlined,
-  DollarOutlined, ChromeOutlined,
+  DashboardOutlined, LineChartOutlined, RocketOutlined, DatabaseOutlined,
+  EyeOutlined, ShoppingOutlined, PayCircleOutlined, CustomerServiceOutlined,
+  FundOutlined, MonitorOutlined, HeartOutlined, BookOutlined,
+  SettingOutlined, MenuFoldOutlined, MenuUnfoldOutlined, LogoutOutlined,
 } from "@ant-design/icons";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useAppStore } from "./stores/app-store";
 import { ErrorBoundary } from "./components/ErrorBoundary";
+import StoreSwitcher from "./components/layout/StoreSwitcher";
+import AlertBell from "./components/layout/AlertBell";
 
 // Lazy-loaded page components — reduces initial bundle size by ~80%
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -18,19 +20,15 @@ const Listing = lazy(() => import("./pages/Listing"));
 const Orders = lazy(() => import("./pages/Orders"));
 const Inventory = lazy(() => import("./pages/Inventory"));
 const Aftersales = lazy(() => import("./pages/Aftersales"));
-const Stores = lazy(() => import("./pages/Stores"));
 const Monitoring = lazy(() => import("./pages/Monitoring"));
 const Login = lazy(() => import("./pages/Login"));
-const Promo = lazy(() => import("./pages/Promo"));
 const Competitor = lazy(() => import("./pages/Competitor"));
-const PricingHistory = lazy(() => import("./pages/PricingHistory"));
-const PromoEffect = lazy(() => import("./pages/PromoEffect"));
 const RagKnowledge = lazy(() => import("./pages/RagKnowledge"));
 const PurchasePay = lazy(() => import("./pages/PurchasePay"));
-const TaskMonitor = lazy(() => import("./pages/TaskMonitor"));
-const FailedProducts = lazy(() => import("./pages/FailedProducts"));
 const MarketAnalysis = lazy(() => import("./pages/MarketAnalysis"));
-const PluginGuide = lazy(() => import("./pages/PluginGuide"));
+const PromoCenter = lazy(() => import("./pages/promo/PromoCenter"));
+const TasksCenter = lazy(() => import("./pages/tasks/TasksCenter"));
+const SettingsCenter = lazy(() => import("./pages/settings/SettingsCenter"));
 
 const { Header, Sider, Content } = Layout;
 const queryClient = new QueryClient({ defaultOptions: { queries: { retry: 1, refetchOnWindowFocus: false } } });
@@ -51,30 +49,73 @@ function RequireAuth({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
-const menuItems = [
-  { key: "/", icon: <DashboardOutlined />, label: <Link to="/">仪表盘</Link> },
-  { key: "/listing", icon: <UploadOutlined />, label: <Link to="/listing">产品上架</Link> },
-  { key: "/orders", icon: <ShoppingCartOutlined />, label: <Link to="/orders">订单管理</Link> },
-  { key: "/inventory", icon: <InboxOutlined />, label: <Link to="/inventory">库存管理</Link> },
-  { key: "/aftersales", icon: <CustomerServiceOutlined />, label: <Link to="/aftersales">售后管理</Link> },
-  { key: "/stores", icon: <ShopOutlined />, label: <Link to="/stores">店铺管理</Link> },
-  { key: "/monitoring", icon: <MonitorOutlined />, label: <Link to="/monitoring">系统监控</Link> },
-  { key: "/promo", icon: <RocketOutlined />, label: <Link to="/promo">推广决策</Link> },
-  { key: "/competitor", icon: <EyeOutlined />, label: <Link to="/competitor">竞品监控</Link> },
-  { key: "/pricing-history", icon: <LineChartOutlined />, label: <Link to="/pricing-history">调价历史</Link> },
-  { key: "/promo-effect", icon: <FundOutlined />, label: <Link to="/promo-effect">推广效果</Link> },
-  { key: "/rag", icon: <DatabaseOutlined />, label: <Link to="/rag">知识库</Link> },
-  { key: "/plugin", icon: <ChromeOutlined />, label: <Link to="/plugin">插件采集</Link> },
-  { key: "/market", icon: <LineChartOutlined />, label: <Link to="/market">大盘分析</Link> },
-  { key: "/purchase-pay", icon: <DollarOutlined />, label: <Link to="/purchase-pay">采购支付</Link> },
-  { key: "/tasks", icon: <MonitorOutlined />, label: <Link to="/tasks">任务监控</Link> },
-  { key: "/failed", icon: <RocketOutlined />, label: <Link to="/failed">失败重试</Link> },
+/** Legacy route redirect: keeps incoming query params, optionally overriding `tab`. */
+function LegacyRedirect({ to, tab }: { to: string; tab?: string }) {
+  const [searchParams] = useSearchParams();
+  const params = new URLSearchParams(searchParams);
+  if (tab) params.set("tab", tab);
+  const qs = params.toString();
+  return <Navigate to={`${to}${qs ? `?${qs}` : ""}`} replace />;
+}
+
+// Grouped navigation (S2 IA restructure) — 5 groups replacing 17 flat items
+const menuItems: MenuProps["items"] = [
+  {
+    type: "group",
+    label: "概览",
+    children: [
+      { key: "/", icon: <DashboardOutlined />, label: <Link to="/">工作台</Link> },
+      { key: "/market", icon: <LineChartOutlined />, label: <Link to="/market">大盘分析</Link> },
+    ],
+  },
+  {
+    type: "group",
+    label: "商品",
+    children: [
+      { key: "/listing", icon: <RocketOutlined />, label: <Link to="/listing">选品上架</Link> },
+      { key: "/inventory", icon: <DatabaseOutlined />, label: <Link to="/inventory">库存与价格</Link> },
+      { key: "/competitor", icon: <EyeOutlined />, label: <Link to="/competitor">竞品监控</Link> },
+    ],
+  },
+  {
+    type: "group",
+    label: "交易",
+    children: [
+      { key: "/orders", icon: <ShoppingOutlined />, label: <Link to="/orders">订单管理</Link> },
+      { key: "/purchase-pay", icon: <PayCircleOutlined />, label: <Link to="/purchase-pay">采购支付</Link> },
+      { key: "/aftersales", icon: <CustomerServiceOutlined />, label: <Link to="/aftersales">售后工单</Link> },
+    ],
+  },
+  {
+    type: "group",
+    label: "推广",
+    children: [
+      { key: "/promo", icon: <FundOutlined />, label: <Link to="/promo">推广中心</Link> },
+    ],
+  },
+  {
+    type: "group",
+    label: "系统",
+    children: [
+      { key: "/tasks", icon: <MonitorOutlined />, label: <Link to="/tasks">任务与失败</Link> },
+      { key: "/monitoring", icon: <HeartOutlined />, label: <Link to="/monitoring">运行监控</Link> },
+      { key: "/rag", icon: <BookOutlined />, label: <Link to="/rag">知识库</Link> },
+      { key: "/settings", icon: <SettingOutlined />, label: <Link to="/settings">店铺与插件</Link> },
+    ],
+  },
 ];
 
 function AppLayout() {
-  const { sidebarCollapsed, toggleSidebar } = useAppStore();
+  const { sidebarCollapsed, toggleSidebar, logout } = useAppStore();
   const { token: themeToken } = theme.useToken();
   const location = useLocation();
+  const navigate = useNavigate();
+
+  const handleLogout = () => {
+    logout(); // clears localStorage "onzo-api-key" + app-store auth state
+    message.success("已登出");
+    navigate("/login", { replace: true });
+  };
 
   return (
     <Layout style={{ minHeight: "100vh" }}>
@@ -96,33 +137,44 @@ function AppLayout() {
         />
       </Sider>
       <Layout>
-        <Header style={{ padding: "0 16px", background: themeToken.colorBgContainer, display: "flex", alignItems: "center", borderBottom: `1px solid ${themeToken.colorBorderSecondary}` }}>
-          <span onClick={toggleSidebar} style={{ fontSize: 18, cursor: "pointer", marginRight: 16 }}>
-            {sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+        <Header style={{ padding: "0 16px", background: themeToken.colorBgContainer, display: "flex", alignItems: "center", justifyContent: "space-between", borderBottom: `1px solid ${themeToken.colorBorderSecondary}` }}>
+          <span style={{ display: "flex", alignItems: "center" }}>
+            <span onClick={toggleSidebar} style={{ fontSize: 18, cursor: "pointer", marginRight: 16 }}>
+              {sidebarCollapsed ? <MenuUnfoldOutlined /> : <MenuFoldOutlined />}
+            </span>
+            <span style={{ fontSize: 14, color: themeToken.colorTextSecondary }}>Ozon 跨境电商自动化运营系统</span>
           </span>
-          <span style={{ fontSize: 14, color: themeToken.colorTextSecondary }}>Ozon 跨境电商自动化运营系统</span>
+          <Space size="middle">
+            <StoreSwitcher />
+            <AlertBell />
+            <Button type="text" icon={<LogoutOutlined />} onClick={handleLogout}>
+              登出
+            </Button>
+          </Space>
         </Header>
         <Content style={{ margin: 16, padding: 24, background: themeToken.colorBgContainer, borderRadius: 8, overflow: "auto" }}>
           <ErrorBoundary>
             <Suspense fallback={<PageLoader />}>
               <Routes>
                 <Route path="/" element={<Dashboard />} />
-                <Route path="/listing" element={<Listing />} />
-                <Route path="/orders" element={<Orders />} />
-                <Route path="/inventory" element={<Inventory />} />
-                <Route path="/aftersales" element={<Aftersales />} />
-                <Route path="/stores" element={<Stores />} />
-                <Route path="/monitoring" element={<Monitoring />} />
-                <Route path="/promo" element={<Promo />} />
-                <Route path="/competitor" element={<Competitor />} />
-                <Route path="/pricing-history" element={<PricingHistory />} />
-                <Route path="/promo-effect" element={<PromoEffect />} />
-                <Route path="/rag" element={<RagKnowledge />} />
-                <Route path="/purchase-pay" element={<PurchasePay />} />
-                <Route path="/tasks" element={<TaskMonitor />} />
-                <Route path="/failed" element={<FailedProducts />} />
                 <Route path="/market" element={<MarketAnalysis />} />
-                <Route path="/plugin" element={<PluginGuide />} />
+                <Route path="/listing" element={<Listing />} />
+                <Route path="/inventory" element={<Inventory />} />
+                <Route path="/competitor" element={<Competitor />} />
+                <Route path="/orders" element={<Orders />} />
+                <Route path="/purchase-pay" element={<PurchasePay />} />
+                <Route path="/aftersales" element={<Aftersales />} />
+                <Route path="/promo" element={<PromoCenter />} />
+                <Route path="/tasks" element={<TasksCenter />} />
+                <Route path="/monitoring" element={<Monitoring />} />
+                <Route path="/rag" element={<RagKnowledge />} />
+                <Route path="/settings" element={<SettingsCenter />} />
+                {/* Legacy route redirects (keep query, inject target tab) */}
+                <Route path="/promo-effect" element={<LegacyRedirect to="/promo" tab="effect" />} />
+                <Route path="/pricing-history" element={<LegacyRedirect to="/promo" tab="pricing" />} />
+                <Route path="/failed" element={<LegacyRedirect to="/tasks" tab="failed" />} />
+                <Route path="/plugin" element={<LegacyRedirect to="/settings" tab="plugin" />} />
+                <Route path="/stores" element={<LegacyRedirect to="/settings" />} />
               </Routes>
             </Suspense>
           </ErrorBoundary>

@@ -1,9 +1,9 @@
 import { useEffect, useState } from "react";
 import { Row, Col, Card, Statistic, Table, Tag, Button, Space, Spin, Tooltip, Typography, message } from "antd";
 import { PlayCircleOutlined, PauseCircleOutlined, ReloadOutlined } from "@ant-design/icons";
-import { promoApi, useDecision, useSalesRanking, usePromoCost, useAutoDecisionToggle } from "../api/promo-api";
+import { promoApi, useDecision, useSalesRanking, usePromoCost, useAutoDecisionToggle } from "../../api/promo-api";
 
-export default function Promo() {
+export default function PromoDecision() {
   const { data: decision, isLoading: dLoading } = useDecision();
   const { data: rankingData } = useSalesRanking(7);
   const { data: costData } = usePromoCost();

@@ -1,6 +1,6 @@
 import { Card, Steps, Button, Table, Tag, Space, message } from "antd";
 import { DownloadOutlined, ChromeOutlined, LinkOutlined } from "@ant-design/icons";
-import { api } from "../api/client";
+import { api } from "../../api/client";
 import { useQuery } from "@tanstack/react-query";
 
 export default function PluginGuide() {

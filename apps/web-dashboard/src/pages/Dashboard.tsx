@@ -2,7 +2,6 @@ import { useQuery } from "@tanstack/react-query";
 import { Row, Col, Card, Statistic, Table, Tag, Spin, Progress } from "antd";
 import { CloudOutlined, GlobalOutlined } from "@ant-design/icons";
 import { dashboardApi, taskApi, monitorApi, inventoryApi } from "../api/client";
-import AlertBanner from "../components/AlertBanner";
 
 export default function Dashboard() {
   const { data: dash, isLoading } = useQuery({ queryKey: ["dashboard"], queryFn: () => dashboardApi.stats(), refetchInterval: 15_000 });
@@ -23,8 +22,6 @@ export default function Dashboard() {
 
   return (
     <div>
-      <AlertBanner />
-
       {/* Multi-store Global Summary */}
       <Card size="small" style={{ marginBottom: 16 }}>
         <Row gutter={16}>

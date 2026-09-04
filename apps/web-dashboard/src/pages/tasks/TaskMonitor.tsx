@@ -3,7 +3,7 @@ import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, Table, Tag, Button, Select, Space, message } from "antd";
 import { ReloadOutlined, SyncOutlined } from "@ant-design/icons";
 import { useState } from "react";
-import { api } from "../api/client";
+import { api } from "../../api/client";
 
 export default function TaskMonitor() {
   const [status, setStatus] = useState<string>("all");

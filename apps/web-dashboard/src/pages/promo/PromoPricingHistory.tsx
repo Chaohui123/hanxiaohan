@@ -1,8 +1,8 @@
 import { useMemo, useState } from "react";
 import { Card, Table, Input, Row, Col, Statistic, Spin, Tag } from "antd";
-import { usePricingHistory } from "../api/promo-api";
+import { usePricingHistory } from "../../api/promo-api";
 
-export default function PricingHistory() {
+export default function PromoPricingHistory() {
   const [searchText, setSearchText] = useState("");
   const { data, isLoading } = usePricingHistory(30);
   const adjustments = (data as { adjustments?: Array<Record<string, unknown>> })?.adjustments || [];

@@ -1,6 +1,6 @@
 import { Row, Col, Card, Statistic, Table, Spin, Tooltip as AntTooltip, Typography } from "antd";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from "recharts";
-import { usePromoCost, usePricingHistory, useCopyHistory } from "../api/promo-api";
+import { usePromoCost, usePricingHistory, useCopyHistory } from "../../api/promo-api";
 
 export default function PromoEffect() {
   const { data: costData } = usePromoCost();

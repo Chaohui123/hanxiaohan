@@ -2,7 +2,7 @@
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { Card, Table, Tag, Button, Space, message } from "antd";
 import { ReloadOutlined, ThunderboltOutlined } from "@ant-design/icons";
-import { api } from "../api/client";
+import { api } from "../../api/client";
 
 export default function FailedProducts() {
   const qc = useQueryClient();

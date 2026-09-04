@@ -1,6 +1,5 @@
-import { Card, Table, Tag, Button, Space, message } from "antd";
-import { PlusOutlined } from "@ant-design/icons";
-import { storeApi } from "../api/client";
+import { Card, Table, Tag } from "antd";
+import { storeApi } from "../../api/client";
 import { useQuery } from "@tanstack/react-query";
 
 export default function Stores() {
@@ -8,7 +7,7 @@ export default function Stores() {
   const stores = (Array.isArray((data as { data?: unknown[] })?.data) ? (data as { data: unknown[] }).data : []);
 
   return (
-    <Card title="店铺管理" extra={<Button icon={<PlusOutlined />} onClick={() => message.info("使用 POST /api/stores 添加店铺")}>添加店铺</Button>}>
+    <Card title="店铺管理">
       <Table dataSource={stores} rowKey="store_id" loading={isLoading} size="small"
         columns={[
           { title: "店铺ID", dataIndex: "store_id" },
