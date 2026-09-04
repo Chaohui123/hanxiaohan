@@ -59,20 +59,18 @@ export function registerCommands(bot: FeishuBot, config: ApiConfig): void {
     // Process "yes" / "是" / "确认" confirmation
     const confirmLower = ctx.text.toLowerCase().trim();
     if (confirmLower === "yes" || confirmLower === "是" || confirmLower === "确认") {
-      for (const prefix of ["backup", "sync", "reconcile"]) {
-        const key = `${prefix}_${ctx.chatId}`;
-        const entry = pending.get(key);
-        if (entry) {
-          pending.delete(key);
-          await bot.sendMessage(ctx.chatId, `⏳ 正在执行 ${entry.action}...`);
-          try {
-            const result = await entry.handler();
-            await bot.sendMessage(ctx.chatId, result);
-          } catch (err) {
-            await bot.sendMessage(ctx.chatId, `❌ 执行失败: ${(err as Error).message}`);
-          }
-          return;
+      // 遍历该 chatId 的所有待确认项 — 硬编码前缀列表会漏掉新命令（cleanup 曾因此无法文字确认，2026-09-04 审查）
+      for (const [key, entry] of pending) {
+        if (!key.endsWith(`_${ctx.chatId}`)) continue;
+        pending.delete(key);
+        await bot.sendMessage(ctx.chatId, `⏳ 正在执行 ${entry.action}...`);
+        try {
+          const result = await entry.handler();
+          await bot.sendMessage(ctx.chatId, result);
+        } catch (err) {
+          await bot.sendMessage(ctx.chatId, `❌ 执行失败: ${(err as Error).message}`);
         }
+        return;
       }
     }
 

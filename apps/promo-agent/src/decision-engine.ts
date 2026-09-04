@@ -778,6 +778,8 @@ function resetDailyCountIfNeeded(): void {
   if (dailyActionDate !== today) {
     dailyActionDate = today;
     dailyActionCount = 0;
+    // key 带日期前缀，跨日后旧条目全部失效 — 不清理会在常驻进程无界累积（2026-09-04 审查）
+    dailyPriceAdjustments.clear();
     logger.info("Daily action count reset");
   }
 }

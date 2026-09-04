@@ -58,6 +58,16 @@ const pendingConfirmations = new Map<string, PricingSuggestion>();
 
 /** 每日调价计数: key = `${date}:${offerId}` */
 const dailyAdjustCount = new Map<string, number>();
+let lastAdjustDate = "";
+
+/** 跨日清理调价计数 — key 带日期前缀，不清理会在常驻进程无界累积（2026-09-04 审查） */
+function resetAdjustCountIfNewDay(): void {
+  const today = new Date().toISOString().slice(0, 10);
+  if (lastAdjustDate !== today) {
+    lastAdjustDate = today;
+    dailyAdjustCount.clear();
+  }
+}
 
 export function isAutoPricingEnabled(): boolean {
   return autoPricingEnabled;
@@ -111,6 +121,8 @@ async function runPricingCycle(
     logger.info("Pricing cycle skipped — auto pricing disabled");
     return;
   }
+
+  resetAdjustCountIfNewDay();
 
   // 1. 获取汇率
   let rate = 12; // fallback

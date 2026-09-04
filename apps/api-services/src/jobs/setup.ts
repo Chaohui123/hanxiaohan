@@ -87,6 +87,13 @@ export function registerCoreJobs(deps: CoreJobDeps): void {
     forceRefreshRate();
   });
 
+  // 定期清理内存队列中已完结任务 — prune 定义了但无人调用，done/failed 任务在
+  // 常驻进程里无界累积（2026-09-04 审查实证）
+  registerJob("task-queue-prune", 6 * 3600_000, async () => {
+    const pruned = taskQueue.prune(24);
+    if (pruned > 0) logger.info({ pruned }, "Task queue pruned");
+  });
+
   registerJob("market-data-collect", 24 * 3600_000, async () => {
     const { collectMarketData } = await import("../services/market-data-collector.js");
     await collectMarketData([], ozonClient as never).catch((err) =>
@@ -129,11 +136,13 @@ export function registerCoreJobs(deps: CoreJobDeps): void {
 
       let ozonCount: number = -1;
       try {
-        const ozonResp = await ozonClient.request(
-          "POST", "/v3/posting/fbo/list",
-          { filter: { since: yesterday }, limit: 1, offset: 0 }
-        ) as { result?: { count?: number } };
-        ozonCount = ozonResp.result?.count ?? -1;
+        // 本地 local_orders 同步 FBS+FBO 两种订单 — Ozon 侧必须同口径求和；
+        // 只查 FBO 时 FBS 店铺 ozonCount≈0，偏差检查形同虚设（2026-09-04 审查实证）
+        const [fbsResp, fboResp] = await Promise.all([
+          ozonClient.request("POST", "/v3/posting/fbs/list", { filter: { since: yesterday }, limit: 1, offset: 0 }) as Promise<{ result?: { count?: number } }>,
+          ozonClient.request("POST", "/v3/posting/fbo/list", { filter: { since: yesterday }, limit: 1, offset: 0 }) as Promise<{ result?: { count?: number } }>,
+        ]);
+        ozonCount = (fbsResp.result?.count ?? 0) + (fboResp.result?.count ?? 0);
       } catch { /* Ozon API unavailable */ }
 
       if (localCount >= 0 && ozonCount >= 0) {
