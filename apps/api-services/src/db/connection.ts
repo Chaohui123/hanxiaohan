@@ -67,6 +67,10 @@ export async function getDb(): Promise<DbAdapter | null> {
     return createPgAdapter(pool);
   } catch (pgErr) {
     logger.warn({ err: (pgErr as Error).message }, "PostgreSQL unavailable, falling back to SQLite");
+    // 生产降级 SQLite 会导致订单/webhook 数据写分裂（且容器内是 ephemeral 存储）— 必须立刻告警（2026-09-04 审查）
+    import("../services/notification-events.js")
+      .then(({ emitEvent }) => emitEvent("DB_FALLBACK_SQLITE", { error: (pgErr as Error).message }).catch(() => {}))
+      .catch(() => {});
     if (pool) { await pool.end().catch(() => {}); pool = null; }
   }
 
