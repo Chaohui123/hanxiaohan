@@ -16,14 +16,14 @@ export default function RagKnowledge() {
   const [modalOpen, setModalOpen] = useState(false);
   const [form] = Form.useForm();
 
-  const stats = statsData as unknown as Record<string, number> || {};
+  const stats = statsData || {};
 
   const handleSearch = () => {
     if (!searchQuery.trim()) { message.warning("请输入查询文本"); return; }
     setActiveQuery(searchQuery.trim());
   };
 
-  const results = (searchResults as unknown as { results?: Array<Record<string, unknown>> })?.results || [];
+  const results = searchResults?.results || [];
 
   const searchColumns = [
     { title: "相似度", dataIndex: "score", key: "score", width: 80, render: (v: number) => (v * 100).toFixed(1) + "%" },

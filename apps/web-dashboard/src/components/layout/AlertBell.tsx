@@ -2,21 +2,14 @@
 import { useState } from "react";
 import { Badge, Button, Drawer, Empty, List, Tag, Typography } from "antd";
 import { BellOutlined } from "@ant-design/icons";
-import { useQuery } from "@tanstack/react-query";
 import dayjs from "dayjs";
-import { dashboardApi } from "../../api/client";
-
-interface AlertItem { type: string; level: string; message: string; count: number }
+import { useAlerts } from "../../api/dashboard-api";
 
 export default function AlertBell() {
   const [open, setOpen] = useState(false);
-  const { data, dataUpdatedAt } = useQuery({
-    queryKey: ["alerts"],
-    queryFn: () => dashboardApi.alerts(),
-    refetchInterval: 30_000,
-  });
+  const { data, dataUpdatedAt } = useAlerts();
 
-  const alerts = (data as { data?: AlertItem[] })?.data || [];
+  const alerts = data || [];
 
   return (
     <>

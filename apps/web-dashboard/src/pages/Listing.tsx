@@ -1,24 +1,23 @@
 import { useState } from "react";
-import { Card, Input, Button, Table, Tag, message, Space, Modal, Divider, Tabs, Upload } from "antd";
-import { LinkOutlined, RocketOutlined, SearchOutlined, ChromeOutlined, ScheduleOutlined, InboxOutlined } from "@ant-design/icons";
-import { listingApi, taskApi } from "../api/client";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { api } from "../api/client";
+import { Card, Input, Button, Table, Tag, message, Space, Modal, Divider, Upload } from "antd";
+import { LinkOutlined, RocketOutlined, SearchOutlined, InboxOutlined } from "@ant-design/icons";
+import { useMutation } from "@tanstack/react-query";
+import { listingApi, type AutoSelectResult } from "../api/listing-api";
+import { useTaskListings } from "../api/task-api";
 
 export default function Listing() {
   const [url, setUrl] = useState("");
   const [keyword, setKeyword] = useState("");
   const [loading, setLoading] = useState(false);
   const [autoSelecting, setAutoSelecting] = useState(false);
-  const [selectResult, setSelectResult] = useState<Record<string, unknown> | null>(null);
-  const { data: listings, refetch } = useQuery({ queryKey: ["listings-full"], queryFn: () => taskApi.listings() });
-  const [dataSource, setDataSource] = useState("scheduled");
+  const [selectResult, setSelectResult] = useState<AutoSelectResult | null>(null);
+  const { data: listings, refetch } = useTaskListings();
 
   // 批量导入：xlsx / csv 读为 base64 后走对应后端端点（axios 实例自动带 X-API-Key）
   const importMutation = useMutation({
-    mutationFn: (args: { endpoint: string; fileBase64: string }) => api.post(args.endpoint, { fileBase64: args.fileBase64 }),
-    onSuccess: (resp) => {
-      const d = (resp as { data?: { enqueued?: number } })?.data;
+    mutationFn: (args: { fileType: "xlsx" | "csv"; fileBase64: string }) =>
+      args.fileType === "csv" ? listingApi.importCsv(args.fileBase64) : listingApi.importXlsx(args.fileBase64),
+    onSuccess: (d) => {
       message.success(`已入队 ${d?.enqueued ?? 0} 个商品`);
       refetch();
     },
@@ -26,12 +25,12 @@ export default function Listing() {
   });
 
   const handleImportFile = (file: File) => {
-    const endpoint = /\.csv$/i.test(file.name) ? "/api/bulk/import/csv" : "/api/bulk/import/xlsx";
+    const fileType = /\.csv$/i.test(file.name) ? "csv" as const : "xlsx" as const;
     const reader = new FileReader();
     reader.onload = () => {
       const base64 = String(reader.result || "").split(",")[1] || "";
       if (!base64) { message.error("文件读取失败"); return; }
-      importMutation.mutate({ endpoint, fileBase64: base64 });
+      importMutation.mutate({ fileType, fileBase64: base64 });
     };
     reader.onerror = () => message.error("文件读取失败");
     reader.readAsDataURL(file);
@@ -56,10 +55,9 @@ export default function Listing() {
     if (!keyword.trim()) return message.warning("请输入商品关键词");
     setAutoSelecting(true);
     try {
-      const resp: unknown = await api.post("/api/auto-select", { keyword: keyword.trim() });
-      const data = (resp as { data?: Record<string, unknown> }).data || (resp as Record<string, unknown>);
+      const data = await listingApi.autoSelect(keyword.trim());
       setSelectResult(data);
-      if ((data as { validationPassed?: boolean }).validationPassed) {
+      if (data.validationPassed) {
         message.success("自动选品上架成功！");
       } else {
         message.warning("已找到候选商品，但交叉验证未通过");
@@ -69,7 +67,7 @@ export default function Listing() {
     finally { setAutoSelecting(false); }
   };
 
-  const records = (Array.isArray((listings as { data?: unknown[] })?.data) ? (listings as { data: unknown[] }).data : []);
+  const records = listings || [];
 
   return (
     <div>
@@ -108,9 +106,8 @@ export default function Listing() {
           </p>
         </Upload.Dragger>
         <Button type="link" size="small" style={{ paddingLeft: 0 }} onClick={async () => {
-          // window.open 不带 X-API-Key 会 401 — 用 axios blob 下载后触发浏览器保存
           try {
-            const blob = await api.get("/api/bulk/template", { responseType: "blob" }) as unknown as Blob;
+            const blob = await listingApi.downloadTemplate();
             const url = URL.createObjectURL(blob);
             const a = document.createElement("a");
             a.href = url;
@@ -142,33 +139,31 @@ export default function Listing() {
       <Modal title="自动选品结果" open={!!selectResult} onCancel={() => setSelectResult(null)} footer={null} width={650}>
         {selectResult && (
           <div style={{ lineHeight: 2.2 }}>
-            <p><strong>关键词：</strong>{String((selectResult as Record<string, unknown>).keyword)}</p>
-            <p><strong>候选商品：</strong>{String((selectResult as Record<string, unknown>).candidates)} 个</p>
+            <p><strong>关键词：</strong>{selectResult.keyword}</p>
+            <p><strong>候选商品：</strong>{selectResult.candidates} 个</p>
 
             {/* Proper product display (not [object Object]) */}
             {(() => {
-              const r = selectResult as Record<string, unknown>;
-              const failType = String(r.validateFailType || "");
-              const topProducts = (r.topScoreProducts as Array<{url:string;title:string;price:number;margin:number;finalScore:number}>) || [];
-              const secondary = (r.secondarySort as Array<{url:string;title:string;price:number;margin:number;finalScore:number}>) || [];
-              const passed = Boolean(r.validationPassed);
+              const failType = selectResult.validateFailType || "";
+              const topProducts = selectResult.topScoreProducts || [];
+              const secondary = selectResult.secondarySort || [];
 
               if (topProducts.length >= 2 && failType === "multipleTopScore") {
                 return (
                   <div style={{ background: "#fffbe6", border: "1px solid #fadb14", padding: 12, borderRadius: 6, marginBottom: 12 }}>
                     <p style={{ color: "#ad6800", fontWeight: "bold" }}>
-                      ⚠️ 存在 {topProducts.length} 款同分高分商品 ({String(r.topScore)}分)，请手动选择：
+                      ⚠️ 存在 {topProducts.length} 款同分高分商品 ({selectResult.topScore}分)，请手动选择：
                     </p>
                     {secondary.map((p, i) => (
                       <div key={i} style={{ display: "flex", alignItems: "center", padding: "6px 0", borderBottom: "1px solid #f0f0f0" }}>
                         <span style={{ flex: 1, fontSize: 13 }}>{p.title?.slice(0, 35)}</span>
                         <span style={{ width: 50 }}>¥{p.price}</span>
-                        <span style={{ width: 50, color: (p.margin||0) > 20 ? "green" : "orange" }}>{p.margin||0}%</span>
+                        <span style={{ width: 50, color: (p.margin || 0) > 20 ? "green" : "orange" }}>{p.margin || 0}%</span>
                         <Button size="small" type="primary" style={{ marginLeft: 8 }}
                           onClick={async () => {
                             try {
-                              await api.post("/api/market/manual-publish", { url: p.url });
-                              message.success(`已上架: ${(p.title||"").slice(0, 20)}`);
+                              await listingApi.manualPublish(p.url);
+                              message.success(`已上架: ${(p.title || "").slice(0, 20)}`);
                             } catch (e) { message.error((e as Error).message); }
                           }}>选定上架</Button>
                       </div>
@@ -188,27 +183,27 @@ export default function Listing() {
             })()}
 
             <p><strong>交叉验证：</strong>
-              {(selectResult as Record<string, unknown>).validationPassed
+              {selectResult.validationPassed
                 ? <Tag color="green">✅ 通过 — 已自动上架</Tag>
                 : <Tag color="orange">⚠️ 未通过</Tag>}
             </p>
 
-            {((selectResult as Record<string, unknown>).validationIssues as string[])?.length > 0 && (
+            {(selectResult.validationIssues?.length ?? 0) > 0 && (
               <div style={{ background: "#fff7e6", padding: 8, borderRadius: 4 }}>
                 <strong>验证问题：</strong>
-                {((selectResult as Record<string, unknown>).validationIssues as string[]).map((issue: string, i: number) => (
+                {(selectResult.validationIssues || []).map((issue, i) => (
                   <div key={i} style={{ fontSize: 13, color: "#ad6800" }}>• {issue}</div>
                 ))}
               </div>
             )}
 
-            {Boolean((selectResult as Record<string, unknown>).listingTaskId) && (
-              <p><strong>上架任务：</strong><code>{String((selectResult as Record<string, unknown>).listingTaskId)}</code></p>
+            {selectResult.listingTaskId && (
+              <p><strong>上架任务：</strong><code>{selectResult.listingTaskId}</code></p>
             )}
 
             <Divider />
             <p style={{ whiteSpace: "pre-wrap", fontSize: 12, color: "#555", background: "#f5f5f5", padding: 8, borderRadius: 4 }}>
-              {String((selectResult as Record<string, unknown>).report || "")}
+              {selectResult.report || ""}
             </p>
           </div>
         )}

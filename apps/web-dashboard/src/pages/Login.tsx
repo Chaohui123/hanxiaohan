@@ -3,7 +3,7 @@ import { Card, Input, Button, message, Space, Typography } from "antd";
 import { KeyOutlined, LoginOutlined } from "@ant-design/icons";
 import { useNavigate, useSearchParams } from "react-router-dom";
 import { useAppStore } from "../stores/app-store";
-import { dashboardApi } from "../api/client";
+import { dashboardApi } from "../api/dashboard-api";
 
 const { Title, Text } = Typography;
 

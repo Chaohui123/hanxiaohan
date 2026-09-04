@@ -10,9 +10,9 @@ export default function PromoEffect() {
   const { data: copyData } = useCopyHistory(30);
   const { data: weekly } = useWeeklyStats();
 
-  const cost = costData as unknown as Record<string, unknown> || {};
-  const adjustments = (pricingData as { adjustments?: Array<Record<string, unknown>> })?.adjustments || [];
-  const copies = (copyData as { copies?: Array<Record<string, unknown>> })?.copies || [];
+  const cost = costData || {};
+  const adjustments = pricingData || [];
+  const copies = copyData || [];
 
   // Pricing effect chart
   const pricingChart = adjustments.slice(0, 10).map((a) => ({

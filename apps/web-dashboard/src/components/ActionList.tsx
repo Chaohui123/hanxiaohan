@@ -1,31 +1,32 @@
 // ActionList — 工作台「需要你处理」行动清单：发货超时 / 失败任务 / 库存预警 / COS 死信
-import { useQuery } from "@tanstack/react-query";
 import { Link } from "react-router-dom";
 import { Card, List, Typography } from "antd";
 import {
   ClockCircleOutlined, ExclamationCircleOutlined, InboxOutlined,
   CloudOutlined, CheckCircleOutlined, RightOutlined,
 } from "@ant-design/icons";
-import { dashboardApi } from "../api/client";
-import { useAwaitingDeliverOrders, useFailedTasks, useInventoryAlerts } from "../api/dashboard-api";
+import { useCosStats } from "../api/dashboard-api";
+import { useAwaitingDeliverOrders } from "../api/order-api";
+import { useFailedTasks } from "../api/task-api";
+import { useInventoryAlerts } from "../api/inventory-api";
 import { hoursUntil } from "../utils/time";
 
 export default function ActionList() {
-  const { data: ordersResp } = useAwaitingDeliverOrders();
-  const { data: failedResp } = useFailedTasks();
-  const { data: alertsResp } = useInventoryAlerts();
-  const { data: cosResp } = useQuery({ queryKey: ["cos"], queryFn: () => dashboardApi.cosStats(), refetchInterval: 60_000 });
+  const { data: orders } = useAwaitingDeliverOrders();
+  const { data: failed } = useFailedTasks();
+  const { data: alerts } = useInventoryAlerts();
+  const { data: cos } = useCosStats();
 
   // 发货截止距今 < 24h 的订单，按最紧急排序取前 3
-  const urgent = (ordersResp?.data || [])
+  const urgent = (orders || [])
     .map((o) => ({ postingNumber: o.posting_number, hours: hoursUntil(o.shipmentDeadline) }))
     .filter((o): o is { postingNumber: string; hours: number } => o.hours !== null && o.hours < 24)
     .sort((a, b) => a.hours - b.hours)
     .slice(0, 3);
 
-  const failedCount = failedResp?.data?.length || 0;
-  const alertCount = alertsResp?.data?.length || 0;
-  const cosDead = Number((cosResp as { data?: { deadLetter?: number } } | undefined)?.data?.deadLetter) || 0;
+  const failedCount = failed?.length || 0;
+  const alertCount = alerts?.length || 0;
+  const cosDead = Number(cos?.deadLetter) || 0;
 
   const allClear = urgent.length === 0 && failedCount === 0 && alertCount === 0 && cosDead === 0;
 

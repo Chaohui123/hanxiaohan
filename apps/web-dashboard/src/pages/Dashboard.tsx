@@ -1,11 +1,11 @@
 // Dashboard — 工作台三层结构：KPI 卡行（点击钻取）→「需要你处理」行动清单 → 近 7 日趋势 + 最近上架
-import { useQuery } from "@tanstack/react-query";
 import { useNavigate } from "react-router-dom";
 import { Row, Col, Card, Statistic, Table, Tag, Spin } from "antd";
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
 import dayjs from "dayjs";
-import { dashboardApi, taskApi, monitorApi } from "../api/client";
-import { useWeeklyStats } from "../api/dashboard-api";
+import { useDashboardStats, useWeeklyStats } from "../api/dashboard-api";
+import { useQueueStats, useTaskListings } from "../api/task-api";
+import { useLlmStats } from "../api/monitor-api";
 import ActionList from "../components/ActionList";
 
 interface KpiCard {
@@ -22,17 +22,17 @@ export default function Dashboard() {
   const todayStr = dayjs().format("YYYY-MM-DD");
   const fromStr = dayjs().subtract(6, "day").format("YYYY-MM-DD");
 
-  const { data: dash, isLoading } = useQuery({ queryKey: ["dashboard"], queryFn: () => dashboardApi.stats(), refetchInterval: 15_000 });
-  const { data: queue } = useQuery({ queryKey: ["queue"], queryFn: () => taskApi.queueStats(), refetchInterval: 15_000 });
-  const { data: llm } = useQuery({ queryKey: ["llm"], queryFn: () => monitorApi.llmStats(), refetchInterval: 30_000 });
-  const { data: listings } = useQuery({ queryKey: ["listings"], queryFn: () => taskApi.listings() });
+  const { data: dash, isLoading } = useDashboardStats();
+  const { data: queue } = useQueueStats();
+  const { data: llm } = useLlmStats();
+  const { data: listings } = useTaskListings();
   const { data: weekly } = useWeeklyStats(fromStr, todayStr);
 
   if (isLoading) return <Spin size="large" style={{ display: "block", margin: "100px auto" }} />;
 
-  const d = (dash as { data?: Record<string, unknown> })?.data || {};
-  const q = (queue as { data?: Record<string, unknown> })?.data || {};
-  const l = (llm as { data?: Record<string, number> })?.data || {};
+  const d = dash || {};
+  const q = queue || {};
+  const l = llm || {};
 
   // 近 7 日趋势（含今天，标记"今天"）；无订单的日期补 0 避免断档
   const byDayMap = new Map((weekly?.byDay || []).map((p) => [p.date, p]));
@@ -94,7 +94,7 @@ export default function Dashboard() {
       <Row gutter={16} style={{ marginTop: 16 }}>
         <Col xs={24} lg={12}>
           <Card title="最近上架" size="small">
-            <Table dataSource={(Array.isArray((listings as { data?: unknown[] })?.data) ? (listings as { data: unknown[] }).data : []).slice(0, 5)}
+            <Table dataSource={(listings || []).slice(0, 5)}
               rowKey="id" size="small" pagination={false} scroll={{ x: 400 }}
               columns={[
                 { title: "URL", dataIndex: "sourceUrl", ellipsis: true, width: 200 },

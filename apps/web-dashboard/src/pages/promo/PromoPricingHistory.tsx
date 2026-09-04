@@ -5,7 +5,7 @@ import { usePricingHistory } from "../../api/promo-api";
 export default function PromoPricingHistory() {
   const [searchText, setSearchText] = useState("");
   const { data, isLoading } = usePricingHistory(30);
-  const adjustments = (data as { adjustments?: Array<Record<string, unknown>> })?.adjustments || [];
+  const adjustments = data || [];
 
   const filtered = useMemo(() => {
     if (!searchText) return adjustments;

@@ -2,25 +2,15 @@
 import { useEffect } from "react";
 import { Select } from "antd";
 import { ShopOutlined } from "@ant-design/icons";
-import { useQuery } from "@tanstack/react-query";
-import { storeApi } from "../../api/client";
+import { useStores, type StoreRecord } from "../../api/settings-api";
 import { useAppStore } from "../../stores/app-store";
-
-interface StoreRecord {
-  store_id: string;
-  store_name?: string;
-  name?: string;
-  active?: number;
-}
 
 const storeLabel = (s: StoreRecord) => s.store_name || s.name || s.store_id;
 
 export default function StoreSwitcher() {
   const { currentStore, setCurrentStore } = useAppStore();
-  const { data } = useQuery({ queryKey: ["stores"], queryFn: () => storeApi.list() });
-  const stores: StoreRecord[] = Array.isArray((data as { data?: unknown[] })?.data)
-    ? (data as { data: StoreRecord[] }).data
-    : [];
+  const { data } = useStores();
+  const stores: StoreRecord[] = data || [];
 
   // Keep currentStore valid: default to the first store when unset or stale
   useEffect(() => {

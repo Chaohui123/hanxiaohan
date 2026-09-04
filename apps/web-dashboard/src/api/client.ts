@@ -46,82 +46,12 @@ api.interceptors.response.use(
   }
 );
 
-// ---- Product Listing ----
-export const listingApi = {
-  submit: (url: string) => api.post("/api/process", { url }),
-  submitSync: (url: string) => api.post("/api/process/sync", { url }),
-  manual: (data: Record<string, unknown>) => api.post("/api/process/manual", data),
-  debugScrape: (url: string) => api.get("/api/debug/scrape", { params: { url } }),
-};
-
-// ---- Dashboard ----
-export const dashboardApi = {
-  stats: () => api.get("/api/dashboard"),
-  globalStats: () => api.get("/api/dashboard/global"),
-  alerts: () => api.get("/api/dashboard/alerts"),
-  cosStats: () => api.get("/api/dashboard/cos"),
-  taskList: (status?: string) => api.get("/api/dashboard/tasks", { params: { status } }),
-  health: () => api.get("/health"),
-  ready: () => api.get("/ready"),
-};
-
-// ---- Orders ----
-export const orderApi = {
-  list: (status?: string) => api.get("/api/orders", { params: { status } }),
-  sync: (params?: Record<string, unknown>) => api.post("/api/orders/sync", params || {}),
-  ship: (postingNumber: string, trackingNumber: string, products: Array<{ sku: number; quantity: number }>) =>
-    api.post("/api/orders/ship", { postingNumber, trackingNumber, products }),
-  batchShip: () => api.post("/api/orders/batch-ship", {}),
-  metrics: () => api.get("/api/orders/metrics"),
-  reconcile: (dateFrom: string, dateTo: string) => api.post("/api/orders/reconcile", { dateFrom, dateTo }),
-  reconcileLatest: () => api.get("/api/orders/reconcile/latest"),
-};
-
-// ---- Tasks ----
-export const taskApi = {
-  queueStats: () => api.get("/api/task/queue/stats"),
-  queue: (status?: string) => api.get("/api/task/queue", { params: { status } }),
-  failed: (storeId?: string) => api.get("/api/task/failed", { params: { storeId } }),
-  retry: (taskId: string) => api.post(`/api/task/retry/${taskId}`),
-  retryBatch: (filterType: string) => api.post("/api/task/deadletter/retry-batch", { filterType }),
-  listings: () => api.get("/api/task/listings"),
-};
-
-// ---- Inventory ----
-export const inventoryApi = {
-  items: () => api.get("/api/inventory/items"),
-  alerts: () => api.get("/api/inventory/alerts"),
-  restock: () => api.get("/api/inventory/recommendations"),
-};
-
-// ---- Stores ----
-export const storeApi = {
-  list: () => api.get("/api/stores"),
-  create: (data: Record<string, unknown>) => api.post("/api/stores", data),
-  delete: (id: string) => api.delete(`/api/stores/${id}`),
-  summary: () => api.get("/api/stores/summary"),
-};
-
-// ---- Monitoring ----
-export const monitorApi = {
-  llmStats: () => api.get("/api/stats/llm"),
-  cosStats: () => api.get("/api/stats/cos"),
-  fxRate: () => api.get("/api/stores/fx"),
-  scraperMetrics: () => api.get("/api/debug/scraper-metrics"),
-  pipelineHealth: () => api.get("/ready/pipeline"),
-};
-
-// ---- Aftersales ----
-export const aftersalesApi = {
-  list: () => api.get("/api/aftersales/cases"),
-  create: (data: Record<string, unknown>) => api.post("/api/aftersales/cases", data),
-  update: (id: string, data: Record<string, unknown>) => api.put(`/api/aftersales/cases/${id}`, data), // 后端是 PUT（曾错配为 POST）
-  resolve: (id: string, resolutionNote: string) => api.post(`/api/aftersales/cases/${id}/resolve`, { resolutionNote }),
-  reject: (id: string, resolutionNote: string) => api.post(`/api/aftersales/cases/${id}/reject`, { resolutionNote }),
-  autoReply: (id: string) => api.post(`/api/aftersales/cases/${id}/auto-reply`),
-};
-
-// ---- Analyze ----
-export const analyzeApi = {
-  blueOcean: () => api.get("/api/analyze/blue-ocean"),
-};
+/**
+ * 后端 { success, data } 业务信封的脱壳（响应拦截器已脱 axios 层，这里再脱业务层）。
+ * 页面/组件拿到的就是最终数据，不再自行判断信封。
+ * 注意：返回裸对象的端点（/api/promo/*、/api/stats/weekly、/api/stores/fx、/ready/pipeline、
+ * /api/rag/* 等）不要走这里，在 api 方法里直接 `as unknown as Promise<T>`。
+ */
+export function unwrapData<T>(p: Promise<unknown>): Promise<T> {
+  return (p as Promise<{ data: T }>).then((r) => r.data);
+}

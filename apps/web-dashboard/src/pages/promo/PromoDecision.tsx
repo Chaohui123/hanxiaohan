@@ -16,19 +16,18 @@ export default function PromoDecision() {
 
   // Sync from backend if the decision endpoint ever returns a switch field (currently none)
   useEffect(() => {
-    const v = (decision as Record<string, unknown> | undefined)?.autoEnabled;
+    const v = decision?.autoEnabled;
     if (typeof v === "boolean") setAutoOn(v);
   }, [decision]);
 
   if (dLoading) return <Spin size="large" style={{ display: "block", margin: "100px auto" }} />;
 
-  const plan = decision as unknown as Record<string, unknown> || {};
-  const ranking = (rankingData as unknown as { items?: Array<Record<string, unknown>> })?.items || [];
-  const cost = costData as unknown as Record<string, unknown> || {};
+  const ranking = rankingData || [];
+  const cost = costData || {};
 
-  const agentReachable = plan.agentReachable !== false;
-  const planStatus = String(plan.lastPlanStatus || "—");
-  const fmtTime = (v: unknown) => (v ? dayjs(String(v)).format("MM-DD HH:mm") : "—");
+  const agentReachable = decision?.agentReachable !== false;
+  const planStatus = decision?.lastPlanStatus || "—";
+  const fmtTime = (v?: string | null) => (v ? dayjs(v).format("MM-DD HH:mm") : "—");
 
   const statusColor: Record<string, string> = {
     pending: "default", validated: "processing", executing: "warning", completed: "green", failed: "red",
@@ -101,7 +100,7 @@ export default function PromoDecision() {
             }
           >
             {agentReachable ? (
-              <p>计划ID: {String(plan.lastPlanId || "—")} | 创建时间: {fmtTime(plan.lastPlanCreatedAt)} | 操作数: {Number(plan.lastPlanActionCount) || 0} | 执行时间: {fmtTime(plan.lastPlanExecutedAt)}</p>
+              <p>计划ID: {decision?.lastPlanId || "—"} | 创建时间: {fmtTime(decision?.lastPlanCreatedAt)} | 操作数: {decision?.lastPlanActionCount || 0} | 执行时间: {fmtTime(decision?.lastPlanExecutedAt)}</p>
             ) : (
               <Typography.Text type="secondary">代理不可达 — 无法获取当前决策计划</Typography.Text>
             )}

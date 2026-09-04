@@ -1,6 +1,6 @@
-// Dashboard workbench hooks — KPI 卡、行动清单、近 7 日趋势的真实数据源
+// Dashboard 域 api + hooks — 工作台统计、告警、COS、任务列表、近 7 日趋势
 import { useQuery } from "@tanstack/react-query";
-import { api, orderApi, taskApi, inventoryApi } from "./client";
+import { api, unwrapData } from "./client";
 
 // ---- Types ----
 
@@ -19,59 +19,74 @@ export interface WeeklyStats {
   bottom5: Array<Record<string, unknown>>;
 }
 
-export interface FailedTaskItem {
-  id: number | string;
-  taskType?: string;
-  errorMessage?: string;
+export type DashboardStats = {
+  todayTokens?: number;
+  [key: string]: unknown;
+};
+
+export type AlertItem = { type: string; level: string; message: string; count: number };
+
+export type CosStats = {
+  totalImages?: number;
+  deadLetter?: number;
+  usagePercent?: number;
+  estimatedBytes?: number;
+  freeTierGB?: number;
+};
+
+/** /api/dashboard/tasks 行（task_queue 表直出） */
+export type DashboardTaskRow = {
+  id?: string | number;
+  type?: string;
   status?: string;
-}
+  store_id?: string;
+  retry_count?: number;
+  max_retries?: number;
+  error_message?: string;
+};
 
-export interface InventoryAlertItem {
-  offerId?: string;
-  name?: string;
-  stockAvailable?: number;
-}
+// ---- API Methods ----
 
-export interface AwaitingOrderItem {
-  posting_number: string;
-  status: string;
-  shipmentDeadline: string | null;
-}
+export const dashboardApi = {
+  stats: () => unwrapData<DashboardStats>(api.get("/api/dashboard")),
+  alerts: () => unwrapData<AlertItem[]>(api.get("/api/dashboard/alerts")),
+  cosStats: () => unwrapData<CosStats>(api.get("/api/dashboard/cos")),
+  taskList: (status: string, limit = 100) =>
+    unwrapData<DashboardTaskRow[]>(api.get("/api/dashboard/tasks", { params: { status, limit } })),
+  /** /health 无需鉴权，裸对象返回（登录页连通性检查用） */
+  health: () => api.get("/health") as unknown as Promise<{ status?: string }>,
+};
 
 // ---- React Query Hooks ----
+
+export function useDashboardStats() {
+  return useQuery({ queryKey: ["dashboard"], queryFn: () => dashboardApi.stats(), refetchInterval: 15_000 });
+}
+
+/** Header 告警铃铛 */
+export function useAlerts() {
+  return useQuery({ queryKey: ["alerts"], queryFn: () => dashboardApi.alerts(), refetchInterval: 30_000 });
+}
+
+/** COS 用量（工作台行动清单的死信图片计数） */
+export function useCosStats() {
+  return useQuery({ queryKey: ["cos"], queryFn: () => dashboardApi.cosStats(), refetchInterval: 60_000 });
+}
+
+/** Ozon 导入任务监控（任务与失败 · 队列 Tab） */
+export function useDashboardTasks(status = "all") {
+  return useQuery({
+    queryKey: ["dashboard-tasks", status],
+    queryFn: () => dashboardApi.taskList(status),
+    refetchInterval: 10_000,
+  });
+}
 
 /** 近 7 日销售趋势（daily_sales 真实数据）；from/to 为 YYYY-MM-DD，缺省由后端定近 7 天 */
 export function useWeeklyStats(from?: string, to?: string) {
   return useQuery({
     queryKey: ["stats-weekly", from || "", to || ""],
     queryFn: () => api.get("/api/stats/weekly", { params: { from, to } }) as unknown as Promise<WeeklyStats>,
-    refetchInterval: 60_000,
-  });
-}
-
-/** 失败/死信任务列表（行动清单计数 + /tasks?tab=failed 入口） */
-export function useFailedTasks() {
-  return useQuery({
-    queryKey: ["failed-tasks"],
-    queryFn: () => taskApi.failed() as unknown as Promise<{ data: FailedTaskItem[] }>,
-    refetchInterval: 60_000,
-  });
-}
-
-/** 库存预警列表（行动清单计数 + /inventory 入口） */
-export function useInventoryAlerts() {
-  return useQuery({
-    queryKey: ["inventory-alerts"],
-    queryFn: () => inventoryApi.alerts() as unknown as Promise<{ data: InventoryAlertItem[] }>,
-    refetchInterval: 60_000,
-  });
-}
-
-/** 待发货订单（含 shipmentDeadline，用于临近超时筛选） */
-export function useAwaitingDeliverOrders() {
-  return useQuery({
-    queryKey: ["awaiting-deliver-orders"],
-    queryFn: () => orderApi.list("awaiting_deliver") as unknown as Promise<{ data: AwaitingOrderItem[] }>,
     refetchInterval: 60_000,
   });
 }

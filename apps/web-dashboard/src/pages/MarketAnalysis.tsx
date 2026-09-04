@@ -1,86 +1,35 @@
-import { useState, useEffect, useRef } from "react";
-import { Card, Row, Col, Statistic, Table, Tag, Tabs, Button, Space, DatePicker, Spin, Empty, message } from "antd";
+import { useState } from "react";
+import { Card, Row, Col, Statistic, Table, Tag, Tabs, Button, Space, DatePicker, message } from "antd";
 import { ReloadOutlined, ExportOutlined, RocketOutlined, DollarOutlined } from "@ant-design/icons";
 import { useNavigate } from "react-router-dom";
-import { api } from "../api/client";
 import dayjs from "dayjs";
-
-// ---- Types ----
-interface SnapshotItem { id: string; date: string; listed_count: number; created_at: string; }
-interface CategoryItem { name: string; sales: number; margin: number; competition: string; label: string; traffic: number; }
-interface ProductItem { title: string; url: string; price: number; score: number; monthlySales: number; rating: number; profit: number; }
-interface KeywordItem { word: string; volume: number; cpc: number; competition: string; products: number; tag: string; }
-interface CostItem { category: string; amount: number; percent: number; }
-interface CompetitorItem { name: string; price: number; sales: number; rating: number; advantage: string; }
-
-interface MarketDetail {
-  date: string; listedCount: number; llmReport: string;
-  overview: { totalSales: number; avgMargin: number; blueOceanCount: number; pendingAdjust: number; avgCpc: number };
-  categories: CategoryItem[]; products: ProductItem[]; keywords: KeywordItem[];
-  costs: CostItem[]; competitors: CompetitorItem[];
-}
+import {
+  useMarketDetail, useMarketSnapshots, useRunMarket,
+  type CategoryItem, type KeywordItem,
+} from "../api/market-api";
+import PageContainer from "../components/PageContainer";
+import QueryState from "../components/QueryState";
 
 export default function MarketAnalysis() {
   const [date, setDate] = useState(dayjs().format("YYYY-MM-DD"));
-  const [loading, setLoading] = useState(false);
-  const [data, setData] = useState<MarketDetail | null>(null);
-  const [snapshots, setSnapshots] = useState<SnapshotItem[]>([]);
   const navigate = useNavigate();
-  // Request sequence — stale responses (slow old-date request) must not overwrite newer data
-  const reqSeq = useRef(0);
-  const dateRef = useRef(date);
-  const pollTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
 
-  const fetchData = async (d: string) => {
-    const seq = ++reqSeq.current;
-    setLoading(true);
-    try {
-      const resp = await api.get(`/api/market/detail/${d}`) as unknown as { data?: MarketDetail };
-      if (seq === reqSeq.current) setData(resp.data || null);
-    } catch { if (seq === reqSeq.current) setData(null); }
-    finally { if (seq === reqSeq.current) setLoading(false); }
-  };
+  // queryKey 含日期：切换日期天然隔离缓存，慢响应不会覆盖新日期的数据
+  const detailQuery = useMarketDetail(date);
+  const { data: snapshots } = useMarketSnapshots();
+  const runMarket = useRunMarket();
 
-  const fetchSnapshots = async () => {
-    try {
-      const resp = await api.get("/api/market/list-snapshot") as unknown as { data?: SnapshotItem[]; total?: number };
-      setSnapshots(resp.data || []);
-    } catch {}
-  };
-
-  const runMarketPoll = async () => {
-    try {
-      message.loading("正在执行大盘分析...");
-      const resp = await api.post("/api/task/run-market") as unknown as { data?: { id: string; status: string } };
-      message.success(`任务已启动: ${resp.data?.id || ""}`);
-      if (pollTimer.current) clearTimeout(pollTimer.current);
-      pollTimer.current = setTimeout(() => fetchData(dateRef.current), 5000);
-    } catch (e) { message.error((e as Error).message); }
+  const handleRun = () => {
+    message.loading("正在执行大盘分析...");
+    runMarket.mutate(undefined, {
+      onSuccess: (d) => message.success(`任务已启动: ${d?.id || ""}`),
+      onError: (e) => message.error(e.message),
+    });
   };
 
   const exportExcel = () => {
     window.open(`/api/market/report-by-date/${date}`, "_blank");
   };
-
-  useEffect(() => { dateRef.current = date; fetchData(date); fetchSnapshots(); }, [date]);
-  useEffect(() => () => { if (pollTimer.current) clearTimeout(pollTimer.current); }, []);
-
-  // ---- Tab: 大盘总览 ----
-  const overviewTab = (
-    <div>
-      <Row gutter={[16,16]} style={{marginBottom:16}}>
-        <Col xs={12} sm={4}><Card><Statistic title="类目总销量" value={data?.overview.totalSales || 0} suffix="件"/></Card></Col>
-        <Col xs={12} sm={4}><Card><Statistic title="平均毛利率" value={data?.overview.avgMargin || 0} suffix="%" precision={2}/></Card></Col>
-        <Col xs={12} sm={4}><Card><Statistic title="蓝海商品" value={data?.overview.blueOceanCount || 0} valueStyle={{color:"#10b981"}}/></Card></Col>
-        <Col xs={12} sm={4}><Card><Statistic title="待调价" value={data?.overview.pendingAdjust || 0} valueStyle={{color:"#f59e0b"}}/></Card></Col>
-        <Col xs={12} sm={4}><Card><Statistic title="广告均价" value={data?.overview.avgCpc || 0} suffix="₽"/></Card></Col>
-        <Col xs={12} sm={4}><Card><Statistic title="今日上架" value={data?.listedCount || 0} valueStyle={{color:"#3b82f6"}}/></Card></Col>
-      </Row>
-      <Card title="LLM 分析结论" style={{background:"#f0f5ff"}}>
-        <p style={{fontSize:14}}>{data?.llmReport || "暂无分析报告，点击「立即更新大盘」生成"}</p>
-      </Card>
-    </div>
-  );
 
   // ---- Tab: 行业类目 ----
   const categoryColumns = [
@@ -120,22 +69,41 @@ export default function MarketAnalysis() {
   ];
 
   return (
-    <div>
-      <Space style={{marginBottom:16}}>
-        <DatePicker value={dayjs(date)} onChange={(d) => setDate(d?.format("YYYY-MM-DD") || date)} allowClear={false} />
-        <Button type="primary" icon={<ReloadOutlined />} onClick={runMarketPoll}>立即更新大盘</Button>
-        <Button icon={<ExportOutlined />} onClick={exportExcel}>导出Excel</Button>
-        <Button icon={<RocketOutlined />} onClick={() => navigate("/listing")}>去上架</Button>
-        <Button icon={<DollarOutlined />} onClick={() => navigate("/pricing-history")}>去调价</Button>
-        {snapshots.length > 0 && (
-          <span style={{color:"#888",fontSize:12}}>上次执行: {snapshots[0]?.created_at?.slice(0,19)||"—"}</span>
-        )}
-      </Space>
-
-      <Spin spinning={loading}>
-        {data ? (
+    <PageContainer
+      title="大盘分析"
+      subTitle="每日大盘快照：类目、关键词、竞品与成本"
+      updatedAt={detailQuery.dataUpdatedAt}
+      extra={
+        <Space wrap>
+          <DatePicker value={dayjs(date)} onChange={(d) => setDate(d?.format("YYYY-MM-DD") || date)} allowClear={false} />
+          <Button type="primary" icon={<ReloadOutlined />} loading={runMarket.isPending} onClick={handleRun}>立即更新大盘</Button>
+          <Button icon={<ExportOutlined />} onClick={exportExcel}>导出Excel</Button>
+          <Button icon={<RocketOutlined />} onClick={() => navigate("/listing")}>去上架</Button>
+          <Button icon={<DollarOutlined />} onClick={() => navigate("/pricing-history")}>去调价</Button>
+          {snapshots && snapshots.length > 0 && (
+            <span style={{color:"#888",fontSize:12}}>上次执行: {snapshots[0]?.created_at?.slice(0,19)||"—"}</span>
+          )}
+        </Space>
+      }
+    >
+      <QueryState query={detailQuery} emptyText="暂无大盘数据，点击「立即更新大盘」生成今日数据">
+        {(data) => (
           <Tabs defaultActiveKey="overview" items={[
-            { key:"overview", label:"📊 大盘总览", children: overviewTab },
+            { key:"overview", label:"📊 大盘总览", children: (
+              <div>
+                <Row gutter={[16,16]} style={{marginBottom:16}}>
+                  <Col xs={12} sm={4}><Card><Statistic title="类目总销量" value={data.overview.totalSales} suffix="件"/></Card></Col>
+                  <Col xs={12} sm={4}><Card><Statistic title="平均毛利率" value={data.overview.avgMargin} suffix="%" precision={2}/></Card></Col>
+                  <Col xs={12} sm={4}><Card><Statistic title="蓝海商品" value={data.overview.blueOceanCount} valueStyle={{color:"#10b981"}}/></Card></Col>
+                  <Col xs={12} sm={4}><Card><Statistic title="待调价" value={data.overview.pendingAdjust} valueStyle={{color:"#f59e0b"}}/></Card></Col>
+                  <Col xs={12} sm={4}><Card><Statistic title="广告均价" value={data.overview.avgCpc} suffix="₽"/></Card></Col>
+                  <Col xs={12} sm={4}><Card><Statistic title="今日上架" value={data.listedCount} valueStyle={{color:"#3b82f6"}}/></Card></Col>
+                </Row>
+                <Card title="LLM 分析结论" style={{background:"#f0f5ff"}}>
+                  <p style={{fontSize:14}}>{data.llmReport || "暂无分析报告，点击「立即更新大盘」生成"}</p>
+                </Card>
+              </div>
+            ) },
             { key:"categories", label:"🏪 行业类目", children:<Table dataSource={data.categories} columns={categoryColumns} rowKey="name" size="small" pagination={false} /> },
             { key:"products", label:"📦 单品分析", children:<Table dataSource={data.products} columns={[
               {title:"商品",dataIndex:"title",key:"t"},{title:"¥",dataIndex:"price",key:"p"},{title:"评分",dataIndex:"score",key:"s",render:(v:number)=><Tag color={v>=60?"green":"orange"}>{v}</Tag>},{title:"月销",dataIndex:"monthlySales",key:"ms"},{title:"利润¥",dataIndex:"profit",key:"pr"}]} rowKey="title" size="small" pagination={false} /> },
@@ -143,8 +111,8 @@ export default function MarketAnalysis() {
             { key:"costs", label:"💰 成本拆解", children:<Table dataSource={data.costs} columns={costColumns} rowKey="category" size="small" pagination={false} /> },
             { key:"competitors", label:"👥 同行比价", children:<Table dataSource={data.competitors} columns={compColumns} rowKey="name" size="small" pagination={false} /> },
           ]} />
-        ) : <Empty description="暂无大盘数据，点击「立即更新大盘」生成今日数据" />}
-      </Spin>
-    </div>
+        )}
+      </QueryState>
+    </PageContainer>
   );
 }

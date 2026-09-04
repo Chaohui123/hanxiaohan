@@ -1,51 +1,15 @@
 import { useMemo, useState } from "react";
 import { Badge, Button, Card, DatePicker, Input, InputNumber, Modal, Popconfirm, Space, Statistic, Table, Tabs, Tag, message } from "antd";
 import { AuditOutlined, ReloadOutlined, SendOutlined, ThunderboltOutlined } from "@ant-design/icons";
-import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQueryClient } from "@tanstack/react-query";
 import { useSearchParams } from "react-router-dom";
 import dayjs from "dayjs";
-import { orderApi } from "../api/client";
+import {
+  orderApi, useOrders, normalizeReconcile,
+  type OrderProduct, type OrderRow, type ReconcileView,
+} from "../api/order-api";
 import PageContainer from "../components/PageContainer";
 import { hoursUntil } from "../utils/time";
-
-interface OrderProduct {
-  sku: number;
-  quantity: number;
-  offerId?: string;
-  price?: string;
-}
-
-interface OrderRow {
-  id: string;
-  posting_number: string;
-  order_id: number;
-  status: string;
-  total_price_rub: number;
-  product_count: number;
-  tracking_number?: string;
-  raw_json?: string;
-  created_at: string;
-  shipmentDeadline?: string | null;
-}
-
-interface ReconcileDiscrepancy {
-  orderId: string;
-  localPayout: number;
-  ozonPayout: number;
-  difference: number;
-  reason?: string;
-}
-
-interface ReconcileView {
-  dateFrom: string;
-  dateTo: string;
-  createdAt?: string;
-  totalOrders: number;
-  matched: number;
-  missingLocal: number;
-  missingOzon: number;
-  discrepancies: ReconcileDiscrepancy[];
-}
 
 // 状态机流水线 Tab（方案 §3.2b）：每个 Tab 是一个任务队列
 const TAB_KEYS = ["awaiting_packaging", "awaiting_deliver", "delivering", "cancelled", "all"] as const;
@@ -95,25 +59,6 @@ function parseProducts(row: OrderRow): OrderProduct[] {
     : [];
 }
 
-/** GET /api/orders/reconcile/latest 的顶层 discrepancies 是计数，明细在 result_json 里 */
-function normalizeReconcile(row: Record<string, unknown> | null | undefined): ReconcileView | null {
-  if (!row) return null;
-  const rj = (row.result_json ?? {}) as Partial<{
-    totalOrders: number; matched: number; missingLocal: number; missingOzon: number;
-    discrepancies: ReconcileDiscrepancy[];
-  }>;
-  return {
-    dateFrom: String(row.date_from ?? ""),
-    dateTo: String(row.date_to ?? ""),
-    createdAt: row.created_at ? String(row.created_at) : undefined,
-    totalOrders: rj.totalOrders ?? Number(row.total_orders) ?? 0,
-    matched: rj.matched ?? Number(row.matched) ?? 0,
-    missingLocal: rj.missingLocal ?? Number(row.missing_local) ?? 0,
-    missingOzon: rj.missingOzon ?? Number(row.missing_ozon) ?? 0,
-    discrepancies: Array.isArray(rj.discrepancies) ? rj.discrepancies : [],
-  };
-}
-
 /** 发货截止渲染：负数超时红 Tag / <12h 红色加粗 / <24h 橙色 / 其余默认色 */
 function renderDeadline(deadline?: string | null) {
   const hours = hoursUntil(deadline);
@@ -141,14 +86,10 @@ export default function Orders() {
   const [reconcileResult, setReconcileResult] = useState<ReconcileView | null>(null);
 
   // 全量（后端 LIMIT 100）一次拉取，Tab 角标计数与各 Tab 数据都由前端分组
-  const { data, isLoading } = useQuery({
-    queryKey: ["orders-all"],
-    queryFn: () => orderApi.list(),
-  });
+  const ordersQuery = useOrders();
+  const { data: ordersData, isLoading } = ordersQuery;
 
-  const orders = (Array.isArray((data as { data?: OrderRow[] })?.data)
-    ? (data as { data: OrderRow[] }).data
-    : []) as OrderRow[];
+  const orders = ordersData || [];
 
   const counts = useMemo(() => {
     const c: Record<TabKey, number> = { awaiting_packaging: 0, awaiting_deliver: 0, delivering: 0, cancelled: 0, all: orders.length };
@@ -169,7 +110,7 @@ export default function Orders() {
     return filtered;
   }, [orders, activeTab]);
 
-  const invalidateOrders = () => qc.invalidateQueries({ queryKey: ["orders-all"] });
+  const invalidateOrders = () => qc.invalidateQueries({ queryKey: ["orders"] });
 
   const syncMutation = useMutation({
     mutationFn: () => orderApi.sync(),
@@ -191,8 +132,7 @@ export default function Orders() {
 
   const batchShipMutation = useMutation({
     mutationFn: () => orderApi.batchShip(),
-    onSuccess: (res) => {
-      const d = (res as { data?: { total?: number; shipped?: number } }).data;
+    onSuccess: (d) => {
       message.success(`批量发货完成: ${d?.shipped ?? 0} 已发 / ${d?.total ?? 0} 总计`);
       invalidateOrders();
     },
@@ -203,8 +143,7 @@ export default function Orders() {
     mutationFn: async () => {
       const [from, to] = reconcileRange;
       await orderApi.reconcile(from.format("YYYY-MM-DD"), to.format("YYYY-MM-DD"));
-      const latest = await orderApi.reconcileLatest();
-      return normalizeReconcile((latest as { data?: Record<string, unknown> | null })?.data);
+      return normalizeReconcile(await orderApi.reconcileLatest());
     },
     onSuccess: (view) => {
       if (!view) { message.info("对账已执行，但暂无可展示的结果"); return; }
@@ -215,10 +154,7 @@ export default function Orders() {
   });
 
   const latestReconcileMutation = useMutation({
-    mutationFn: async () => {
-      const latest = await orderApi.reconcileLatest();
-      return normalizeReconcile((latest as { data?: Record<string, unknown> | null })?.data);
-    },
+    mutationFn: async () => normalizeReconcile(await orderApi.reconcileLatest()),
     onSuccess: (view) => {
       if (!view) { message.info("暂无对账记录"); return; }
       setReconcileResult(view);
@@ -277,6 +213,7 @@ export default function Orders() {
     <PageContainer
       title="订单管理"
       subTitle="按状态流水线处理：清空每个 Tab 即完成当日发货工作"
+      updatedAt={ordersQuery.dataUpdatedAt}
       extra={
         <Space>
           <Button icon={<AuditOutlined />} onClick={() => setReconcileOpen(true)}>对账</Button>

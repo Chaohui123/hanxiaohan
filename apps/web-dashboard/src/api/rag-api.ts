@@ -1,10 +1,28 @@
+// 知识库域 api + hooks — 各库统计、向量搜索、录入/导入
+// 注意：/api/rag/* 均为裸对象返回（无 success/data 信封），在此直接标注类型
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import { api } from "./client";
 
+// ---- Types ----
+
+/** GET /api/rag/stats — 裸对象，键为各知识库表名 */
+export type RagStats = Record<string, number>;
+
+export type RagSearchResult = {
+  score?: number;
+  content?: string;
+  content_ru?: string;
+  report_text?: string;
+  original_text?: string;
+  source?: string;
+};
+
+// ---- API Methods ----
+
 export const ragApi = {
-  stats: () => api.get("/api/rag/stats"),
+  stats: () => api.get("/api/rag/stats") as unknown as Promise<RagStats>,
   search: (kb: string, query: string, topK = 5, extra?: Record<string, unknown>) =>
-    api.post(`/api/rag/${kb}/search`, { query, topK, ...extra }),
+    api.post(`/api/rag/${kb}/search`, { query, topK, ...extra }) as unknown as Promise<{ results: RagSearchResult[] }>,
   addAftersales: (data: Record<string, unknown>) => api.post("/api/rag/aftersales", data),
   addCompetitor: (data: Record<string, unknown>) => api.post("/api/rag/competitor", data),
   addProduct: (data: Record<string, unknown>) => api.post("/api/rag/product", data),

@@ -1,16 +1,11 @@
 import { Card, Steps, Button, Table, Tag, Space, message } from "antd";
 import { DownloadOutlined, ChromeOutlined, LinkOutlined } from "@ant-design/icons";
-import { api } from "../../api/client";
-import { useQuery } from "@tanstack/react-query";
+import { usePluginProducts, type PluginProduct } from "../../api/settings-api";
+import QueryState from "../../components/QueryState";
 
 export default function PluginGuide() {
-  const { data: pluginList } = useQuery({
-    queryKey: ["plugin-products"],
-    queryFn: () => api.get("/api/crawl/plugin-list") as Promise<{ data?: Array<Record<string, string>>; count?: number }>,
-    refetchInterval: 15000,
-  });
-
-  const products = pluginList?.data || [];
+  const pluginQuery = usePluginProducts();
+  const products = pluginQuery.data || [];
 
   const columns = [
     { title: "商品", dataIndex: "title", key: "title", ellipsis: true, render: (v: string) => v?.slice(0, 50) },
@@ -21,8 +16,8 @@ export default function PluginGuide() {
     },
     {
       title: "操作", key: "action", width: 120,
-      render: (_: unknown, r: Record<string, string>) => (
-        <Button size="small" onClick={() => window.open(r.source_url, "_blank")}>查看1688</Button>
+      render: (_: unknown, r: PluginProduct) => (
+        <Button size="small" onClick={() => r.source_url && window.open(r.source_url, "_blank")}>查看1688</Button>
       ),
     },
   ];
@@ -80,7 +75,11 @@ export default function PluginGuide() {
           </Space>
         }
       >
-        <Table dataSource={products.map((p, i) => ({ ...p, key: String(i) }))} columns={columns as never} size="small" pagination={{ pageSize: 20 }} />
+        <QueryState query={pluginQuery} emptyText="暂无插件采集记录，打开 1688 商品页点击「同步至ERP」开始">
+          {(list) => (
+            <Table dataSource={list.map((p, i) => ({ ...p, key: String(i) }))} columns={columns} size="small" pagination={{ pageSize: 20 }} />
+          )}
+        </QueryState>
       </Card>
     </div>
   );

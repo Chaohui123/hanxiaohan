@@ -1,34 +1,40 @@
 import { Card, Table, Tag } from "antd";
-import { inventoryApi } from "../api/client";
-import { useQuery } from "@tanstack/react-query";
+import { useInventoryItems, useInventoryAlerts } from "../api/inventory-api";
+import PageContainer from "../components/PageContainer";
+import QueryState from "../components/QueryState";
 
 export default function Inventory() {
-  const { data, isLoading } = useQuery({ queryKey: ["inventory"], queryFn: () => inventoryApi.items() });
-  const { data: alerts } = useQuery({ queryKey: ["alerts"], queryFn: () => inventoryApi.alerts() });
-
-  const items = (Array.isArray((data as { data?: unknown[] })?.data) ? (data as { data: unknown[] }).data : []) as readonly Record<string, unknown>[];
-  const alertList = (Array.isArray((alerts as { data?: unknown[] })?.data) ? (alerts as { data: unknown[] }).data : []) as readonly Record<string, unknown>[];
+  const itemsQuery = useInventoryItems();
+  const alertsQuery = useInventoryAlerts();
 
   return (
-    <div>
+    <PageContainer title="库存与价格" subTitle="实时库存与补货建议" updatedAt={itemsQuery.dataUpdatedAt}>
       <Card title="库存列表" style={{ marginBottom: 16 }}>
-        <Table dataSource={items} rowKey={(r: Record<string,unknown>) => `${String(r.offer_id)}-${String(r.sku)}`} loading={isLoading} size="small"
-          columns={[
-            { title: "SKU", dataIndex: "sku" }, { title: "Offer ID", dataIndex: "offer_id", ellipsis: true },
-            { title: "可用", dataIndex: "stock_available", render: (v: number) => <Tag color={v < 5 ? "red" : "green"}>{v}</Tag> },
-            { title: "预留", dataIndex: "stock_reserved" },
-          ]}
-        />
+        <QueryState query={itemsQuery} emptyText="还没有库存记录" emptyAction={{ label: "去选品上架", to: "/listing" }}>
+          {(items) => (
+            <Table dataSource={items} rowKey={(r) => `${String(r.offer_id)}-${String(r.sku)}`} size="small"
+              columns={[
+                { title: "SKU", dataIndex: "sku" }, { title: "Offer ID", dataIndex: "offer_id", ellipsis: true },
+                { title: "可用", dataIndex: "stock_available", render: (v: number) => <Tag color={v < 5 ? "red" : "green"}>{v}</Tag> },
+                { title: "预留", dataIndex: "stock_reserved" },
+              ]}
+            />
+          )}
+        </QueryState>
       </Card>
       <Card title="补货建议">
-        <Table dataSource={alertList} rowKey="sku" size="small" locale={{ emptyText: "✅ 库存充足" }}
-          columns={[
-            { title: "SKU", dataIndex: "sku" }, { title: "当前库存", dataIndex: "currentStock" },
-            { title: "建议补货", dataIndex: "suggestedOrderQuantity" },
-            { title: "级别", dataIndex: "alertLevel", render: (l: string) => <Tag color={l === "critical" ? "red" : "orange"}>{l}</Tag> },
-          ]}
-        />
+        <QueryState query={alertsQuery} emptyText="✅ 库存充足，暂无补货建议">
+          {(alertList) => (
+            <Table dataSource={alertList} rowKey="sku" size="small"
+              columns={[
+                { title: "SKU", dataIndex: "sku" }, { title: "当前库存", dataIndex: "currentStock" },
+                { title: "建议补货", dataIndex: "suggestedOrderQuantity" },
+                { title: "级别", dataIndex: "alertLevel", render: (l: string) => <Tag color={l === "critical" ? "red" : "orange"}>{l}</Tag> },
+              ]}
+            />
+          )}
+        </QueryState>
       </Card>
-    </div>
+    </PageContainer>
   );
 }

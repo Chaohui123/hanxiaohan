@@ -1,7 +1,12 @@
 import { useState } from "react";
 import { Row, Col, Card, Statistic, Table, Tag, Button, Space, Spin, Modal, Input, InputNumber, Select, message, Tooltip } from "antd";
-import { ReloadOutlined, DollarOutlined, ThunderboltOutlined, EditOutlined, CopyOutlined, EyeOutlined, ExportOutlined } from "@ant-design/icons";
-import { usePurchaseList, usePurchaseBill, usePayMutation, useRetryMutation, useUpdateMutation } from "../api/purchase-api";
+import { ReloadOutlined, ThunderboltOutlined, EditOutlined, CopyOutlined, EyeOutlined, ExportOutlined } from "@ant-design/icons";
+import { useMutation } from "@tanstack/react-query";
+import {
+  purchaseApi, usePurchaseList, usePurchaseBill, usePayMutation, useRetryMutation, useUpdateMutation,
+  type PurchaseRecord,
+} from "../api/purchase-api";
+import PageContainer from "../components/PageContainer";
 
 // ---- 中文状态映射 ----
 const STATUS_MAP: Record<string, { label: string; color: string }> = {
@@ -38,22 +43,36 @@ function copyToClipboard(text: string) {
 }
 
 export default function PurchasePay() {
-  const { data: listData, isLoading } = usePurchaseList();
-  const { data: billData } = usePurchaseBill();
+  const listQuery = usePurchaseList();
+  const { data: bill } = usePurchaseBill();
   const payMutation = usePayMutation();
   const retryMutation = useRetryMutation();
   const updateMutation = useUpdateMutation();
   const [modalOpen, setModalOpen] = useState(false);
-  const [detailModal, setDetailModal] = useState<Record<string, unknown> | null>(null);
-  const [editModal, setEditModal] = useState<Record<string, unknown> | null>(null);
+  const [detailModal, setDetailModal] = useState<PurchaseRecord | null>(null);
+  const [editModal, setEditModal] = useState<PurchaseRecord | null>(null);
   const [payForm, setPayForm] = useState({ postingNumber: "", costCny: 0, sellingPriceRub: 0, ozonOrderId: 0 });
   const [editForm, setEditForm] = useState({ paymentStatus: "", paySerial: "", logisticsStatus: "", logisticsTracking: "", logisticsCarrier: "" });
   const [selectedRowKeys, setSelectedRowKeys] = useState<React.Key[]>([]);
 
-  if (isLoading) return <Spin size="large" style={{ display: "block", margin: "100px auto" }} />;
+  // 跨境巴士 xlsx 导出（api 实例 blob 下载，替代裸 fetch）
+  const exportMutation = useMutation({
+    mutationFn: (ids: Array<string | number>) => purchaseApi.exportKuajingbus(ids),
+    onSuccess: (blob, ids) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `跨境巴士_${new Date().toISOString().slice(0, 10)}.xlsx`;
+      a.click();
+      URL.revokeObjectURL(url);
+      message.success(`已导出 ${ids.length} 单`);
+    },
+    onError: (e: Error) => message.error(e.message),
+  });
 
-  const items = (listData as unknown as { data?: Array<Record<string, unknown>> })?.data || [];
-  const bill = billData as unknown as { data?: { totalCny?: number; count?: number } } || {};
+  if (listQuery.isLoading) return <Spin size="large" style={{ display: "block", margin: "100px auto" }} />;
+
+  const items = listQuery.data || [];
   const pending = items.filter((i) => i.payment_status === "pending_payment" || i.payment_status === "pending").length;
   const failed = items.filter((i) => i.payment_status === "failed").length;
   const paid = items.filter((i) => i.payment_status === "paid").length;
@@ -72,10 +91,10 @@ export default function PurchasePay() {
     { title: "支付时间", dataIndex: "pay_time", key: "time", width: 150, render: (v: string) => v || "—" },
     {
       title: "操作", key: "action", width: 200,
-      render: (_: unknown, r: Record<string, unknown>) => {
-        const st = (r.payment_status as string) || "";
-        const freight = (r.freight_address as string) || "";
-        const url = (r.source_1688_url as string) || "";
+      render: (_: unknown, r: PurchaseRecord) => {
+        const st = r.payment_status || "";
+        const freight = r.freight_address || "";
+        const url = r.source_1688_url || "";
         return (
           <Space size="small">
             <Tooltip title="查看详情">
@@ -95,11 +114,11 @@ export default function PurchasePay() {
               <Button size="small" icon={<EditOutlined />}
                 onClick={() => {
                   setEditForm({
-                    paymentStatus: (r.payment_status as string) || "",
-                    paySerial: (r.pay_serial as string) || "",
-                    logisticsStatus: (r.logistics_status as string) || "",
-                    logisticsTracking: (r.logistics_tracking as string) || "",
-                    logisticsCarrier: (r.logistics_carrier as string) || "",
+                    paymentStatus: r.payment_status || "",
+                    paySerial: r.pay_serial || "",
+                    logisticsStatus: r.logistics_status || "",
+                    logisticsTracking: r.logistics_tracking || "",
+                    logisticsCarrier: r.logistics_carrier || "",
                   });
                   setEditModal(r);
                 }}>
@@ -110,7 +129,7 @@ export default function PurchasePay() {
               <Button size="small" type="primary"
                 onClick={() => {
                   updateMutation.mutate(
-                    { id: r.id as string, paymentStatus: "completed" },
+                    { id: r.id, paymentStatus: "completed" },
                     { onSuccess: () => message.success("已标记为完成，订单锁定"), onError: (e: Error) => message.error(e.message) }
                   );
                 }}>
@@ -120,7 +139,7 @@ export default function PurchasePay() {
             {st === "failed" && (
               <Button size="small" type="primary" danger icon={<ReloadOutlined />}
                 loading={retryMutation.isPending}
-                onClick={() => retryMutation.mutate(r.id as string, {
+                onClick={() => retryMutation.mutate(r.id, {
                   onSuccess: () => message.success("重试已提交"),
                   onError: (e: Error) => message.error(e.message),
                 })}>
@@ -134,7 +153,7 @@ export default function PurchasePay() {
   ];
 
   return (
-    <div>
+    <PageContainer title="采购支付" subTitle="1688 采购付款与物流跟踪" updatedAt={listQuery.dataUpdatedAt}>
       <Row gutter={[16, 16]}>
         <Col xs={12} sm={6}><Card><Statistic title="待支付" value={pending} valueStyle={{ color: "#f59e0b" }} /></Card></Col>
         <Col xs={12} sm={6}><Card><Statistic title="支付中" value={items.filter((i) => i.payment_status === "paying").length} valueStyle={{ color: "#3b82f6" }} /></Card></Col>
@@ -143,8 +162,8 @@ export default function PurchasePay() {
       </Row>
 
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
-        <Col xs={12} sm={6}><Card><Statistic title="今日支出" value={bill?.data?.totalCny || 0} prefix="¥" /></Card></Col>
-        <Col xs={12} sm={6}><Card><Statistic title="今日笔数" value={bill?.data?.count || 0} /></Card></Col>
+        <Col xs={12} sm={6}><Card><Statistic title="今日支出" value={bill?.totalCny || 0} prefix="¥" /></Card></Col>
+        <Col xs={12} sm={6}><Card><Statistic title="今日笔数" value={bill?.count || 0} /></Card></Col>
       </Row>
 
       <Row gutter={[16, 16]} style={{ marginTop: 16 }}>
@@ -154,25 +173,16 @@ export default function PurchasePay() {
             extra={
               <Space>
                 <Button icon={<ExportOutlined />} disabled={selectedRowKeys.length === 0}
-                  onClick={() => {
-                    const key = localStorage.getItem("onzo-api-key") || "";
-                    fetch("/api/logistics/export-kuajingbus", {
-                      method: "POST",
-                      headers: { "Content-Type": "application/json", "X-API-Key": key },
-                      body: JSON.stringify({ ids: selectedRowKeys }),
-                    })
-                      .then(r => { if (!r.ok) throw new Error("导出失败"); return r.blob(); })
-                      .then(b => { const a = document.createElement("a"); a.href = URL.createObjectURL(b); a.download = `跨境巴士_${new Date().toISOString().slice(0,10)}.xlsx`; a.click(); message.success(`已导出 ${selectedRowKeys.length} 单`); })
-                      .catch((e) => message.error(e.message));
-                  }}>
+                  loading={exportMutation.isPending}
+                  onClick={() => exportMutation.mutate(selectedRowKeys.map(String))}>
                   导出跨境巴士 ({selectedRowKeys.length})
                 </Button>
                 <Button icon={<ThunderboltOutlined />} onClick={() => setModalOpen(true)}>手动支付</Button>
-                <Button icon={<ReloadOutlined />} onClick={() => message.info("刷新中...")}>刷新</Button>
+                <Button icon={<ReloadOutlined />} onClick={() => listQuery.refetch()}>刷新</Button>
               </Space>
             }
           >
-            <Table dataSource={items.map((item) => ({ ...item, key: item.id as string }))} columns={columns} pagination={{ pageSize: 20 }} size="small" scroll={{ y: 500 }}
+            <Table dataSource={items.map((item) => ({ ...item, key: item.id }))} columns={columns} pagination={{ pageSize: 20 }} size="small" scroll={{ y: 500 }}
               rowSelection={{ selectedRowKeys, onChange: (keys) => setSelectedRowKeys(keys) }} />
           </Card>
         </Col>
@@ -181,15 +191,15 @@ export default function PurchasePay() {
       <Modal title="采购详情" open={!!detailModal} onCancel={() => setDetailModal(null)} footer={null} width={600}>
         {detailModal && (
           <div style={{ lineHeight: 2 }}>
-            <p><strong>采购编号：</strong>{detailModal.id as string}</p>
-            <p><strong>Ozon 单号：</strong>{detailModal.ozon_posting_number as string}</p>
-            <p><strong>1688 链接：</strong><a href={detailModal.source_1688_url as string} target="_blank" rel="noreferrer">{detailModal.source_1688_url as string}</a></p>
-            <p><strong>金额：</strong>¥{(detailModal.total_amount_cny as number)?.toFixed(2)}</p>
-            <p><strong>状态：</strong>{statusLabel(detailModal.payment_status as string)}</p>
-            <p><strong>渠道：</strong>{channelLabel(detailModal.pay_channel as string)}</p>
-            <p><strong>收货地址：</strong>{detailModal.freight_address as string || "未设置"}</p>
-            <p><strong>物流编号：</strong>{detailModal.logistics_tracking as string || "—"}</p>
-            <p><strong>创建时间：</strong>{detailModal.created_at as string}</p>
+            <p><strong>采购编号：</strong>{detailModal.id}</p>
+            <p><strong>Ozon 单号：</strong>{detailModal.ozon_posting_number}</p>
+            <p><strong>1688 链接：</strong><a href={detailModal.source_1688_url} target="_blank" rel="noreferrer">{detailModal.source_1688_url}</a></p>
+            <p><strong>金额：</strong>¥{detailModal.total_amount_cny?.toFixed(2)}</p>
+            <p><strong>状态：</strong>{statusLabel(detailModal.payment_status || "")}</p>
+            <p><strong>渠道：</strong>{channelLabel(detailModal.pay_channel || "")}</p>
+            <p><strong>收货地址：</strong>{detailModal.freight_address || "未设置"}</p>
+            <p><strong>物流编号：</strong>{detailModal.logistics_tracking || "—"}</p>
+            <p><strong>创建时间：</strong>{detailModal.created_at}</p>
           </div>
         )}
       </Modal>
@@ -198,7 +208,7 @@ export default function PurchasePay() {
         onOk={() => {
           if (!editModal?.id) return;
           updateMutation.mutate(
-            { id: editModal.id as string, ...editForm },
+            { id: editModal.id, ...editForm },
             { onSuccess: () => { message.success("已更新"); setEditModal(null); }, onError: (e: Error) => message.error(e.message) }
           );
         }}
@@ -255,6 +265,6 @@ export default function PurchasePay() {
             onChange={(v) => setPayForm({ ...payForm, ozonOrderId: v || 0 })} />
         </Space>
       </Modal>
-    </div>
+    </PageContainer>
   );
 }
