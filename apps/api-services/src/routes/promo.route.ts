@@ -64,15 +64,53 @@ export function createPromoRouter(): Router {
     } catch { res.json({ items: [] }); }
   });
 
-  // ---- Decision Submission ----
+  // ---- Decision Submission / Dashboard Actions ----
+  // dashboard 按钮契约：POST {action:"run"|"on"|"off"} → 转发 promo-agent 内部端点；
+  // 无 action 时按原 {id, actions} 决策提交处理（2026-09-04 补齐后端缺口）
+  const PROMO_AGENT_URL = process.env.PROMO_AGENT_URL || "http://promo-agent:9101";
+
   router.post("/promo/decision", async (req, res) => {
     try {
-      const { id, actions } = req.body as { id?: string; actions?: unknown[] };
+      const { id, actions, action } = req.body as { id?: string; actions?: unknown[]; action?: string };
+
+      if (action === "run" || action === "on" || action === "off") {
+        const url = action === "run" ? `${PROMO_AGENT_URL}/trigger-decision` : `${PROMO_AGENT_URL}/auto-decision`;
+        const upstream = await fetch(url, {
+          method: action === "run" ? "POST" : action === "on" || action === "off" ? "POST" : "GET",
+          headers: { "Content-Type": "application/json" },
+          body: action === "run" ? "{}" : JSON.stringify({ enabled: action === "on" }),
+          signal: AbortSignal.timeout(10_000),
+        }).catch((err: Error) => {
+          logger.warn({ err: err.message, action }, "promo-agent unreachable for decision action");
+          return null;
+        });
+        if (!upstream) {
+          res.status(502).json({ error: "promo-agent unreachable" });
+          return;
+        }
+        const data = await upstream.json().catch(() => ({}));
+        await insertAuditLog({ actionType: `decision_${action}`, offerId: null, details: { upstreamStatus: upstream.status } });
+        res.status(upstream.status).json(data);
+        return;
+      }
+
       if (!id || !actions) { res.status(400).json({ error: "id and actions required" }); return; }
       await insertDecision(id, JSON.stringify(req.body));
       await insertAuditLog({ actionType: "decision_submit", offerId: null, details: { id, actionCount: actions.length } });
       res.json({ success: true, id });
     } catch (err) { res.status(500).json({ error: (err as Error).message }); }
+  });
+
+  // dashboard useDecision() 轮询 — 返回 promo-agent 实时状态（此前端点不存在，前端恒失败）
+  router.get("/promo/decision", async (_req, res) => {
+    const upstream = await fetch(`${PROMO_AGENT_URL}/health`, { signal: AbortSignal.timeout(8_000) })
+      .catch(() => null);
+    if (!upstream || !upstream.ok) {
+      res.json({ autoEnabled: null, lastPlanId: null, lastPlanStatus: null, agentReachable: false });
+      return;
+    }
+    const h = await upstream.json() as { autoDecision?: boolean; lastPlanId?: string | null; lastPlanStatus?: string | null };
+    res.json({ autoEnabled: h.autoDecision ?? null, lastPlanId: h.lastPlanId ?? null, lastPlanStatus: h.lastPlanStatus ?? null, agentReachable: true });
   });
 
   // ---- Action Validation ----

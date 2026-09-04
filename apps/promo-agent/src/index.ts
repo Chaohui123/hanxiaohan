@@ -5,9 +5,9 @@ import { logger } from "@onzo/logger";
 import type { ApiConfig } from "./api-client.js";
 import { registerCommands, syncWatchList } from "./commands.js";
 import { startCompetitorWatch, stopCompetitorWatch } from "./competitor-watch.js";
-import { startSmartPricing, stopSmartPricing } from "./smart-pricing.js";
+import { stopSmartPricing } from "./smart-pricing.js";
 import { startPerformanceReports, stopPerformanceReports } from "./performance.js";
-import { startDecisionEngine, stopDecisionEngine, isAutoDecisionEnabled, getCurrentPlan } from "./decision-engine.js";
+import { startDecisionEngine, stopDecisionEngine, isAutoDecisionEnabled, setAutoDecisionEnabled, getCurrentPlan } from "./decision-engine.js";
 import { register } from "./metrics.js";
 import { createServer } from "node:http";
 
@@ -51,7 +51,9 @@ registerCommands(bot, apiConfig);
 // ---- 启动定时任务 ----
 if (CHAT_ID) {
   startCompetitorWatch(bot, { chatId: CHAT_ID, apiConfig });
-  startSmartPricing(bot, CHAT_ID, apiConfig);
+  // smart-pricing 已停用（2026-09-04 决策）：它与 decision-engine 双引擎并存会方向相反反复调价，
+  // 且建议卡片属于不必要的人工审批打扰 — 调价统一由 decision-engine 全自动执行（带净利≥10%底价保护）。
+  // /promo pricing 手动命令仍可按需使用。
   startPerformanceReports(bot, CHAT_ID, apiConfig);
   startDecisionEngine(bot, CHAT_ID, apiConfig);
 } else {
@@ -75,6 +77,38 @@ const healthServer = createServer(async (req, res) => {
   } else if (req.url === "/metrics") {
     res.writeHead(200, { "Content-Type": register.contentType });
     res.end(await register.metrics());
+  } else if (req.url === "/trigger-decision" && req.method === "POST") {
+    // 手动触发一轮决策（dashboard「手动触发」按钮，经 api-services 转发）— 异步执行立即 202
+    if (!CHAT_ID) {
+      res.writeHead(409, { "Content-Type": "application/json" });
+      res.end(JSON.stringify({ error: "chat not configured" }));
+      return;
+    }
+    const { runDecisionCycle } = await import("./decision-engine.js");
+    void runDecisionCycle(bot, CHAT_ID, apiConfig).catch((err) =>
+      logger.error({ err }, "Manual decision cycle failed")
+    );
+    logger.info("Decision cycle manually triggered via API");
+    res.writeHead(202, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ accepted: true }));
+  } else if (req.url === "/auto-decision" && req.method === "GET") {
+    res.writeHead(200, { "Content-Type": "application/json" });
+    res.end(JSON.stringify({ enabled: isAutoDecisionEnabled() }));
+  } else if (req.url === "/auto-decision" && req.method === "POST") {
+    let body = "";
+    req.on("data", (chunk: Buffer) => { body += chunk.toString(); });
+    req.on("end", () => {
+      try {
+        const { enabled } = JSON.parse(body || "{}") as { enabled?: boolean };
+        setAutoDecisionEnabled(enabled !== false);
+        logger.info({ enabled: enabled !== false }, "Auto decision toggled via API");
+        res.writeHead(200, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ enabled: isAutoDecisionEnabled() }));
+      } catch {
+        res.writeHead(400, { "Content-Type": "application/json" });
+        res.end(JSON.stringify({ error: "invalid body" }));
+      }
+    });
   } else if (req.url === "/forward" && req.method === "POST") {
     // Inter-agent message forwarding from ops-agent
     let body = "";
