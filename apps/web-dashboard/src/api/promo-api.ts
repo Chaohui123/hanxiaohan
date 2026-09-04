@@ -5,6 +5,7 @@ import { api } from "./client";
 
 export const promoApi = {
   decision: () => api.get("/api/promo/decision"),
+  decisionStats: () => api.get("/api/promo/decision-stats"),
   salesRanking: (days = 7) => api.get("/api/promo/sales-ranking", { params: { days } }),
   cost: (from: string, to: string) => api.get("/api/promo/cost", { params: { from, to } }),
   watchList: () => api.get("/api/promo/watch-list"),
@@ -29,8 +30,22 @@ const daysAgo = (n: number) => {
   return d.toISOString().slice(0, 10);
 };
 
+export interface DecisionStats {
+  todayActions: number;
+  weekActions: number;
+  lastActionAt: string | null;
+}
+
 export function useDecision() {
   return useQuery({ queryKey: ["promo-decision"], queryFn: () => promoApi.decision(), refetchInterval: 60_000 });
+}
+
+export function useDecisionStats() {
+  return useQuery({
+    queryKey: ["promo-decision-stats"],
+    queryFn: () => promoApi.decisionStats() as unknown as Promise<DecisionStats>,
+    refetchInterval: 60_000,
+  });
 }
 
 export function useSalesRanking(days = 7) {

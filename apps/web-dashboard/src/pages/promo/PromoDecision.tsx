@@ -1,10 +1,13 @@
 import { useEffect, useState } from "react";
-import { Row, Col, Card, Statistic, Table, Tag, Button, Space, Spin, Tooltip, Typography, message } from "antd";
+import { Row, Col, Card, Statistic, Table, Tag, Button, Space, Spin, Typography, message } from "antd";
 import { PlayCircleOutlined, PauseCircleOutlined, ReloadOutlined } from "@ant-design/icons";
-import { promoApi, useDecision, useSalesRanking, usePromoCost, useAutoDecisionToggle } from "../../api/promo-api";
+import dayjs from "dayjs";
+import { promoApi, useDecision, useDecisionStats, useSalesRanking, usePromoCost, useAutoDecisionToggle } from "../../api/promo-api";
+import { fromNow } from "../../utils/time";
 
 export default function PromoDecision() {
   const { data: decision, isLoading: dLoading } = useDecision();
+  const { data: decisionStats } = useDecisionStats();
   const { data: rankingData } = useSalesRanking(7);
   const { data: costData } = usePromoCost();
   const toggleMutation = useAutoDecisionToggle();
@@ -22,6 +25,10 @@ export default function PromoDecision() {
   const plan = decision as unknown as Record<string, unknown> || {};
   const ranking = (rankingData as unknown as { items?: Array<Record<string, unknown>> })?.items || [];
   const cost = costData as unknown as Record<string, unknown> || {};
+
+  const agentReachable = plan.agentReachable !== false;
+  const planStatus = String(plan.lastPlanStatus || "—");
+  const fmtTime = (v: unknown) => (v ? dayjs(String(v)).format("MM-DD HH:mm") : "—");
 
   const statusColor: Record<string, string> = {
     pending: "default", validated: "processing", executing: "warning", completed: "green", failed: "red",
@@ -46,8 +53,15 @@ export default function PromoDecision() {
   return (
     <div>
       <Row gutter={[16, 16]}>
-        <Col xs={12} sm={6}><Card extra={<Tooltip title="硬编码示例，待接入真实接口"><Typography.Text type="secondary">示例数据</Typography.Text></Tooltip>}><Statistic title="今日决策" value={1} suffix="次" /></Card></Col>
-        <Col xs={12} sm={6}><Card extra={<Tooltip title="硬编码示例，待接入真实接口"><Typography.Text type="secondary">示例数据</Typography.Text></Tooltip>}><Statistic title="执行成功率" value={92} suffix="%" valueStyle={{ color: "#10b981" }} /></Card></Col>
+        <Col xs={12} sm={6}><Card><Statistic title="今日动作" value={decisionStats?.todayActions ?? 0} suffix="次" /></Card></Col>
+        <Col xs={12} sm={6}>
+          <Card>
+            <Statistic title="近 7 日动作" value={decisionStats?.weekActions ?? 0} suffix="次" valueStyle={{ color: "#10b981" }} />
+            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+              最近动作：{decisionStats?.lastActionAt ? fromNow(decisionStats.lastActionAt) : "暂无"}
+            </Typography.Text>
+          </Card>
+        </Col>
         <Col xs={12} sm={6}><Card><Statistic title="推广花费" value={Number(cost?.adSpend || 0)} prefix="₽" /></Card></Col>
         <Col xs={12} sm={6}><Card><Statistic title="ROI" value={Number(cost?.roi || 0).toFixed(2)} suffix="x" valueStyle={{ color: Number(cost?.roi) >= 2 ? "#10b981" : "#f59e0b" }} /></Card></Col>
       </Row>
@@ -58,9 +72,11 @@ export default function PromoDecision() {
             title="当前决策计划"
             extra={
               <Space>
-                <Tag color={statusColor[String(plan?.status || "pending")] || "default"}>
-                  {String(plan?.status || "—")}
-                </Tag>
+                {agentReachable ? (
+                  <Tag color={statusColor[planStatus] || "default"}>{planStatus}</Tag>
+                ) : (
+                  <Tag>代理不可达</Tag>
+                )}
                 <Button
                   type={autoOn ? "default" : "primary"}
                   icon={autoOn ? <PauseCircleOutlined /> : <PlayCircleOutlined />}
@@ -84,7 +100,11 @@ export default function PromoDecision() {
               </Space>
             }
           >
-            <p>计划ID: {String(plan?.id || "—")} | 创建时间: {String(plan?.createdAt || "—")} | 操作数: {String((plan?.actions as unknown[])?.length || 0)}</p>
+            {agentReachable ? (
+              <p>计划ID: {String(plan.lastPlanId || "—")} | 创建时间: {fmtTime(plan.lastPlanCreatedAt)} | 操作数: {Number(plan.lastPlanActionCount) || 0} | 执行时间: {fmtTime(plan.lastPlanExecutedAt)}</p>
+            ) : (
+              <Typography.Text type="secondary">代理不可达 — 无法获取当前决策计划</Typography.Text>
+            )}
           </Card>
         </Col>
       </Row>

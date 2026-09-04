@@ -1,11 +1,14 @@
-import { Row, Col, Card, Statistic, Table, Spin, Tooltip as AntTooltip, Typography } from "antd";
+import { Row, Col, Card, Statistic, Table, Spin } from "antd";
 import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, LineChart, Line, Legend } from "recharts";
+import dayjs from "dayjs";
 import { usePromoCost, usePricingHistory, useCopyHistory } from "../../api/promo-api";
+import { useWeeklyStats } from "../../api/dashboard-api";
 
 export default function PromoEffect() {
   const { data: costData } = usePromoCost();
   const { data: pricingData, isLoading: pLoading } = usePricingHistory(30);
   const { data: copyData } = useCopyHistory(30);
+  const { data: weekly } = useWeeklyStats();
 
   const cost = costData as unknown as Record<string, unknown> || {};
   const adjustments = (pricingData as { adjustments?: Array<Record<string, unknown>> })?.adjustments || [];
@@ -18,13 +21,11 @@ export default function PromoEffect() {
     after: Number(a.salesAfter || 0),
   }));
 
-  // Weekly trend mock
-  const weeklyTrend = [
-    { week: "W1", spend: 320, revenue: 1200 },
-    { week: "W2", spend: 280, revenue: 1050 },
-    { week: "W3", spend: 350, revenue: 1400 },
-    { week: "W4", spend: 400, revenue: 1800 },
-  ];
+  // 近 7 日销售趋势（daily_sales 真实数据）
+  const trendData = (weekly?.byDay || []).map((p) => ({
+    date: dayjs(p.date).format("MM-DD"),
+    revenue: Math.round(p.revenue),
+  }));
 
   return (
     <div>
@@ -54,18 +55,19 @@ export default function PromoEffect() {
           </Card>
         </Col>
         <Col xs={24} lg={12}>
-          <Card title="周趋势: 花费 vs 增量收入" extra={<AntTooltip title="硬编码示例，待接入真实接口"><Typography.Text type="secondary">示例数据</Typography.Text></AntTooltip>}>
-            <ResponsiveContainer width="100%" height={300}>
-              <LineChart data={weeklyTrend}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="week" />
-                <YAxis />
-                <Tooltip />
-                <Legend />
-                <Line type="monotone" dataKey="spend" stroke="#ef4444" name="推广花费" />
-                <Line type="monotone" dataKey="revenue" stroke="#10b981" name="增量收入" />
-              </LineChart>
-            </ResponsiveContainer>
+          <Card title="近 7 日销售趋势">
+            {trendData.length > 0 ? (
+              <ResponsiveContainer width="100%" height={300}>
+                <LineChart data={trendData}>
+                  <CartesianGrid strokeDasharray="3 3" />
+                  <XAxis dataKey="date" />
+                  <YAxis />
+                  <Tooltip />
+                  <Legend />
+                  <Line type="monotone" dataKey="revenue" stroke="#10b981" name="销售额 ₽" />
+                </LineChart>
+              </ResponsiveContainer>
+            ) : <div style={{ textAlign: "center", padding: 40, color: "#94a3b8" }}>暂无销售数据</div>}
           </Card>
         </Col>
       </Row>

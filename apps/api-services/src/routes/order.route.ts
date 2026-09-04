@@ -134,15 +134,17 @@ export function createOrderRouter(ozonClient: OzonClient): Router {
       const status = req.query.status as string | undefined;
       const days = parseInt(req.query.days as string || "0", 10);
 
-      let sql = "SELECT * FROM local_orders";
+      // ozon_orders.posting_number 可能带 "-1" 包后缀，local_orders 是裸单号
+      let sql = `SELECT l.*, o.shipment_deadline FROM local_orders l
+                 LEFT JOIN ozon_orders o ON o.posting_number = l.posting_number OR o.posting_number LIKE l.posting_number || '-%'`;
       const conditions: string[] = [];
       const params: (string | number)[] = [];
 
-      if (status) { conditions.push("status = ?"); params.push(status); }
-      if (days > 0) { conditions.push("created_at >= ?"); params.push(nowDb(-days*86400_000)); }
+      if (status) { conditions.push("l.status = ?"); params.push(status); }
+      if (days > 0) { conditions.push("l.created_at >= ?"); params.push(nowDb(-days*86400_000)); }
 
       if (conditions.length > 0) sql += " WHERE " + conditions.join(" AND ");
-      sql += " ORDER BY created_at DESC LIMIT 100";
+      sql += " ORDER BY l.created_at DESC LIMIT 100";
 
       const rows = await db.all(sql, params);
       const formatted = rows.map((r: Record<string, unknown>) => ({
@@ -150,6 +152,7 @@ export function createOrderRouter(ozonClient: OzonClient): Router {
         createdAt: r.created_at,
         total: r.total_price_rub,
         price: r.total_price_rub,
+        shipmentDeadline: r.shipment_deadline || null,
       }));
       res.json({ success: true, data: formatted, correlationId: req.correlationId });
     } catch (err) {

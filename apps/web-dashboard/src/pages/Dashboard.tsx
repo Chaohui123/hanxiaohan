@@ -1,62 +1,96 @@
+// Dashboard — 工作台三层结构：KPI 卡行（点击钻取）→「需要你处理」行动清单 → 近 7 日趋势 + 最近上架
 import { useQuery } from "@tanstack/react-query";
-import { Row, Col, Card, Statistic, Table, Tag, Spin, Progress } from "antd";
-import { CloudOutlined, GlobalOutlined } from "@ant-design/icons";
-import { dashboardApi, taskApi, monitorApi, inventoryApi } from "../api/client";
+import { useNavigate } from "react-router-dom";
+import { Row, Col, Card, Statistic, Table, Tag, Spin } from "antd";
+import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer } from "recharts";
+import dayjs from "dayjs";
+import { dashboardApi, taskApi, monitorApi } from "../api/client";
+import { useWeeklyStats } from "../api/dashboard-api";
+import ActionList from "../components/ActionList";
+
+interface KpiCard {
+  title: string;
+  value: number;
+  prefix?: string;
+  suffix?: string;
+  color?: string;
+  path: string;
+}
 
 export default function Dashboard() {
+  const navigate = useNavigate();
+  const todayStr = dayjs().format("YYYY-MM-DD");
+  const fromStr = dayjs().subtract(6, "day").format("YYYY-MM-DD");
+
   const { data: dash, isLoading } = useQuery({ queryKey: ["dashboard"], queryFn: () => dashboardApi.stats(), refetchInterval: 15_000 });
-  const { data: global } = useQuery({ queryKey: ["global"], queryFn: () => dashboardApi.globalStats(), refetchInterval: 30_000 });
-  const { data: cos } = useQuery({ queryKey: ["cos"], queryFn: () => dashboardApi.cosStats(), refetchInterval: 60_000 });
   const { data: queue } = useQuery({ queryKey: ["queue"], queryFn: () => taskApi.queueStats(), refetchInterval: 15_000 });
   const { data: llm } = useQuery({ queryKey: ["llm"], queryFn: () => monitorApi.llmStats(), refetchInterval: 30_000 });
   const { data: listings } = useQuery({ queryKey: ["listings"], queryFn: () => taskApi.listings() });
-  const { data: failed } = useQuery({ queryKey: ["failed"], queryFn: () => taskApi.failed() });
+  const { data: weekly } = useWeeklyStats(fromStr, todayStr);
 
   if (isLoading) return <Spin size="large" style={{ display: "block", margin: "100px auto" }} />;
 
   const d = (dash as { data?: Record<string, unknown> })?.data || {};
-  const g = (global as { data?: Record<string, unknown> })?.data || {};
-  const c = (cos as { data?: Record<string, number> })?.data || {};
   const q = (queue as { data?: Record<string, unknown> })?.data || {};
   const l = (llm as { data?: Record<string, number> })?.data || {};
 
+  // 近 7 日趋势（含今天，标记"今天"）；无订单的日期补 0 避免断档
+  const byDayMap = new Map((weekly?.byDay || []).map((p) => [p.date, p]));
+  const trendData = Array.from({ length: 7 }, (_, i) => {
+    const date = dayjs().subtract(6 - i, "day").format("YYYY-MM-DD");
+    const point = byDayMap.get(date);
+    return {
+      label: i === 6 ? "今天" : dayjs(date).format("MM-DD"),
+      orders: point?.orders || 0,
+      revenue: Math.round(point?.revenue || 0),
+    };
+  });
+  const todaySales = trendData[trendData.length - 1];
+
+  const pendingTasks = (Number(q.queued) || 0) + (Number(q.processing) || 0);
+  const todayTokens = Number(l.todayTokens) || Number(d.todayTokens) || 0;
+
+  const kpis: KpiCard[] = [
+    { title: "今日销售额", value: Math.round(todaySales.revenue), prefix: "₽", path: "/orders" },
+    { title: "今日订单", value: todaySales.orders, suffix: "单", path: "/orders" },
+    { title: "待处理任务", value: pendingTasks, suffix: "个", color: pendingTasks > 0 ? "#f59e0b" : "#10b981", path: "/tasks" },
+    { title: "今日Token", value: todayTokens, suffix: `/ ${(Number(l.dailyLimit) || 500000).toLocaleString()}`, path: "/monitoring" },
+  ];
+
   return (
     <div>
-      {/* Multi-store Global Summary */}
-      <Card size="small" style={{ marginBottom: 16 }}>
-        <Row gutter={16}>
-          <Col xs={12} sm={4}><Statistic title="店铺数" value={Number(g.stores) || 1} prefix={<GlobalOutlined />} /></Col>
-          <Col xs={12} sm={4}><Statistic title="总上架" value={Number(g.totalListings) || 0} /></Col>
-          <Col xs={12} sm={4}><Statistic title="总订单" value={Number(g.totalOrders) || 0} /></Col>
-          <Col xs={12} sm={4}><Statistic title="总库存" value={Number(g.totalInventory) || 0} /></Col>
-          <Col xs={12} sm={4}><Statistic title="Token总量" value={(Number(g.totalTokens) || 0).toLocaleString()} /></Col>
-          <Col xs={12} sm={4}>
-            <Statistic title="COS存储" value={`${c.usagePercent || 0}%`}
-              valueStyle={{ color: (c.usagePercent || 0) > 80 ? "#ef4444" : (c.usagePercent || 0) > 50 ? "#f59e0b" : "#10b981" }} />
-            <Progress percent={c.usagePercent || 0} size="small" status={(c.usagePercent || 0) > 80 ? "exception" : "normal"}
-              format={() => `${c.totalImages || 0}张`} />
-          </Col>
-        </Row>
-      </Card>
-
-      {/* Today's metrics */}
+      {/* 第一层：KPI 卡行 */}
       <Row gutter={[16, 16]}>
-        <Col xs={12} sm={8} md={4}><Card><Statistic title="今日上架" value={Number(d.todayListings) || 0} valueStyle={{ color: "#10b981" }} /></Card></Col>
-        <Col xs={12} sm={8} md={4}><Card><Statistic title="队列中" value={Number(q.queued) || 0} valueStyle={{ color: "#f59e0b" }} /></Card></Col>
-        <Col xs={12} sm={8} md={4}><Card><Statistic title="处理中" value={Number(q.processing) || 0} valueStyle={{ color: "#3b82f6" }} /></Card></Col>
-        <Col xs={12} sm={8} md={4}><Card><Statistic title="失败" value={Number(q.failed) || 0} valueStyle={{ color: Number(q.failed) > 0 ? "#ef4444" : "#10b981" }} /></Card></Col>
-        <Col xs={12} sm={8} md={4}><Card><Statistic title="低库存" value={Number(d.lowStockProducts) || 0} valueStyle={{ color: Number(d.lowStockProducts) > 0 ? "#ef4444" : "#10b981" }} /></Card></Col>
-        <Col xs={12} sm={8} md={4}><Card><Statistic title="今日Token" value={(Number(l.todayTokens) || Number(d.todayTokens) || 0).toLocaleString()} suffix={`/ ${(Number(l.dailyLimit) || 500000).toLocaleString()}`} /></Card></Col>
+        {kpis.map((kpi) => (
+          <Col xs={12} sm={6} key={kpi.title}>
+            <Card hoverable style={{ cursor: "pointer" }} onClick={() => navigate(kpi.path)}>
+              <Statistic title={kpi.title} value={kpi.value} prefix={kpi.prefix} suffix={kpi.suffix}
+                valueStyle={kpi.color ? { color: kpi.color } : undefined} />
+            </Card>
+          </Col>
+        ))}
       </Row>
 
-      {/* COS Storage card */}
-      {Number(c.deadLetter) > 0 && (
-        <Card size="small" style={{ marginTop: 16, borderColor: "#ef4444" }}>
-          <span><CloudOutlined /> COS死信图片: {c.deadLetter} 张 — 建议清理释放空间</span>
-        </Card>
-      )}
+      {/* 第二层：需要你处理（行动清单） */}
+      <ActionList />
 
-      {/* Recent listings + Failed tasks */}
+      {/* 第三层：近 7 日销售趋势 */}
+      <Card title="近 7 日销售趋势" style={{ marginTop: 16 }}>
+        <ResponsiveContainer width="100%" height={300}>
+          <AreaChart data={trendData}>
+            <CartesianGrid strokeDasharray="3 3" />
+            <XAxis dataKey="label" />
+            <YAxis yAxisId="orders" allowDecimals={false} />
+            <YAxis yAxisId="revenue" orientation="right" />
+            <Tooltip />
+            <Legend />
+            <Area yAxisId="orders" type="monotone" dataKey="orders" name="订单数" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.15} />
+            <Area yAxisId="revenue" type="monotone" dataKey="revenue" name="销售额 ₽" stroke="#10b981" fill="#10b981" fillOpacity={0.15} />
+          </AreaChart>
+        </ResponsiveContainer>
+      </Card>
+
+      {/* 最近上架 */}
       <Row gutter={16} style={{ marginTop: 16 }}>
         <Col xs={24} lg={12}>
           <Card title="最近上架" size="small">
@@ -67,17 +101,6 @@ export default function Dashboard() {
                 { title: "状态", dataIndex: "status", render: (s: string) => <Tag color={s === "done" ? "green" : "red"}>{s}</Tag> },
                 { title: "时间", dataIndex: "createdAt", width: 160 },
               ]} />
-          </Card>
-        </Col>
-        <Col xs={24} lg={12}>
-          <Card title="失败任务" size="small" style={{ borderColor: (Array.isArray((failed as { data?: unknown[] })?.data) ? (failed as { data: unknown[] }).data : []).length > 0 ? "#ef4444" : undefined }}>
-            <Table dataSource={(Array.isArray((failed as { data?: unknown[] })?.data) ? (failed as { data: unknown[] }).data : []).slice(0, 5)}
-              rowKey="id" size="small" pagination={false} scroll={{ x: 400 }}
-              columns={[
-                { title: "类型", dataIndex: "taskType", width: 100 },
-                { title: "错误", dataIndex: "errorMessage", ellipsis: true },
-              ]}
-              locale={{ emptyText: "✅ 无失败任务" }} />
           </Card>
         </Col>
       </Row>
