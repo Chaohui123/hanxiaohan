@@ -137,17 +137,13 @@ export function createWebhookRouter(): Router {
       return;
     }
 
-    // seller_id check (fast, no DB) — keep before ack; on mismatch reject (Ozon sees error).
+    // seller_id check — log-only. Ozon 诊断 (2026-09-04): 对 TYPE_STOCKS_CHANGED 等合法推送
+    // 返回 403 SELLER_MISMATCH 会触发「3 天后禁用推送」警告；Ozon 官方要求所有格式合法的
+    // 推送一律 2xx。测试推送的 seller_id 为占位值（如 12345），不可依赖校验拒绝，改为只记 warn。
     const sellerId = (rawJson as Record<string, unknown>).seller_id;
     const configuredSellers = (process.env.OZON_CLIENT_IDS || "").split(",").map((s) => s.trim()).filter(Boolean);
     if (sellerId != null && configuredSellers.length > 0 && !configuredSellers.includes(String(sellerId))) {
-      logger.warn({ clientIp, sellerId, correlationId: req.correlationId }, "Webhook rejected — seller_id not in OZON_CLIENT_IDS");
-      res.status(403).json({
-        success: false,
-        error: { code: "SELLER_MISMATCH", message: "seller_id not recognized", retryable: false },
-        correlationId: req.correlationId,
-      });
-      return;
+      logger.warn({ clientIp, sellerId, correlationId: req.correlationId }, "Webhook seller_id not in OZON_CLIENT_IDS — accepted anyway (log-only per Ozon diagnostic)");
     }
 
     // ★ ACK FIRST (9/2 Ozon 2500ms 超时实证)：先秒回 200，dedup/解析/落库全部移到响应后异步执行。
