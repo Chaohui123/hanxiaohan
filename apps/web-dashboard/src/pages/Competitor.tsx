@@ -5,6 +5,7 @@ import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContai
 import { useWatchList, useCompetitorPrices, usePromoEvents, useAddWatch, useRemoveWatch } from "../api/promo-api";
 import PageContainer from "../components/PageContainer";
 import QueryState from "../components/QueryState";
+import { useChartTheme } from "../components/ThemedChart";
 
 export default function Competitor() {
   const watchQuery = useWatchList();
@@ -16,6 +17,7 @@ export default function Competitor() {
   const [newName, setNewName] = useState("");
   const [selectedOfferId, setSelectedOfferId] = useState("");
   const { data: prices } = useCompetitorPrices(selectedOfferId, 30);
+  const chartTheme = useChartTheme();
 
   const chartData = (prices || []).map((p) => ({
     date: String(p.capturedAt || "").slice(0, 10),
@@ -63,10 +65,10 @@ export default function Competitor() {
             <Card title={`价格趋势 — ${selectedOfferId}`}>
               <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={chartData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis />
-                  <Tooltip />
+                  <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.gridStroke} />
+                  <XAxis dataKey="date" tick={{ fill: chartTheme.tickFill }} />
+                  <YAxis tick={{ fill: chartTheme.tickFill }} />
+                  <Tooltip contentStyle={chartTheme.tooltipStyle} />
                   <Line type="monotone" dataKey="price" stroke="#3b82f6" name="竞品均价" />
                 </LineChart>
               </ResponsiveContainer>

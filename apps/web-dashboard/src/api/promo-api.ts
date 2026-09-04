@@ -41,6 +41,7 @@ export type PricingAdjustment = {
   reason?: string; salesBefore?: number; salesAfter?: number; appliedAt?: string;
 };
 export type CopyRecord = { offerId?: string; name?: string; titleRu?: string };
+export type ProductSearchItem = { offerId: string; name: string; price: number; rating: number; salesCount: number };
 
 // ---- API Methods ----
 
@@ -62,6 +63,8 @@ export const promoApi = {
     api.get("/api/promo/pricing-history", { params: { days } }) as unknown as Promise<{ adjustments: PricingAdjustment[] }>,
   copyHistory: (days = 30) =>
     api.get("/api/promo/copy-history", { params: { days } }) as unknown as Promise<{ copies: CopyRecord[] }>,
+  productSearch: (query: string, limit = 10) =>
+    api.get("/api/promo/ozon/products/search", { params: { query, limit } }) as unknown as Promise<{ items: ProductSearchItem[] }>,
   autoDecisionOn: () => api.post("/api/promo/decision", { action: "on" }),
   autoDecisionOff: () => api.post("/api/promo/decision", { action: "off" }),
   triggerDecision: () => api.post("/api/promo/decision", { action: "run" }),
@@ -132,6 +135,16 @@ export function useCopyHistory(days = 30) {
   return useQuery({
     queryKey: ["promo-copy-history", days],
     queryFn: () => promoApi.copyHistory(days).then((r) => r.copies),
+  });
+}
+
+/** Ctrl+K 全局搜索的商品结果（S7）：query 为空不发请求，调用方负责防抖 */
+export function useProductSearch(query: string) {
+  return useQuery({
+    queryKey: ["promo-product-search", query],
+    queryFn: () => promoApi.productSearch(query).then((r) => r.items),
+    enabled: !!query,
+    staleTime: 60_000,
   });
 }
 

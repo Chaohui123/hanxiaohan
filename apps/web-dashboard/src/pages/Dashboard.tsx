@@ -7,6 +7,7 @@ import { useDashboardStats, useWeeklyStats } from "../api/dashboard-api";
 import { useQueueStats, useTaskListings } from "../api/task-api";
 import { useLlmStats } from "../api/monitor-api";
 import ActionList from "../components/ActionList";
+import { useChartTheme } from "../components/ThemedChart";
 
 interface KpiCard {
   title: string;
@@ -27,6 +28,7 @@ export default function Dashboard() {
   const { data: llm } = useLlmStats();
   const { data: listings } = useTaskListings();
   const { data: weekly } = useWeeklyStats(fromStr, todayStr);
+  const chartTheme = useChartTheme();
 
   if (isLoading) return <Spin size="large" style={{ display: "block", margin: "100px auto" }} />;
 
@@ -78,11 +80,11 @@ export default function Dashboard() {
       <Card title="近 7 日销售趋势" style={{ marginTop: 16 }}>
         <ResponsiveContainer width="100%" height={300}>
           <AreaChart data={trendData}>
-            <CartesianGrid strokeDasharray="3 3" />
-            <XAxis dataKey="label" />
-            <YAxis yAxisId="orders" allowDecimals={false} />
-            <YAxis yAxisId="revenue" orientation="right" />
-            <Tooltip />
+            <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.gridStroke} />
+            <XAxis dataKey="label" tick={{ fill: chartTheme.tickFill }} />
+            <YAxis yAxisId="orders" allowDecimals={false} tick={{ fill: chartTheme.tickFill }} />
+            <YAxis yAxisId="revenue" orientation="right" tick={{ fill: chartTheme.tickFill }} />
+            <Tooltip contentStyle={chartTheme.tooltipStyle} />
             <Legend />
             <Area yAxisId="orders" type="monotone" dataKey="orders" name="订单数" stroke="#3b82f6" fill="#3b82f6" fillOpacity={0.15} />
             <Area yAxisId="revenue" type="monotone" dataKey="revenue" name="销售额 ₽" stroke="#10b981" fill="#10b981" fillOpacity={0.15} />

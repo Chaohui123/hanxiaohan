@@ -3,12 +3,14 @@ import { BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContaine
 import dayjs from "dayjs";
 import { usePromoCost, usePricingHistory, useCopyHistory } from "../../api/promo-api";
 import { useWeeklyStats } from "../../api/dashboard-api";
+import { useChartTheme } from "../../components/ThemedChart";
 
 export default function PromoEffect() {
   const { data: costData } = usePromoCost();
   const { data: pricingData, isLoading: pLoading } = usePricingHistory(30);
   const { data: copyData } = useCopyHistory(30);
   const { data: weekly } = useWeeklyStats();
+  const chartTheme = useChartTheme();
 
   const cost = costData || {};
   const adjustments = pricingData || [];
@@ -42,10 +44,10 @@ export default function PromoEffect() {
             {pricingChart.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <BarChart data={pricingChart}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="name" tick={{ fontSize: 11 }} />
-                  <YAxis />
-                  <Tooltip />
+                  <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.gridStroke} />
+                  <XAxis dataKey="name" tick={{ fontSize: 11, fill: chartTheme.tickFill }} />
+                  <YAxis tick={{ fill: chartTheme.tickFill }} />
+                  <Tooltip contentStyle={chartTheme.tooltipStyle} />
                   <Legend />
                   <Bar dataKey="before" fill="#94a3b8" name="调前销量" />
                   <Bar dataKey="after" fill="#3b82f6" name="调后销量" />
@@ -59,10 +61,10 @@ export default function PromoEffect() {
             {trendData.length > 0 ? (
               <ResponsiveContainer width="100%" height={300}>
                 <LineChart data={trendData}>
-                  <CartesianGrid strokeDasharray="3 3" />
-                  <XAxis dataKey="date" />
-                  <YAxis />
-                  <Tooltip />
+                  <CartesianGrid strokeDasharray="3 3" stroke={chartTheme.gridStroke} />
+                  <XAxis dataKey="date" tick={{ fill: chartTheme.tickFill }} />
+                  <YAxis tick={{ fill: chartTheme.tickFill }} />
+                  <Tooltip contentStyle={chartTheme.tooltipStyle} />
                   <Legend />
                   <Line type="monotone" dataKey="revenue" stroke="#10b981" name="销售额 ₽" />
                 </LineChart>

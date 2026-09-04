@@ -1,18 +1,20 @@
 import { Suspense, lazy } from "react";
 import { BrowserRouter, Routes, Route, Link, useLocation, useNavigate, useSearchParams, Navigate } from "react-router-dom";
-import { Layout, Menu, Spin, theme, Button, Space, Avatar, message } from "antd";
+import { Layout, Menu, Spin, theme, Button, Space, Avatar, message, Tooltip } from "antd";
 import type { MenuProps } from "antd";
 import {
   DashboardOutlined, LineChartOutlined, RocketOutlined, DatabaseOutlined,
   EyeOutlined, ShoppingOutlined, PayCircleOutlined, CustomerServiceOutlined,
   FundOutlined, MonitorOutlined, HeartOutlined, BookOutlined,
   SettingOutlined, MenuFoldOutlined, MenuUnfoldOutlined, LogoutOutlined,
+  SunOutlined, MoonOutlined,
 } from "@ant-design/icons";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { useAppStore } from "./stores/app-store";
 import { ErrorBoundary } from "./components/ErrorBoundary";
 import StoreSwitcher from "./components/layout/StoreSwitcher";
 import AlertBell from "./components/layout/AlertBell";
+import GlobalSearch from "./components/layout/GlobalSearch";
 
 // Lazy-loaded page components — reduces initial bundle size by ~80%
 const Dashboard = lazy(() => import("./pages/Dashboard"));
@@ -106,7 +108,7 @@ const menuItems: MenuProps["items"] = [
 ];
 
 function AppLayout() {
-  const { sidebarCollapsed, toggleSidebar, logout } = useAppStore();
+  const { sidebarCollapsed, toggleSidebar, logout, darkMode, setDarkMode } = useAppStore();
   const { token: themeToken } = theme.useToken();
   const location = useLocation();
   const navigate = useNavigate();
@@ -144,9 +146,15 @@ function AppLayout() {
             </span>
             <Avatar shape="square" size={24} style={{ backgroundColor: themeToken.colorPrimary, fontSize: 14, marginRight: 8 }}>O</Avatar>
             <span style={{ fontSize: 14, color: themeToken.colorTextSecondary }}>Ozon 跨境电商自动化运营系统</span>
+            <span style={{ marginLeft: 32 }}>
+              <GlobalSearch />
+            </span>
           </span>
           <Space size={16}>
             <StoreSwitcher />
+            <Tooltip title={darkMode ? "切换到亮色模式" : "切换到暗色模式"}>
+              <Button type="text" icon={darkMode ? <SunOutlined /> : <MoonOutlined />} onClick={() => setDarkMode(!darkMode)} />
+            </Tooltip>
             <AlertBell />
             <Button type="text" icon={<LogoutOutlined />} onClick={handleLogout}>
               登出

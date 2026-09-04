@@ -5,6 +5,8 @@ interface AppState {
   setCurrentStore: (id: string) => void;
   sidebarCollapsed: boolean;
   toggleSidebar: () => void;
+  darkMode: boolean;
+  setDarkMode: (v: boolean) => void;
   apiKey: string;
   isAuthenticated: boolean;
   setApiKey: (key: string) => void;
@@ -21,11 +23,22 @@ function getSavedAuthState(): boolean {
   catch { return false; }
 }
 
+// 暗色偏好（S7）：默认亮色
+function getSavedDarkMode(): boolean {
+  try { return localStorage.getItem("onzo-dark-mode") === "1"; }
+  catch { return false; }
+}
+
 export const useAppStore = create<AppState>((set) => ({
   currentStore: "",
   setCurrentStore: (id) => set({ currentStore: id }),
   sidebarCollapsed: false,
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
+  darkMode: getSavedDarkMode(),
+  setDarkMode: (v) => {
+    try { localStorage.setItem("onzo-dark-mode", v ? "1" : "0"); } catch {}
+    set({ darkMode: v });
+  },
   apiKey: getSavedApiKey(),
   isAuthenticated: getSavedAuthState(),
   setApiKey: (key) => {
