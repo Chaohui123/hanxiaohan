@@ -19,8 +19,10 @@ import { emitEvent } from "../services/notification-events.js";
 
 const SEARCH_KEYWORDS = (process.env.LEARNING_BILI_KEYWORDS || "Ozon运营,Ozon关键词,跨境电商 俄罗斯,Yandex推广").split(",");
 const MAX_VIDEOS_PER_KEYWORD = 2;
-const MIN_PLAY_COUNT = 300;
-const RECENT_HOURS = 48;
+// 跨境垂类新视频发布初期播放普遍几十（2026-09-05 实测：48h 内 Ozon 新视频播放 2-31）——
+// 阈值 300 会把一切过滤掉；30 是质量与召回的平衡点
+const MIN_PLAY_COUNT = parseInt(process.env.LEARNING_MIN_PLAY || "30", 10);
+const RECENT_HOURS = parseInt(process.env.LEARNING_RECENT_HOURS || "96", 10); // 96h 窗口（4 天）
 const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || "";
 const DEEPSEEK_BASE = process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com";
 
