@@ -77,13 +77,15 @@ export function createWebhookRouter(): Router {
     next();
   });
 
-  // Webhook-specific body size guard — Ozon payloads are < 10KB, 100KB is generous
+  // Webhook-specific body size guard — Ozon 商品类推送（TYPE_CREATE_OR_UPDATE_ITEM）含完整
+  // 商品数据，单条可达数百 KB；守卫上限必须大于实际推送体积（100KB 曾把真实推送 413 导致
+  // Ozon 自动禁用推送地址，2026-09-05 实证）。2MB 留足冗余仍防滥用。
   router.post(["/webhook/ozon", "/webhook"], (req, res, next) => {
     const contentLength = parseInt(req.headers["content-length"] || "0", 10);
-    if (contentLength > 100_000) {
+    if (contentLength > 2_000_000) {
       res.status(413).json({
         success: false,
-        error: { code: "PAYLOAD_TOO_LARGE", message: "Webhook body exceeds 100KB limit", retryable: false },
+        error: { code: "PAYLOAD_TOO_LARGE", message: "Webhook body exceeds 2MB limit", retryable: false },
         correlationId: (req as unknown as { correlationId?: string }).correlationId ?? "unknown",
       });
       return;

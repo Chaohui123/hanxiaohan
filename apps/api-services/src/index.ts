@@ -88,7 +88,10 @@ app.use(helmet({
 }));
 
 app.use(express.json({
-  limit: "1mb",
+  // 4MB：Ozon TYPE_CREATE_OR_UPDATE_ITEM 推送含完整商品数据（描述+富内容+图集），
+  // 单条可达数百 KB；之前全局 1mb + webhook 守卫 100KB 把真实商品推送 413，
+  // Ozon 判「响应错误」并自动禁用了推送地址（2026-09-05 实证）
+  limit: "4mb",
   verify: (req, _res, buf) => { (req as express.Request & { rawBody?: Buffer }).rawBody = buf; },
 }));
 
