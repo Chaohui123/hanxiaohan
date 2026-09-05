@@ -71,6 +71,20 @@ export class EmbeddingClient {
       }
     }
 
+    if (provider === "kimi") {
+      // Kimi（api.kimi.com）OpenAI 兼容 embeddings，模型 bge_m3_embed（1024 维）
+      // 注意：与 PG vector(1024) 列配套 — 维度变更需同步 ALTER rag 表（2026-09-05 自智谱迁移）
+      const resp = await fetch(`${baseUrl}/embeddings`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+        body: JSON.stringify({ model, input: texts }),
+        signal: AbortSignal.timeout(this.config.requestTimeoutMs),
+      });
+      if (!resp.ok) throw new Error(`Kimi embedding API ${resp.status}: ${(await resp.text()).slice(0, 200)}`);
+      const data = await resp.json() as { data: Array<{ index: number; embedding: number[] }> };
+      return [...data.data].sort((a, b) => a.index - b.index).map((d) => d.embedding);
+    }
+
     if (provider === "deepseek") {
       logger.warn("DeepSeek has no embedding API, falling back to Zhipu");
       const resp = await fetch("https://open.bigmodel.cn/api/paas/v4/embeddings", {
