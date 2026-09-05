@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { Badge, Button, Card, DatePicker, Input, InputNumber, Modal, Popconfirm, Space, Statistic, Table, Tabs, Tag, message } from "antd";
 import { AuditOutlined, ReloadOutlined, SendOutlined, ThunderboltOutlined } from "@ant-design/icons";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
@@ -10,6 +10,7 @@ import {
 } from "../api/order-api";
 import PageContainer from "../components/PageContainer";
 import { hoursUntil } from "../utils/time";
+import { getSeenAt, hasSeenRecord, markSeen } from "../utils/unread";
 
 // 状态机流水线 Tab（方案 §3.2b）：每个 Tab 是一个任务队列
 const TAB_KEYS = ["awaiting_packaging", "awaiting_deliver", "delivering", "cancelled", "all"] as const;
@@ -80,6 +81,7 @@ export default function Orders() {
 
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
+  const [seenVersion, setSeenVersion] = useState(0); // 已读位置版本号：点击查看后 +1 触发角标重算
   const [shipModalOpen, setShipModalOpen] = useState(false);
   const [shipTarget, setShipTarget] = useState<OrderRow | null>(null);
   const [trackingNumber, setTrackingNumber] = useState("");
@@ -94,13 +96,35 @@ export default function Orders() {
 
   const orders = ordersData || [];
 
+  // 未读角标机制：
+  // 1) 首次进入时无记录的频道初始化为当前时间 — 历史订单不算未读（避免一打开全是红数字）
+  // 2) 当前激活 Tab 持续标记已读（用户正在看，新订单也不应再亮角标）
+  useEffect(() => {
+    const channels = [...TAB_KEYS.filter((k) => k !== "all").map((k) => `orders:${k}`)];
+    for (const ch of channels) {
+      if (!hasSeenRecord(ch)) markSeen(ch);
+    }
+    // 当前 Tab 标记到当前时间（含停留期间新到的订单）
+    markSeen(`orders:${activeTab}`);
+    setSeenVersion((v) => v + 1);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeTab, ordersData]);
+
   const counts = useMemo(() => {
-    const c: Record<TabKey, number> = { awaiting_packaging: 0, awaiting_deliver: 0, delivering: 0, cancelled: 0, all: orders.length };
+    // 未读角标语义：只统计「上次查看该 Tab 之后新到达」的订单；点击 Tab 后清零（2026-09-05 用户要求）
+    const c: Record<TabKey, number> = { awaiting_packaging: 0, awaiting_deliver: 0, delivering: 0, cancelled: 0, all: 0 };
     for (const o of orders) {
-      if (o.status in c && o.status !== "all") c[o.status as TabKey] += 1;
+      const createdMs = o.createdAt ? new Date(o.createdAt).getTime() : 0;
+      const channel = `orders:${o.status}`;
+      if (createdMs > getSeenAt(channel)) {
+        if (o.status in c && o.status !== "all") c[o.status as TabKey] += 1;
+        c.all += 1;
+      }
     }
     return c;
-  }, [orders]);
+    // seenVersion 变化（点击查看后）触发重算
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [orders, seenVersion]);
 
   const tabOrders = useMemo(() => {
     const filtered = activeTab === "all" ? orders : orders.filter((o) => o.status === activeTab);
@@ -171,7 +195,6 @@ export default function Orders() {
     setSearchParams(params, { replace: true });
     setPage(1);
   };
-
   const openShipModal = (row: OrderRow) => {
     const products = parseProducts(row);
     setShipTarget(row);

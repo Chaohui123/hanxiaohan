@@ -22,6 +22,7 @@ export interface OrderRow {
   raw_json?: string;
   products_json?: string; // ozon_orders 的商品明细（webhook local_orders 用 raw_json）
   created_at: string;
+  createdAt?: string; // 后端 formatted 输出（与 created_at 同源）
   shipmentDeadline?: string | null;
 }
 
