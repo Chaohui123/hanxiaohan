@@ -90,7 +90,7 @@ export class OzonOrderSyncService {
     const ozonClient = new (await import("@onzo/ozon-api-wrapper")).OzonClient({ auth });
     const orderClient = new OzonOrderClient(ozonClient);
 
-    const statuses = ["awaiting_packaging", "awaiting_deliver"];
+    const statuses = ["awaiting_packaging", "awaiting_deliver", "delivering", "cancelled", "delivered"];
 
     for (const status of statuses) {
       // FBS

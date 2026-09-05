@@ -39,19 +39,22 @@ const statusColors: Record<string, string> = {
   cancelled: "red",
 };
 
-/** Parse products from order raw_json. Expected format: { products: [{ sku, quantity, offer_id, price }] } */
+/** Parse products from order raw_json / products_json. Expected format: { products: [{ sku, quantity, offer_id, price }] } */
 function parseProducts(row: OrderRow): OrderProduct[] {
   try {
-    const raw = typeof row.raw_json === "string" ? JSON.parse(row.raw_json) : row.raw_json;
-    if (raw?.products && Array.isArray(raw.products)) {
-      return raw.products.map((p: Record<string, unknown>) => ({
+    const source = row.raw_json ?? row.products_json;
+    const raw = typeof source === "string" ? JSON.parse(source) : source;
+    // ozon_orders.products_json 可能是数组本身或 { products: [...] }
+    const list = Array.isArray(raw) ? raw : raw?.products;
+    if (Array.isArray(list)) {
+      return list.map((p: Record<string, unknown>) => ({
         sku: (p.sku ?? p.offer_id ?? 0) as number,
         quantity: (p.quantity ?? 1) as number,
         offerId: p.offer_id as string | undefined,
         price: p.price as string | undefined,
       }));
     }
-  } catch { /* raw_json parse failed — fall through */ }
+  } catch { /* parse failed — fall through */ }
 
   // Fallback: synthetic product from product_count
   return row.product_count > 0

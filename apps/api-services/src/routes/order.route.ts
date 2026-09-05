@@ -123,7 +123,8 @@ export function createOrderRouter(ozonClient: OzonClient): Router {
     }
   });
 
-  // GET /api/orders — list locally synced orders (supports ?status= & ?days=)
+  // GET /api/orders — 订单列表（主源 ozon_orders：轮询同步持续维护；
+  // local_orders 是 webhook 处理记录，webhook 曾长期被禁用导致该表为空、页面无数据 — 2026-09-05 实证）
   router.get("/orders", async (req, res) => {
     try {
       const db = await getDb();
@@ -134,22 +135,20 @@ export function createOrderRouter(ozonClient: OzonClient): Router {
       const status = req.query.status as string | undefined;
       const days = parseInt(req.query.days as string || "0", 10);
 
-      // ozon_orders.posting_number 可能带 "-1" 包后缀，local_orders 是裸单号
-      let sql = `SELECT l.*, o.shipment_deadline FROM local_orders l
-                 LEFT JOIN ozon_orders o ON o.posting_number = l.posting_number OR o.posting_number LIKE l.posting_number || '-%'`;
+      let sql = "SELECT * FROM ozon_orders";
       const conditions: string[] = [];
       const params: (string | number)[] = [];
 
-      if (status) { conditions.push("l.status = ?"); params.push(status); }
-      if (days > 0) { conditions.push("l.created_at >= ?"); params.push(nowDb(-days*86400_000)); }
+      if (status) { conditions.push("status = ?"); params.push(status); }
+      if (days > 0) { conditions.push("synced_at >= ?"); params.push(nowDb(-days*86400_000)); }
 
       if (conditions.length > 0) sql += " WHERE " + conditions.join(" AND ");
-      sql += " ORDER BY l.created_at DESC LIMIT 100";
+      sql += " ORDER BY created_at_ozon DESC LIMIT 100";
 
       const rows = await db.all(sql, params);
       const formatted = rows.map((r: Record<string, unknown>) => ({
         ...r,
-        createdAt: r.created_at,
+        createdAt: r.created_at_ozon,
         total: r.total_price_rub,
         price: r.total_price_rub,
         shipmentDeadline: r.shipment_deadline || null,
