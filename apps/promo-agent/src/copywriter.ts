@@ -129,20 +129,22 @@ export async function generateCopy(
     logger.warn({ err }, "RAG copy search failed, continuing without context");
   }
 
-  // 2.6 RAG 合规知识库检索 — 注入Ozon规则上下文
+  // 2.6 RAG 平台规则与运营知识检索 — 注入 Ozon 规则/学习成果上下文
+  // 不限 scenario 全库向量检索：合规、平台规则、每日学习（Yandex 关键词等）统一按语义排序，
+  // 固定 "compliance" 场景曾导致学习到的关键词知识进不了文案生成（2026-09-05 实证断点）
   let ragCompliance = "";
   try {
     const compResp = await fetch(`${config.apiBase}/api/rag/playbook/search`, {
       method: "POST",
       headers: { "Content-Type": "application/json", "X-API-Key": config.apiKey },
-      body: JSON.stringify({ query: `${name} ${product.category || ""}`, scenario: "compliance", topK: 3 }),
+      body: JSON.stringify({ query: `${name} ${product.category || ""}`, topK: 4 }),
       signal: AbortSignal.timeout(10_000),
     });
     if (compResp.ok) {
-      const compData = await compResp.json() as { results?: Array<{ title?: string; content?: string }> };
+      const compData = await compResp.json() as { results?: Array<{ title?: string; content?: string; score?: number }> };
       if (compData.results?.length) {
         ragCompliance = compData.results
-          .map((r) => `[合规规则-${r.title || ""}]: ${(r.content || "").slice(0, 300)}`)
+          .map((r) => `[${r.title || "知识"}]: ${(r.content || "").slice(0, 300)}`)
           .join("\n");
       }
     }
@@ -150,7 +152,7 @@ export async function generateCopy(
 
   // 3. 构建 prompt
   const complianceNote = ragCompliance
-    ? `\n\n⚠️ Ozon平台合规规则（必须遵守）：\n${ragCompliance}\n\n请确保生成的文案不违反以上规则。`
+    ? `\n\n⚠️ Ozon平台规则与运营知识（必须遵守并善加利用）：\n${ragCompliance}\n\n请确保生成的文案不违反以上规则，并参考其中的关键词/搜索习惯洞察。`
     : "";
   const systemPrompt = (ragContext
     ? `你是一个俄罗斯电商文案专家。\n\n以下是同类商品的优秀文案参考：\n${ragContext}\n\n请参考以上文案的风格和结构，但不要直接复制。${complianceNote}`
