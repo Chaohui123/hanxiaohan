@@ -7,12 +7,14 @@ import { readdirSync, statSync, unlinkSync, rmdirSync, existsSync } from "node:f
 import { join } from "node:path";
 import { getDb } from "../db/connection.js";
 import { logger } from "@onzo/logger";
-import { authMiddleware } from "../middleware/auth.js";
 import { nowDb } from "../utils/time.js";
 
 export function createOpsRouter(): Router {
   const router = Router();
-  router.use(authMiddleware);
+  // 注意：不要在这里挂 authMiddleware —— 全局鉴权已在 index.ts 根挂载（所有 /api/* 必经）。
+  // 子路由里二次挂载的 req.path 是剥了 /api 前缀的，白名单永远失配；
+  // 且 app.use("/api", opsRouter) 会让所有 fallthrough 经过的无关 /api/* 请求都被误拦
+  //（1688 callback 白名单路径曾因此被 401，2026-09-05 实证）
 
   // ---- POST /ops/cleanup — clean temp files & stale DB records ----
   router.post("/ops/cleanup", async (_req, res) => {
