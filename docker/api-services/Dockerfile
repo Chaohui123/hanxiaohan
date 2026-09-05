@@ -12,7 +12,7 @@ ENV npm_config_registry=https://registry.npmmirror.com \
     COREPACK_NPM_REGISTRY=https://registry.npmmirror.com
 
 # Replace Alpine source with Aliyun mirror (fast in China, avoids download timeouts)
-RUN sed -i 's|dl-cdn.alpinelinux.org|mirrors.aliyun.com|g' /etc/apk/repositories
+RUN sed -i 's|dl-cdn.alpinelinux.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apk/repositories
 
 # Install gcc toolchain for native module compilation (better-sqlite3 needs C++ compiler)
 RUN apk add --no-cache gcc g++ make python3 python3-dev
@@ -79,7 +79,7 @@ RUN cp -r packages/scraper/src/scripts packages/scraper/dist/scripts || true
 FROM node:22-alpine AS runner
 
 # Aliyun mirror for runtime packages
-RUN sed -i 's|dl-cdn.alpinelinux.org|mirrors.aliyun.com|g' /etc/apk/repositories
+RUN sed -i 's|dl-cdn.alpinelinux.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apk/repositories
 
 WORKDIR /app
 
