@@ -137,6 +137,55 @@ async function fetchSubtitleText(bvid: string): Promise<string> {
   }
 }
 
+// ---- 无字幕视频 → whisper 转录（独立 whisper 服务容器） ----
+
+const WHISPER_URL = process.env.WHISPER_URL || "http://whisper:9200";
+/** 无字幕视频转录的热度门槛：≥50 播放才值得花 3-5 分钟 CPU 转录（2026-09-05 实测垂类分布） */
+const TRANSCRIBE_MIN_PLAY = parseInt(process.env.LEARNING_TRANSCRIBE_MIN_PLAY || "50", 10);
+const TRANSCRIBE_MAX_PER_KEYWORD = 1; // 每关键词最多转录 1 个（限流）
+
+/** 取 B 站 dash 音频直链（playurl API, fnval=16） */
+async function fetchAudioUrl(bvid: string): Promise<string> {
+  const viewResp = await fetch(`https://api.bilibili.com/x/web-interface/view?bvid=${bvid}`, {
+    headers: { "User-Agent": UA }, signal: AbortSignal.timeout(10_000),
+  });
+  const viewData = await viewResp.json() as { data?: { cid?: number } };
+  const cid = viewData.data?.cid;
+  if (!cid) return "";
+  const playResp = await fetch(`https://api.bilibili.com/x/player/playurl?bvid=${bvid}&cid=${cid}&fnval=16&fourk=0`, {
+    headers: { "User-Agent": UA, Referer: `https://www.bilibili.com/video/${bvid}/` },
+    signal: AbortSignal.timeout(10_000),
+  });
+  const playData = await playResp.json() as { data?: { dash?: { audio?: Array<{ baseUrl?: string; base_url?: string }> } } };
+  const audio = playData.data?.dash?.audio?.[0];
+  return (audio?.baseUrl || audio?.base_url || "") as string;
+}
+
+/** 调 whisper 服务转录无字幕视频；服务不可用返回空串（降级回标题简介提炼） */
+async function transcribeWithWhisper(video: BiliVideo): Promise<string> {
+  try {
+    const audioUrl = await fetchAudioUrl(video.bvid);
+    if (!audioUrl) return "";
+    const resp = await fetch(`${WHISPER_URL}/transcribe`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ audioUrl, language: "zh", referer: "https://www.bilibili.com" }),
+      signal: AbortSignal.timeout(420_000), // 9 分钟音频 CPU 约 3-5 分钟
+    });
+    if (!resp.ok) {
+      logger.warn({ bvid: video.bvid, status: resp.status }, "Whisper service error");
+      return "";
+    }
+    const data = await resp.json() as { text?: string; duration?: number };
+    const text = (data.text || "").slice(0, 6000);
+    logger.info({ bvid: video.bvid, duration: data.duration, chars: text.length }, "Whisper transcribed");
+    return text;
+  } catch (err) {
+    logger.warn({ bvid: video.bvid, err: (err as Error).message }, "Whisper transcribe failed");
+    return "";
+  }
+}
+
 // ---- DeepSeek 结构化提炼 ----
 
 interface DistilledKnowledge {
@@ -262,12 +311,20 @@ export async function runDailyLearning(): Promise<{ scanned: number; learned: nu
       continue;
     }
 
+    let transcribed = 0; // 每关键词 whisper 转录计数（限流）
     for (const video of videos) {
       if (seen.has(video.bvid)) continue;
       seen.add(video.bvid);
       stats.scanned++;
 
-      const subtitle = await fetchSubtitleText(video.bvid);
+      let subtitle = await fetchSubtitleText(video.bvid);
+
+      // 无字幕高价值视频 → whisper 转录（播放≥50 才值得 CPU 成本，每关键词限 1 个）
+      if (!subtitle && video.play >= TRANSCRIBE_MIN_PLAY && transcribed < TRANSCRIBE_MAX_PER_KEYWORD) {
+        subtitle = await transcribeWithWhisper(video);
+        if (subtitle) transcribed++;
+      }
+
       const knowledge = await distillWithDeepSeek(video, subtitle);
       if (!knowledge) continue;
 

@@ -250,6 +250,29 @@ services:
       - full
       - standalone
 
+  # ---- Whisper 转录服务（无字幕视频 → 文本，供每日学习调用）----
+  whisper:
+    build:
+      context: ./docker/whisper
+      dockerfile: Dockerfile
+    container_name: onzo-whisper
+    restart: always
+    deploy:
+      resources:
+        limits:
+          memory: 1536M
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+    networks:
+      - onzo-network
+    profiles:
+      - production
+      - full
+      - standalone
+
   # ---- n8n Workflow Automation (OPTIONAL — 内建 scheduler 已覆盖全部定时职责) ----
   # 默认不启动（独立 profile）。仅在需要可视化编排时启用:
   #   docker compose --profile production --profile n8n up -d
