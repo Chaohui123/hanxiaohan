@@ -189,12 +189,25 @@ export class OzonOrderSyncService {
     logger.info({ storeId, postingNumber: posting.postingNumber, needsReview, marginPercent },
       "OzonOrderSync: Order processed");
 
+    // ---- Auto purchase record ----
+    // 新订单（非取消）必须在采购列表出现待处理记录并计入成本（2026-09-05 用户要求）；
+    // ON CONFLICT DO NOTHING 幂等，webhook 路径先到也不会重复
+    const isNew = existing.length === 0;
+    if (isNew && posting.status !== "cancelled") {
+      const { ensurePendingPurchase } = await import("./purchase-auto.js");
+      await ensurePendingPurchase(this.db, {
+        storeId,
+        postingNumber: posting.postingNumber,
+        ozonOrderId: posting.orderId,
+        products: enrichedProducts.map((p) => ({ offerId: p.offerId, sku: p.sku, quantity: p.quantity })),
+      }).catch((err) => logger.warn({ err: (err as Error).message, postingNumber: posting.postingNumber }, "Auto purchase record failed"));
+    }
+
     // ---- Notification (fallback path) ----
     // The webhook path (drain → processNewOrder) writes local_orders (keyed by
     // order_number) and notifies; skip here when that already happened.
     // First-seen wins. Match both the bare order_number and the package-level
     // posting_number.
-    const isNew = existing.length === 0;
     const becameCancelled = !isNew && existing[0].status !== "cancelled" && posting.status === "cancelled";
     if ((isNew && posting.status !== "cancelled") || becameCancelled) {
       const orderNumber = posting.orderNumber || posting.postingNumber;

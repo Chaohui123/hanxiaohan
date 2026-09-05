@@ -86,7 +86,19 @@ export async function processNewOrder(
       }
     }
 
-    // 3. Notify — unless the fallback order sync already announced this
+    // 3. Auto purchase record — 新订单必须在采购列表出现待处理记录并计入成本（2026-09-05 用户要求）；
+    // ON CONFLICT DO NOTHING 幂等，与轮询兜底路径（ozon-order-sync）先到先得
+    if (order.products.length > 0) {
+      const { ensurePendingPurchase } = await import("./purchase-auto.js");
+      await ensurePendingPurchase(db, {
+        storeId,
+        postingNumber: order.postingNumber,
+        ozonOrderId: order.orderId,
+        products: order.products.map((p) => ({ offerId: p.offerId, sku: p.sku, quantity: p.quantity })),
+      }).catch((err) => logger.warn({ err: (err as Error).message, postingNumber: order.postingNumber }, "Auto purchase record failed"));
+    }
+
+    // 4. Notify — unless the fallback order sync already announced this
     // posting (it writes ozon_orders and notifies when the webhook path
     // missed the order). Dedup both directions, first-seen wins.
     // Match by order_number: ozon_orders stores package-level posting_number
