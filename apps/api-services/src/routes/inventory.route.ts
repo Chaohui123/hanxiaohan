@@ -282,10 +282,15 @@ export function createInventoryRouter(): Router {
       const { getExchangeRate } = await import("../services/exchange-rate.js");
       const cnyToRub = (await getExchangeRate().catch(() => null))?.rate ?? 11.5;
       const priceCny = (Math.round((price / cnyToRub) * 100) / 100).toFixed(2);
+      // Ozon 规则：25-620¥ 价格区间的商品，划线价(old_price)折扣必须 >5%。
+      // 只推 price 时 Ozon 用现有划线价校验，目标价与划线价差距 <5% 会被拒
+      //（discount_for_average_price_is_too_small，MAR-ICE-BLADE-150-01 曾差 0.004% 踩线，2026-09-05 实证）。
+      // 联动划线价 = price/0.94（折扣约 6%，留边界浮点余量）。
+      const oldPriceCny = String(Math.ceil(parseFloat(priceCny) / 0.94));
       const pushResp = await client.request<{
         result?: Array<{ offer_id?: string; updated?: boolean; errors?: Array<{ description?: string }> }>;
       }>("POST", "/v1/product/import/prices", {
-        prices: [{ offer_id: offerId, price: priceCny, currency_code: "CNY" }],
+        prices: [{ offer_id: offerId, price: priceCny, old_price: oldPriceCny, currency_code: "CNY" }],
       });
       const pushItem = (pushResp.result || [])[0];
       // Ozon errors 元素结构不固定（description/code/message 都可能缺）— 全字段保留，否则只剩 "unknown" 无法定位
