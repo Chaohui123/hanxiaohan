@@ -29,7 +29,6 @@ const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || "";
 const DEEPSEEK_BASE = process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com";
 
 const KIMI_API_KEY = process.env.KIMI_API_KEY || "";
-const GLM_BASE = process.env.KIMI_BASE_URL || "https://open.bigmodel.cn/api/paas/v4";
 
 // ---- 待确认文案缓存 ----
 
@@ -288,56 +287,48 @@ export async function analyzeImage(
 
   const imageUrl = images[0];
 
-  // 2. 调用 GLM-4V 分析图片
-  const resp = await fetch(`${GLM_BASE}/chat/completions`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${KIMI_API_KEY}`,
-      "Content-Type": "application/json",
-    },
-    body: JSON.stringify({
-      model: "glm-4v",
-      messages: [
-        {
-          role: "user",
-          content: [
-            { type: "text", text: IMAGE_ANALYSIS_PROMPT },
-            { type: "image_url", image_url: { url: imageUrl } },
-          ],
-        },
-      ],
-      max_tokens: 800,
-      temperature: 0.3,
-    }),
-    signal: AbortSignal.timeout(30_000),
+  // 2. Kimi K3 视觉分析（2026-09-05 自 GLM-4V 迁移：GLM key 过期；
+  // Kimi 端点拒收外部 URL — 必须先下载转 base64 data URI）
+  const imgResp = await fetch(imageUrl, { signal: AbortSignal.timeout(15_000) });
+  if (!imgResp.ok) throw new Error(`图片下载失败: HTTP ${imgResp.status}`);
+  const mimeType = imgResp.headers.get("content-type")?.split(";")[0] || "image/jpeg";
+  const base64 = Buffer.from(await imgResp.arrayBuffer()).toString("base64");
+
+  const { KimiVisionClient } = await import("@onzo/glm-integration");
+  const client = new KimiVisionClient({ apiKey: KIMI_API_KEY });
+  const result = await client.chatCompletion<{ score?: number; issues?: string[]; suggestions?: string[] }>({
+    messages: [
+      {
+        role: "user",
+        content: [
+          { type: "text", text: IMAGE_ANALYSIS_PROMPT },
+          { type: "image_url", image_url: { url: `data:${mimeType};base64,${base64}` } },
+        ],
+      },
+    ],
+    maxTokens: 2000,
+    responseFormat: { type: "json_object" },
   });
 
-  if (!resp.ok) {
-    throw new Error(`GLM API ${resp.status}`);
+  // 3. 解析 JSON 响应（client 内置解析失败时 fallback 手动截取）
+  let parsed = result.parsed;
+  if (!parsed) {
+    try {
+      const jsonMatch = result.content.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, result.content];
+      parsed = JSON.parse((jsonMatch[1] || result.content).trim());
+    } catch {
+      logger.warn({ raw: result.content.slice(0, 500) }, "Failed to parse Kimi vision JSON");
+      parsed = { score: 50, issues: ["无法解析分析结果"], suggestions: [] };
+    }
   }
-
-  const data = (await resp.json()) as {
-    choices: Array<{ message: { content: string } }>;
-  };
-
-  const raw = data.choices?.[0]?.message?.content || "";
-
-  // 3. 解析 JSON 响应
-  let parsed: { score?: number; issues?: string[]; suggestions?: string[] };
-  try {
-    const jsonMatch = raw.match(/```(?:json)?\s*([\s\S]*?)```/) || [null, raw];
-    parsed = JSON.parse((jsonMatch[1] || raw).trim());
-  } catch {
-    logger.warn({ raw: raw.slice(0, 500) }, "Failed to parse GLM JSON");
-    parsed = { score: 50, issues: ["无法解析分析结果"], suggestions: [] };
-  }
+  const finalParsed = parsed ?? { score: 50, issues: [], suggestions: [] };
 
   return {
     offerId,
     imageUrl,
-    score: Math.min(100, Math.max(0, parsed.score || 50)),
-    issues: parsed.issues || [],
-    suggestions: parsed.suggestions || [],
+    score: Math.min(100, Math.max(0, finalParsed.score || 50)),
+    issues: finalParsed.issues || [],
+    suggestions: finalParsed.suggestions || [],
   };
 }
 

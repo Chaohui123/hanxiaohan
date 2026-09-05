@@ -282,6 +282,9 @@ importers:
       '@onzo/feishu-bot':
         specifier: workspace:*
         version: link:../../packages/feishu-bot
+      '@onzo/glm-integration':
+        specifier: workspace:*
+        version: link:../../packages/ai
       '@onzo/logger':
         specifier: workspace:*
         version: link:../../packages/logger
