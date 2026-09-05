@@ -115,6 +115,19 @@ export function registerCoreJobs(deps: CoreJobDeps): void {
     if (report) logger.info(report, "Knowledge janitor completed");
   });
 
+  // 价格×重量→CEL 档位仓每日自检（2026-09-06：凡绕过调价路由的改价都会导致
+  // 价格×仓库错配——import 恢复/后台手动改价——本 job 每日幂等纠正，不依赖调价路由单点）
+  registerJob("warehouse-band-sync", 24 * 3600_000, async () => {
+    const { syncWarehouseBands } = await import("../services/warehouse-band-sync.js");
+    const r = await syncWarehouseBands(ozonClient).catch((err) => {
+      logger.error({ err: (err as Error).message }, "Warehouse band sync failed");
+      return null;
+    });
+    if (r && (r.migrated.length > 0 || r.errors.length > 0)) {
+      logger.info({ migrated: r.migrated, errors: r.errors, checked: r.checked }, "Warehouse band sync applied");
+    }
+  });
+
   registerJob("market-data-collect", 24 * 3600_000, async () => {
     const { collectMarketData } = await import("../services/market-data-collector.js");
     await collectMarketData([], ozonClient as never).catch((err) =>
