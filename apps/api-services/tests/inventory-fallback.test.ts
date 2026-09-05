@@ -253,9 +253,9 @@ describe("PUT /api/inventory/:offerId/price — 真实推 Ozon 改价", () => {
     expect(res.status).toBe(200);
     expect(res.body).toMatchObject({ success: true, offerId: "OFFER-1", newPrice: 1500, priceCny: "150.00" });
 
-    // 验证 Ozon 推送载荷：CNY 价 = RUB / 汇率(10)
+    // 验证 Ozon 推送载荷：CNY 价 = RUB / 汇率(10)；old_price 联动划线价 = ceil(price/0.94)（Ozon 5% 折扣规则）
     const pushCall = state.ozonRequest.mock.calls.find((c) => c[1] === "/v1/product/import/prices");
-    expect(pushCall?.[2]).toEqual({ prices: [{ offer_id: "OFFER-1", price: "150.00", currency_code: "CNY" }] });
+    expect(pushCall?.[2]).toEqual({ prices: [{ offer_id: "OFFER-1", price: "150.00", old_price: "160", currency_code: "CNY" }] });
 
     // 审计记录已写
     const audit = sqlite.db.prepare("SELECT * FROM promo_pricing_history WHERE offer_id = ?").get("OFFER-1") as Record<string, unknown>;
