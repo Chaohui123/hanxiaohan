@@ -216,9 +216,17 @@ export async function processCallbackMessage(
 
     case "SUPPLIER_SHIPPED": {
       if (!message.trackingNumber) return { matched: false, action: "none", error: "Missing trackingNumber" };
+      // 必须按 1688 订单号精确匹配 — 无条件批量更新会把所有待发货采购单错配成同一运单（2026-09-05 审查实证）
+      const shippedOrderId = message.orderId || message.paySerial || "";
+      if (!shippedOrderId) return { matched: false, action: "none", error: "Missing orderId/paySerial for matching" };
       const result = await db.run(
-        "UPDATE purchase_1688 SET logistics_status = 'shipped', logistics_tracking = ?, updated_at = NOW() WHERE logistics_tracking IS NULL AND payment_status = 'paid'",
-        [message.trackingNumber]
+        `UPDATE purchase_1688
+         SET logistics_status = 'shipped', logistics_tracking = ?,
+             alibaba_order_id = COALESCE(NULLIF(alibaba_order_id, ''), ?), updated_at = NOW()
+         WHERE (alibaba_order_id = ? OR pay_serial = ?)
+           AND payment_status = 'paid'
+           AND (logistics_tracking IS NULL OR logistics_tracking = '')`,
+        [message.trackingNumber, shippedOrderId, shippedOrderId, shippedOrderId]
       );
       if (result.changes > 0) {
         await emitEvent("ORDER_SHIPPED", {

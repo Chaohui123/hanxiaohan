@@ -37,6 +37,7 @@ const PUBLIC_PATHS = [
   "/ready/pipeline",
   "/images",
   "/api/auth/login",
+  "/api/1688/message/callback",
   "/api/webhook/ozon",
   "/api/v1/webhook/ozon",
   "/ozon/webhook",

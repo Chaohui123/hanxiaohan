@@ -33,7 +33,10 @@ export function create1688CallbackRouter(): Router {
   router.post("/1688/message/callback", async (req, res) => {
     const clientIp = (req.headers["x-forwarded-for"] as string) || req.ip || "unknown";
     const signatureHeader = (req.headers["x-1688-signature"] as string) || "";
-    const rawBody = req.body instanceof Buffer ? req.body.toString("utf-8") : JSON.stringify(req.body);
+    // 必须用 index.ts verify 捕获的原始字节 — JSON.stringify(req.body) 重序列化后
+    // 空白/键序/unicode 与原文不一致，HMAC 验签对真实回调必败（2026-09-05 审查实证）
+    const rawBody = (req as { rawBody?: Buffer }).rawBody?.toString("utf-8")
+      ?? (req.body instanceof Buffer ? req.body.toString("utf-8") : JSON.stringify(req.body));
     const isProduction = (process.env.ENV || process.env.NODE_ENV) === "production";
 
     // 0. IP whitelist check (production only)
