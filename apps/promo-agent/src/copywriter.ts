@@ -282,7 +282,20 @@ export async function analyzeImage(
     throw new Error(`无法获取商品信息: ${(err as Error).message}`);
   }
 
-  const images = (product.images as string[]) || [];
+  let images = (product.images as string[]) || [];
+  // getProduct 契约无 images 时，调专用图片端点（2026-09-05 断点实证：/api/inventory/:offerId 不含 images）
+  if (images.length === 0) {
+    try {
+      const imgResp = await fetch(`${config.apiBase}/api/inventory/${encodeURIComponent(offerId)}/images`, {
+        headers: { "X-API-Key": config.apiKey },
+        signal: AbortSignal.timeout(15_000),
+      });
+      if (imgResp.ok) {
+        const imgData = await imgResp.json() as { images?: string[] };
+        images = imgData.images || [];
+      }
+    } catch { /* fall through to 无主图 error */ }
+  }
   if (images.length === 0) {
     throw new Error("该商品无主图");
   }

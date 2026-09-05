@@ -22,6 +22,7 @@ interface OzonInventoryItem {
   orders: number;
   revenue: number;
   quantity: number;
+  images?: string[]; // Ozon 图片 URL（analyzeImage 等图像分析依赖）
 }
 
 // 90s 轻量内存缓存，避免 decision-engine 每店循环重复拉取
@@ -55,7 +56,7 @@ async function fetchOzonInventoryItems(): Promise<OzonInventoryItem[]> {
     }
 
     // 2. 商品详情（offer_id / name / 在售状态）
-    const infoResp = await client.request<{ items?: Array<{ offer_id?: string; name?: string; statuses?: { status_name?: string } }> }>(
+    const infoResp = await client.request<{ items?: Array<{ offer_id?: string; name?: string; images?: string[]; statuses?: { status_name?: string } }> }>(
       "POST", "/v3/product/info/list", { product_id: productIds },
     );
     // 排除停售品（statuses.status_name="Не продается"，如 67F 商标停售）——
@@ -120,6 +121,7 @@ async function fetchOzonInventoryItems(): Promise<OzonInventoryItem[]> {
         orders: 0,
         revenue: 0,
         quantity: stock,
+        images: Array.isArray(info.images) ? info.images : [],
       });
     }
 
@@ -200,6 +202,17 @@ export function createInventoryRouter(): Router {
           cost_cny: f.cost, weight_kg: f.weight, updated_at: null,
         })),
       });
+    } catch (err) {
+      res.status(500).json({ error: (err as Error).message });
+    }
+  });
+
+  /** GET /api/inventory/:offerId/images — 商品图片 URL（图像分析专用轻量端点，按需拉 Ozon 不污染 getProduct 语义） */
+  router.get("/:offerId/images", async (req, res) => {
+    try {
+      const { offerId } = req.params;
+      const item = (await fetchOzonInventoryItems()).find((i) => i.offerId === offerId);
+      res.json({ offerId, images: item?.images || [] });
     } catch (err) {
       res.status(500).json({ error: (err as Error).message });
     }
