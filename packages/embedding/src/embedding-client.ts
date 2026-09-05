@@ -53,15 +53,22 @@ export class EmbeddingClient {
     const { provider, baseUrl, apiKey, model } = this.config;
 
     if (provider === "zhipu") {
-      const resp = await fetch(`${baseUrl}/embeddings`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-        body: JSON.stringify({ model, input: texts }),
-        signal: AbortSignal.timeout(this.config.requestTimeoutMs),
-      });
-      if (!resp.ok) throw new Error(`Zhipu embedding API ${resp.status}: ${(await resp.text()).slice(0, 200)}`);
-      const data = await resp.json() as { data: Array<{ index: number; embedding: number[] }> };
-      return [...data.data].sort((a, b) => a.index - b.index).map((d) => d.embedding);
+      try {
+        const resp = await fetch(`${baseUrl}/embeddings`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
+          body: JSON.stringify({ model, input: texts }),
+          signal: AbortSignal.timeout(this.config.requestTimeoutMs),
+        });
+        if (!resp.ok) throw new Error(`Zhipu embedding API ${resp.status}: ${(await resp.text()).slice(0, 200)}`);
+        const data = await resp.json() as { data: Array<{ index: number; embedding: number[] }> };
+        return [...data.data].sort((a, b) => a.index - b.index).map((d) => d.embedding);
+      } catch (err) {
+        // 智谱 key 失效（401 等）时降级本地 hash 向量 — 内容入库优先，检索质量下降优于写入失败；
+        // key 恢复后可通过 reindex 重建向量（2026-09-05 GLM_API_KEY 过期实证）
+        logger.error({ err: (err as Error).message }, "Zhipu embedding failed — degraded to local hash vectors (update GLM/EMBEDDING key and reindex)");
+        return texts.map((t) => this.localEmbed(t));
+      }
     }
 
     if (provider === "deepseek") {
