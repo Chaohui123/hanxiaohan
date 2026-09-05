@@ -85,6 +85,11 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction):
     return;
   }
 
+  // AUTH-DEBUG 临时诊断：记录白名单未命中时的路径真值（排查 1688 callback 401）
+  if (req.path.includes("1688")) {
+    console.log("AUTH-DEBUG", JSON.stringify({ path: req.path, url: req.url, originalUrl: req.originalUrl, baseUrl: req.baseUrl }));
+  }
+
   // Dev mode skips auth (must be explicitly set to "dev")
   if ((process.env.ENV || process.env.NODE_ENV) === "dev") {
     next();
