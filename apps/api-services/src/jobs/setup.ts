@@ -105,6 +105,16 @@ export function registerCoreJobs(deps: CoreJobDeps): void {
     if (stats) logger.info(stats, "Daily learning completed");
   });
 
+  // 知识库每周维护：过期 TTL 清理 + 低质清理 + 语义重复合并（2026-09-05 用户要求）
+  registerJob("knowledge-janitor", 7 * 24 * 3600_000, async () => {
+    const { runKnowledgeJanitor } = await import("../services/knowledge-janitor.js");
+    const report = await runKnowledgeJanitor().catch((err) => {
+      logger.error({ err: (err as Error).message }, "Knowledge janitor cycle failed");
+      return null;
+    });
+    if (report) logger.info(report, "Knowledge janitor completed");
+  });
+
   registerJob("market-data-collect", 24 * 3600_000, async () => {
     const { collectMarketData } = await import("../services/market-data-collector.js");
     await collectMarketData([], ozonClient as never).catch((err) =>

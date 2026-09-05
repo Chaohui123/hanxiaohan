@@ -146,6 +146,14 @@ export const NOTIFICATION_EVENTS: NotificationEvent[] = [
     rateLimit: 2,
   },
   {
+    key: "KNOWLEDGE_JANITOR",
+    level: "info",
+    label: "知识库维护",
+    template: "🧹 知识库维护完成: 清理过期{{expired}}条, 低质{{lowQuality}}条, 语义重复{{duplicates}}条. 当前库藏{{remaining}}条.",
+    force: false,
+    rateLimit: 2,
+  },
+  {
     key: "EXCHANGE_RATE_STALE",
     level: "warn",
     label: "汇率过期",

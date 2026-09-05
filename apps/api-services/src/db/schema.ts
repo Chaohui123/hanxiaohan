@@ -293,7 +293,7 @@ export async function initSchema(db: DbAdapter): Promise<void> {
       id TEXT PRIMARY KEY, category TEXT NOT NULL,
       scenario TEXT NOT NULL, content_ru TEXT NOT NULL,
       content_zh TEXT, keywords TEXT[],
-      embedding vector(2048), source TEXT DEFAULT 'manual',
+      embedding vector(1024), source TEXT DEFAULT 'manual',
       effectiveness_score REAL DEFAULT 0, usage_count INTEGER DEFAULT 0,
       created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW()
     );
@@ -303,7 +303,7 @@ export async function initSchema(db: DbAdapter): Promise<void> {
       id TEXT PRIMARY KEY, offer_id TEXT NOT NULL,
       category_id INTEGER, report_text TEXT NOT NULL,
       price_trend_summary TEXT, action_suggestion TEXT,
-      embedding vector(2048), period_start TEXT, period_end TEXT,
+      embedding vector(1024), period_start TEXT, period_end TEXT,
       created_at TIMESTAMP DEFAULT NOW()
     );
 
@@ -311,7 +311,7 @@ export async function initSchema(db: DbAdapter): Promise<void> {
     CREATE TABLE IF NOT EXISTS rag_product_knowledge (
       id TEXT PRIMARY KEY, category_id INTEGER, category_name TEXT,
       title TEXT NOT NULL, content TEXT NOT NULL, source_url TEXT,
-      keywords TEXT[], embedding vector(2048),
+      keywords TEXT[], embedding vector(1024),
       data_source TEXT DEFAULT 'scraper',
       created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW()
     );
@@ -321,7 +321,7 @@ export async function initSchema(db: DbAdapter): Promise<void> {
       id TEXT PRIMARY KEY, category TEXT NOT NULL,
       category_id INTEGER, original_text TEXT NOT NULL,
       optimized_text TEXT, optimization_notes TEXT,
-      embedding vector(2048), performance_score REAL DEFAULT 0,
+      embedding vector(1024), performance_score REAL DEFAULT 0,
       created_at TIMESTAMP DEFAULT NOW()
     );
 
@@ -329,7 +329,7 @@ export async function initSchema(db: DbAdapter): Promise<void> {
     CREATE TABLE IF NOT EXISTS rag_operations_playbook (
       id TEXT PRIMARY KEY, title TEXT NOT NULL,
       scenario TEXT NOT NULL, content TEXT NOT NULL,
-      tags TEXT[], embedding vector(2048),
+      tags TEXT[], embedding vector(1024),
       author TEXT DEFAULT 'system', priority INTEGER DEFAULT 0,
       created_at TIMESTAMP DEFAULT NOW(), updated_at TIMESTAMP DEFAULT NOW()
     );

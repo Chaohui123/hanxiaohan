@@ -197,7 +197,7 @@ async function distillWithDeepSeek(video: BiliVideo, subtitle: string): Promise<
   }
 }
 
-// ---- 入库（向量知识库） ----
+// ---- 入库（向量知识库，经 Knowledge Gate 门禁：边界+真实性+语义查重） ----
 
 async function saveToPlaybook(video: BiliVideo, k: DistilledKnowledge): Promise<boolean> {
   const db = await getDb().catch(() => null);
@@ -221,23 +221,22 @@ async function saveToPlaybook(video: BiliVideo, k: DistilledKnowledge): Promise<
   ].filter(Boolean).join("\n");
 
   try {
-    const { EmbeddingClient } = await import("@onzo/embedding");
-    const vector = (await new EmbeddingClient().embed(`${video.title} ${k.summary}`)).vector;
-    await db.run(
-      `INSERT INTO rag_operations_playbook (id, title, scenario, content, tags, author, priority, embedding)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8::vector)`,
-      [
-        `learn_${video.bvid}`,
-        `每日学习: ${video.title}`.slice(0, 120),
-        "learning",
-        content,
-        ["每日学习", "B站", ...k.keywords.slice(0, 5).map((w) => w.ru)],
-        "daily-learning",
-        1,
-        `[${vector.join(",")}]`,
-      ],
-    );
-    return true;
+    const { knowledgeGate, persistToPlaybook } = await import("../services/knowledge-gate.js");
+    const input = {
+      id: `learn_${video.bvid}`,
+      title: `每日学习: ${video.title}`.slice(0, 120),
+      scenario: "learning",
+      content,
+      tags: ["每日学习", "B站", ...k.keywords.slice(0, 5).map((w) => w.ru)],
+      author: "daily-learning",
+      priority: 1,
+    };
+    const gate = await knowledgeGate(input);
+    if (gate.action === "reject" || gate.action === "skip") {
+      logger.info({ bvid: video.bvid, action: gate.action, reason: gate.reason }, "DailyLearning: gated out");
+      return false;
+    }
+    return await persistToPlaybook(input, gate);
   } catch (err) {
     logger.error({ bvid: video.bvid, err: (err as Error).message }, "Playbook insert failed");
     return false;
