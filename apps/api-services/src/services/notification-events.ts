@@ -138,6 +138,14 @@ export const NOTIFICATION_EVENTS: NotificationEvent[] = [
     rateLimit: 5,
   },
   {
+    key: "DAILY_LEARNING",
+    level: "info",
+    label: "每日学习",
+    template: "📚 每日学习完成: 扫描{{scanned}}个视频, 新沉淀{{learned}}条知识, 提取{{keywords}}个关键词.\n视频: {{titles}}\n关键词: {{topKeywords}}",
+    force: false,
+    rateLimit: 2,
+  },
+  {
     key: "EXCHANGE_RATE_STALE",
     level: "warn",
     label: "汇率过期",

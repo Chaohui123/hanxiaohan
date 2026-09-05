@@ -94,6 +94,17 @@ export function registerCoreJobs(deps: CoreJobDeps): void {
     if (pruned > 0) logger.info({ pruned }, "Task queue pruned");
   });
 
+  // 每日学习：从公开网站（B站）学习跨境知识，DeepSeek 提炼后沉淀 RAG 知识库，
+  // 供选品/文案/调价检索引用（2026-09-05 用户要求：全自动无审批迭代专业度）
+  registerJob("daily-learning", 24 * 3600_000, async () => {
+    const { runDailyLearning } = await import("../jobs/daily-learning.js");
+    const stats = await runDailyLearning().catch((err) => {
+      logger.error({ err: (err as Error).message }, "Daily learning cycle failed");
+      return null;
+    });
+    if (stats) logger.info(stats, "Daily learning completed");
+  });
+
   registerJob("market-data-collect", 24 * 3600_000, async () => {
     const { collectMarketData } = await import("../services/market-data-collector.js");
     await collectMarketData([], ozonClient as never).catch((err) =>
