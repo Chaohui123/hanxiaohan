@@ -46,12 +46,14 @@ COPY apps/api-services/package.json apps/api-services/tsconfig.json apps/api-ser
 # Step 2: Install deps (includes devDeps for TS compilation)
 RUN pnpm install --no-frozen-lockfile --ignore-scripts --config.verify-deps-before-run=false
 
-# Rebuild better-sqlite3 native binding for Alpine musl.
-# (allowBuilds:false skips it at install; npm rebuild can't resolve pnpm's
-# symlinked store layout. Prefer musl prebuilt download; fall back to
-# source compile with pinned node-gyp@10 — v13 breaks on Python 3.14.)
+# Rebuild better-sqlite3 native binding for Alpine musl — OPTIONAL.
+# PG is the production database; SQLite is only the local/dev fallback (lazy-imported).
+# prebuild-install / node-gyp downloads are the flakiest step of this build
+# (repeated timeouts 2026-09-05) — never let them fail the whole image;
+# if the binding is missing, only the PG-outage fallback path is affected.
 RUN cd node_modules/.pnpm/better-sqlite3@*/node_modules/better-sqlite3 \
-    && (npx --yes prebuild-install || npx --yes node-gyp@10 rebuild)
+    && (npx --yes prebuild-install || npx --yes node-gyp@10 rebuild \
+        || echo "WARN: better-sqlite3 native build skipped — PG-only runtime")
 
 # Step 3: Copy full source
 COPY packages/ packages/
