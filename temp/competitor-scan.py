@@ -85,7 +85,30 @@ def api(method, path, body=None):
     with urllib.request.urlopen(req, timeout=30) as r:
         return json.loads(r.read().decode("utf-8"))
 
+def ensure_webbridge():
+    """启动前确保 WebBridge daemon 在跑（僵死自愈：daemon 不在则拉起，拉起失败明确报错）。
+    2026-09-05 实证：daemon 僵死后本任务报「目标计算机积极拒绝」。"""
+    import subprocess
+    try:
+        with urllib.request.urlopen(urllib.request.Request(WB, data=b"{}", headers={"Content-Type": "application/json"}), timeout=5):
+            return  # daemon 在线
+    except Exception:
+        pass
+    exe = os.path.expanduser(r"~\.kimi-webbridge\bin\kimi-webbridge.exe")
+    print(f"WebBridge daemon 未运行，尝试拉起: {exe}")
+    subprocess.run([exe, "start"], capture_output=True, timeout=30)
+    time.sleep(3)
+    try:
+        with urllib.request.urlopen(urllib.request.Request(WB, data=b"{}", headers={"Content-Type": "application/json"}), timeout=5):
+            print("WebBridge daemon 已拉起")
+            return
+    except Exception as e:
+        print(f"FATAL: WebBridge daemon 拉起失败（可能 pid 文件僵死：删除 ~/.kimi-webbridge/daemon.pid 后重试）: {e}")
+        sys.exit(1)
+
+
 def main():
+    ensure_webbridge()
     only = sys.argv[1] if len(sys.argv) > 1 else None
     links = api("GET", "/api/promo/competitor-links" + (f"?offerId={only}" if only else ""))["items"]
     if not links:
