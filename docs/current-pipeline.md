@@ -143,6 +143,8 @@ node scripts/download-1688-assets.cjs <1688链接或offerId> [输出根目录]
 - **`order_id` INTEGER 溢出（8/10-8/11 sync 154 次 errors:1 的真凶）**：Ozon order_id 为 11 位数（38394336004）超 PG int4 上限，sync 拉到订单后 INSERT 直接失败——这就是"凭据正常、API 正常但永远 0 单"的原因。修复：`local_orders.order_id` / `ozon_orders.order_id` / `purchase_1688.ozon_order_id` 三列改 BIGINT（schema.ts + 生产库已 ALTER）。8/10 首单已手动补录进 ozon_orders（cancelled 态）。
 - 教训：**job 报错必须带内容**，只记数量的日志等于没有日志。
 
+**每日学习多平台升级（2026-09-06，commit `6bcc85f`）**：源 1 B 站关键词 4→14（运营/选品/广告/内容评级/俄电商/Yandex/船外机维修/冰钓冬钓/跨境物流/选品方法）；源 2 新增 **vc.ru 俄文一手电商源**（标签 RSS `vc.ru/rss/tag/{ozon|маркетплейсы|wildberries|e-commerce}`，72h 窗口每标签 2 篇，content:encoded 全文提炼）。多源抽象 `LearningItem`（sourceId 幂等）；飞书简报**无论有无新入库都发**（force:true 突破静默，模板含分源扫描/门禁拦截/去重统计——此前 learned:0 静默导致"没启动"误判）。scheduler 首跑双跑修复（tick 等 stagger 时点，fake-timers 回归测试）。候选待扩：seller-edu.ozon.ru（SPA 需适配）、Habr（RSS 迁移中）、YouTube（需代理）。
+
 ### 推广汇报链路（2026-08-13 修复，commit `8acbe4c`+`2dce21f`）
 
 **问题**：飞书群日报/周报/决策卡片全是硬编码假数据（实证 7/31-8/12 全部消息）：日报永远 0 单（daily_sales 表无 job 写入）、周报 `orders:0` 写死、"广告花费"实为 LLM token 成本、自然流 70/30 拍脑袋、决策卡片空壳（商品源 `/api/inventory` 查空表 product_performance 且 cost 硬编码 0）。
