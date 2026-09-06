@@ -220,6 +220,8 @@ node scripts/download-1688-assets.cjs <1688链接或offerId> [输出根目录]
 
 **货源映射"错行"真相（2026-09-06 五重验证翻案）**：`sku_1688_mapping` **全部正确，一条未错**——61N→837185927166（新通化油器包，用户实测+8/13素材+¥32吻合）、66T→608822032027（亚玛瑞，payload实证）、blade130→950785053114（江银刀片，选品包实证）、F20→993176717131（马力机械化油器包，9/1素材目检）、blade150→982609015553（泰兰科刀片130/150多规格，WebBridge实时标题实证）。**真根因=9/5 批量抓取（img-iteration）WebBridge 后台 tab 串页**：navigate 与提取竞态（后台 tab 节流未渲染完即提取），每个 manifest 记的是队列里其他任务的页面（61N 记成刀片、blade 记成 6E5 化油器包、F20 记成 67F 叶轮、blade150 记成 66T 化油器包），错素材直接进批量换图。**防范硬闸门**：①WebBridge 批量抓取 navigate 后必须校验"当前页身份==目标"（URL/页面 offer id/标题关键词）再提取，不符则 bringToFront 重渲染重试，连续不符标记跳过——未校验的 manifest 一律不可信；②素材入库前目检首图与品类一致；③故障期产物（temp/img-iteration/ 9/5 批次 manifest+images）标注不可信，以各品 8 月上架素材（temp/src-assets/、listing-*/）为准；④引用 1688 链接前实时取标题校验品类（链接内容可变，但本次非换品）。
 
+**MCP 工具链接入（2026-09-06，双子代理调研后接入）**：`~/.kimi-code/mcp.json` 三个 server——①**excel**（excel-mcp v1.29.1，`~/.local/bin/excel-mcp-server.exe` 直连；⚠️ uvx 启动慢会超时，必须 exe 直连；PyPI 用清华镜像 `UV_INDEX_URL=https://pypi.tuna.tsinghua.edu.cn/simple uv tool install`）②**ozon-buyer**（eduard256/ozon-mcp-server 60★，`D:/Onzo/tools/ozon-mcp-server/src/index.js`，headless Chromium 过 Ozon 反爬：搜索/商品详情/买家评论三工具结构化 JSON——选品调研/竞品监控新通道，首请求过反爬 ~12s 后 0.3-1s）③**deepl**（官方 npx deepl-mcp-server，key 已配，俄语翻译+术语表）。**明确不接**：Ozon Seller 写操作第三方 MCP（个位数 star，生产风险大于收益；自研 wrapper 已全覆盖）；nexscope（付费 API，先小额实测）。skill 候选：motiful/product-shots（主图，MIT，待改造为 Ozon 规范+俄语版）。评估全录：`design-mcp-skill-survey-2026-09`（知识库）。
+
 ### 在售品优化实战（2026-09-06，按新 SOP 执行）
 
 **背景**：用户归档至 6 个船配品（61N 已出单不动）。优化对象 5 个：6E7/66T/6E5/67F-02/F20-CARB。
