@@ -84,9 +84,12 @@ export async function startScheduler(): Promise<void> {
   }
 
   // Stagger initial runs over 60 seconds (leader only)
+  // 2026-09-06 修复：60s tick 的 !lastRun 判定比 stagger 先抢跑导致启动期双跑；
+  // tick 首跑必须等 stagger 计划时点（failover 时新 leader 重走 startScheduler，stagger 重排）
+  const schedulerStartedAt = Date.now();
   if (isLeader) {
     jobs.forEach((job, i) => {
-      setTimeout(() => runJob(job), (i + 1) * 10_000);
+      setTimeout(() => { if (!job.lastRun && !job.running) void runJob(job); }, (i + 1) * 10_000);
     });
   }
 
@@ -94,9 +97,14 @@ export async function startScheduler(): Promise<void> {
   timer = setInterval(() => {
     if (!isLeader) return; // follower — skip job execution
     const now = Date.now();
-    for (const job of jobs) {
+    for (const [i, job] of jobs.entries()) {
       if (job.running) continue;
-      if (!job.lastRun || now - job.lastRun >= job.intervalMs) {
+      if (!job.lastRun) {
+        if (now - schedulerStartedAt < (i + 1) * 10_000) continue; // 等 stagger 首跑
+        runJob(job);
+        continue;
+      }
+      if (now - job.lastRun >= job.intervalMs) {
         runJob(job);
       }
     }

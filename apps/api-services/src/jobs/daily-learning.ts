@@ -1,13 +1,14 @@
 // ============================================================
-// Daily Learning — 每日从公开网站学习跨境电商知识并沉淀到知识库
+// Daily Learning — 每日从公开平台学习跨境电商知识并沉淀到知识库
 //
-// 流水线（每日 03:30）：
-//   B 站关键词搜索（wbi 签名）→ 近 48h 高播放视频 → CC 字幕提取
+// 流水线（每日一次，scheduler 注册）：
+//   源1 B 站：关键词搜索（wbi 签名）→ 近 96h 高播放视频 → CC 字幕/whisper 转录
+//   源2 vc.ru：俄文电商标签 RSS（ozon/маркетплейсы/wildberries/e-commerce）→ 正文
 //   → DeepSeek 结构化提炼（关键词/搜索习惯/选品线索/主图视频实践/推广策略）
-//   → 写入 rag_operations_playbook（向量检索，供选品/文案/调价引用）
-//   → 飞书推送学习摘要
+//   → Knowledge Gate 门禁（边界+真实性+语义查重）→ rag_operations_playbook
+//   → 飞书推送学习简报（无论是否有新入库都发，2026-09-06 用户要求可见性）
 //
-// 设计原则：全自动无审批；防幻觉（只提取内容明确出现的知识）；幂等（bvid 去重）。
+// 设计原则：全自动无审批；防幻觉（只提取内容明确出现的知识）；幂等（sourceId 去重）。
 // ============================================================
 
 import crypto from "node:crypto";
@@ -17,8 +18,17 @@ import { emitEvent } from "../services/notification-events.js";
 
 // ---- 配置 ----
 
-const SEARCH_KEYWORDS = (process.env.LEARNING_BILI_KEYWORDS || "Ozon运营,Ozon关键词,跨境电商 俄罗斯,Yandex推广").split(",");
+// B 站搜索词（2026-09-06 扩容 4→14：覆盖运营/选品/广告/内容/物流+我方赛道船配/冰钓）
+const SEARCH_KEYWORDS = (process.env.LEARNING_BILI_KEYWORDS ||
+  "Ozon运营,Ozon关键词,Ozon选品,Ozon广告,Ozon内容评级,跨境电商 俄罗斯,Yandex推广,俄罗斯电商,船外机维修,冰钓装备,冬钓装备,跨境物流 俄罗斯,Ozon卖家,跨境选品方法"
+).split(",").map((s) => s.trim()).filter(Boolean);
 const MAX_VIDEOS_PER_KEYWORD = 2;
+
+// vc.ru 俄文电商标签（RSS 直取，2026-09-06 新增俄文一手源）
+const VC_TAGS = (process.env.LEARNING_VC_TAGS || "ozon,маркетплейсы,wildberries,e-commerce").split(",").map((s) => s.trim()).filter(Boolean);
+const MAX_VC_PER_TAG = 2;
+const VC_RECENT_HOURS = parseInt(process.env.LEARNING_VC_RECENT_HOURS || "72", 10);
+
 // 跨境垂类新视频发布初期播放普遍几十（2026-09-05 实测：48h 内 Ozon 新视频播放 2-31）——
 // 阈值 300 会把一切过滤掉；30 是质量与召回的平衡点
 const MIN_PLAY_COUNT = parseInt(process.env.LEARNING_MIN_PLAY || "30", 10);
@@ -27,6 +37,21 @@ const DEEPSEEK_API_KEY = process.env.DEEPSEEK_API_KEY || "";
 const DEEPSEEK_BASE = process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com";
 
 const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0 Safari/537.36";
+
+// ---- 统一学习条目（多源抽象） ----
+
+interface LearningItem {
+  /** 幂等键：B 站=bvid，vc.ru=文章 URL */
+  sourceId: string;
+  source: "bilibili" | "vc.ru";
+  title: string;
+  author: string;
+  /** 正文/字幕（可为空，空则仅基于标题提炼并从严） */
+  text: string;
+  url: string;
+  publishedAt: number; // 秒
+  play?: number;       // 仅 B 站（whisper 门槛用）
+}
 
 // ---- B 站 wbi 签名（公开算法） ----
 
@@ -186,6 +211,52 @@ async function transcribeWithWhisper(video: BiliVideo): Promise<string> {
   }
 }
 
+// ---- vc.ru 源（俄文电商标签 RSS） ----
+
+/** 解析 RSS XML 为条目（轻量正则解析，content:encoded 优先于 description） */
+export function parseRssItems(xml: string): Array<{ title: string; link: string; author: string; text: string; pubTs: number }> {
+  const items: Array<{ title: string; link: string; author: string; text: string; pubTs: number }> = [];
+  const blocks = xml.match(/<item>[\s\S]*?<\/item>/g) || [];
+  const pick = (block: string, tag: string) => {
+    const m = block.match(new RegExp(`<${tag}[^>]*>(?:<!\\[CDATA\\[)?([\\s\\S]*?)(?:\\]\\]>)?</${tag}>`));
+    return (m?.[1] || "").trim();
+  };
+  const stripHtml = (s: string) => s.replace(/<[^>]+>/g, " ").replace(/\s+/g, " ").trim();
+  for (const b of blocks) {
+    const title = stripHtml(pick(b, "title"));
+    const link = pick(b, "link") || pick(b, "guid");
+    const author = pick(b, "dc:creator") || pick(b, "author");
+    const content = pick(b, "content:encoded") || pick(b, "description");
+    const pubTs = Date.parse(pick(b, "pubDate")) / 1000 || 0;
+    if (title && link) items.push({ title, link, author, text: stripHtml(content).slice(0, 6000), pubTs });
+  }
+  return items;
+}
+
+async function fetchVcRu(tag: string): Promise<LearningItem[]> {
+  const resp = await fetch(`https://vc.ru/rss/tag/${encodeURIComponent(tag)}`, {
+    headers: { "User-Agent": UA }, signal: AbortSignal.timeout(15_000),
+  });
+  if (!resp.ok) {
+    logger.warn({ tag, status: resp.status }, "vc.ru RSS fetch failed");
+    return [];
+  }
+  const xml = await resp.text();
+  const cutoff = Date.now() / 1000 - VC_RECENT_HOURS * 3600;
+  return parseRssItems(xml)
+    .filter((i) => i.pubTs >= cutoff)
+    .slice(0, MAX_VC_PER_TAG)
+    .map((i) => ({
+      sourceId: i.link,
+      source: "vc.ru" as const,
+      title: i.title,
+      author: i.author || "vc.ru",
+      text: i.text,
+      url: i.link,
+      publishedAt: i.pubTs,
+    }));
+}
+
 // ---- DeepSeek 结构化提炼 ----
 
 interface DistilledKnowledge {
@@ -198,6 +269,7 @@ interface DistilledKnowledge {
 }
 
 const DISTILL_PROMPT = `你是 Ozon 跨境电商运营专家。从下面的学习内容中提取可落地的知识，严格 JSON 输出。
+内容可能是中文或俄文（俄文为俄罗斯本土卖家/媒体一手经验，价值最高）；你的输出中 keywords 必须是俄语搜索词，summary 用中文。
 
 要求：
 1. 只提取内容中**明确出现**的知识点，严禁编造/推测（无相关内容则对应数组留空）
@@ -210,9 +282,9 @@ const DISTILL_PROMPT = `你是 Ozon 跨境电商运营专家。从下面的学�
 
 JSON 结构：{"keywords":[{"ru":"...","zh":"..."}],"searchHabits":["..."],"productClues":["..."],"contentPractices":["..."],"promoStrategies":["..."],"summary":"..."}`;
 
-async function distillWithDeepSeek(video: BiliVideo, subtitle: string): Promise<DistilledKnowledge | null> {
+async function distillWithDeepSeek(item: LearningItem): Promise<DistilledKnowledge | null> {
   if (!DEEPSEEK_API_KEY) return null;
-  const content = `标题：${video.title}\nUP主：${video.author}\n简介：${video.description || "无"}\n标签：${video.tag || "无"}\n${subtitle ? `字幕全文：\n${subtitle}` : "（无字幕，仅基于标题简介提炼，请从严）"}`;
+  const content = `来源：${item.source}\n标题：${item.title}\n作者/UP主：${item.author}\n链接：${item.url}\n${item.text ? `正文/字幕：\n${item.text}` : "（无正文，仅基于标题提炼，请从严）"}`;
   try {
     const resp = await fetch(`${DEEPSEEK_BASE}/chat/completions`, {
       method: "POST",
@@ -228,7 +300,7 @@ async function distillWithDeepSeek(video: BiliVideo, subtitle: string): Promise<
       }),
       signal: AbortSignal.timeout(60_000),
     });
-    const data = await resp.json() as { choices?: Array<{ message?: { content?: string } }> };
+    const data = (await resp.json()) as { choices?: Array<{ message?: { content?: string } }> };
     const text = data.choices?.[0]?.message?.content || "";
     const match = text.match(/\{[\s\S]*\}/);
     if (!match) return null;
@@ -243,26 +315,28 @@ async function distillWithDeepSeek(video: BiliVideo, subtitle: string): Promise<
       summary: String(parsed.summary),
     };
   } catch (err) {
-    logger.error({ bvid: video.bvid, err: (err as Error).message }, "DeepSeek distill failed");
+    logger.error({ sourceId: item.sourceId, err: (err as Error).message }, "DeepSeek distill failed");
     return null;
   }
 }
 
 // ---- 入库（向量知识库，经 Knowledge Gate 门禁：边界+真实性+语义查重） ----
 
-async function saveToPlaybook(video: BiliVideo, k: DistilledKnowledge): Promise<boolean> {
-  const db = await getDb().catch(() => null);
-  if (!db) return false;
+type SaveResult = "saved" | "dup" | "gated" | "error";
 
-  // 幂等：bvid 已在库则跳过
+async function saveToPlaybook(item: LearningItem, k: DistilledKnowledge): Promise<SaveResult> {
+  const db = await getDb().catch(() => null);
+  if (!db) return "error";
+
+  // 幂等：sourceId 已在库则跳过
   const dup = await db.all<{ x: number }>(
     "SELECT 1 AS x FROM rag_operations_playbook WHERE content LIKE ? LIMIT 1",
-    [`%${video.bvid}%`],
+    [`%${item.sourceId}%`],
   ).catch(() => [] as Array<{ x: number }>);
-  if (dup.length > 0) return false;
+  if (dup.length > 0) return "dup";
 
   const content = [
-    `来源：B站《${video.title}》UP主:${video.author} (${video.bvid})`,
+    `来源：${item.source === "bilibili" ? "B站" : "vc.ru(俄文)"}《${item.title}》作者:${item.author}（${item.sourceId}）`,
     `摘要：${k.summary}`,
     k.searchHabits.length ? `搜索习惯：${k.searchHabits.join("；")}` : "",
     k.productClues.length ? `选品线索：${k.productClues.join("；")}` : "",
@@ -274,38 +348,48 @@ async function saveToPlaybook(video: BiliVideo, k: DistilledKnowledge): Promise<
   try {
     const { knowledgeGate, persistToPlaybook } = await import("../services/knowledge-gate.js");
     const input = {
-      id: `learn_${video.bvid}`,
-      title: `每日学习: ${video.title}`.slice(0, 120),
+      id: item.source === "bilibili" ? `learn_${item.sourceId}` : `learn_vc_${Buffer.from(item.sourceId).toString("base64url").slice(-24)}`,
+      title: `每日学习: ${item.title}`.slice(0, 120),
       scenario: "learning",
       content,
-      tags: ["每日学习", "B站", ...k.keywords.slice(0, 5).map((w) => w.ru)],
+      tags: ["每日学习", item.source, ...k.keywords.slice(0, 5).map((w) => w.ru)],
       author: "daily-learning",
       priority: 1,
     };
     const gate = await knowledgeGate(input);
     if (gate.action === "reject" || gate.action === "skip") {
-      logger.info({ bvid: video.bvid, action: gate.action, reason: gate.reason }, "DailyLearning: gated out");
-      return false;
+      logger.info({ sourceId: item.sourceId, action: gate.action, reason: gate.reason }, "DailyLearning: gated out");
+      return "gated";
     }
-    return await persistToPlaybook(input, gate);
+    return (await persistToPlaybook(input, gate)) ? "saved" : "error";
   } catch (err) {
-    logger.error({ bvid: video.bvid, err: (err as Error).message }, "Playbook insert failed");
-    return false;
+    logger.error({ sourceId: item.sourceId, err: (err as Error).message }, "Playbook insert failed");
+    return "error";
   }
 }
 
 // ---- 主流程 ----
 
-export async function runDailyLearning(): Promise<{ scanned: number; learned: number; newKeywords: number }> {
-  const stats = { scanned: 0, learned: 0, newKeywords: 0 };
+export interface LearningStats {
+  scanned: number;
+  learned: number;
+  newKeywords: number;
+  gated: number;
+  dup: number;
+  bySource: Record<string, number>;
+}
+
+export async function runDailyLearning(): Promise<LearningStats> {
+  const stats: LearningStats = { scanned: 0, learned: 0, newKeywords: 0, gated: 0, dup: 0, bySource: {} };
   const seen = new Set<string>();
   const learnedTitles: string[] = [];
   const allKeywords = new Set<string>();
 
+  // ---- 源 1：B 站（中文跨境教学） ----
   for (const kw of SEARCH_KEYWORDS) {
     let videos: BiliVideo[] = [];
     try {
-      videos = await searchBilibili(kw.trim());
+      videos = await searchBilibili(kw);
     } catch (err) {
       logger.error({ kw, err: (err as Error).message }, "DailyLearning: search failed");
       continue;
@@ -316,6 +400,7 @@ export async function runDailyLearning(): Promise<{ scanned: number; learned: nu
       if (seen.has(video.bvid)) continue;
       seen.add(video.bvid);
       stats.scanned++;
+      stats.bySource.bilibili = (stats.bySource.bilibili || 0) + 1;
 
       let subtitle = await fetchSubtitleText(video.bvid);
 
@@ -325,30 +410,68 @@ export async function runDailyLearning(): Promise<{ scanned: number; learned: nu
         if (subtitle) transcribed++;
       }
 
-      const knowledge = await distillWithDeepSeek(video, subtitle);
+      const item: LearningItem = {
+        sourceId: video.bvid, source: "bilibili",
+        title: video.title, author: video.author,
+        text: subtitle || [video.description, video.tag].filter(Boolean).join("\n标签："),
+        url: `https://www.bilibili.com/video/${video.bvid}/`,
+        publishedAt: video.pubdate, play: video.play,
+      };
+      const knowledge = await distillWithDeepSeek(item);
       if (!knowledge) continue;
 
-      const saved = await saveToPlaybook(video, knowledge);
-      if (saved) {
+      const r = await saveToPlaybook(item, knowledge);
+      if (r === "saved") {
         stats.learned++;
         learnedTitles.push(video.title);
         for (const w of knowledge.keywords) allKeywords.add(`${w.ru}(${w.zh})`);
-      }
+      } else if (r === "gated") stats.gated++;
+      else if (r === "dup") stats.dup++;
+    }
+  }
+
+  // ---- 源 2：vc.ru（俄文一手电商经验） ----
+  for (const tag of VC_TAGS) {
+    let items: LearningItem[] = [];
+    try {
+      items = await fetchVcRu(tag);
+    } catch (err) {
+      logger.error({ tag, err: (err as Error).message }, "DailyLearning: vc.ru fetch failed");
+      continue;
+    }
+    for (const item of items) {
+      if (seen.has(item.sourceId)) continue;
+      seen.add(item.sourceId);
+      stats.scanned++;
+      stats.bySource["vc.ru"] = (stats.bySource["vc.ru"] || 0) + 1;
+
+      const knowledge = await distillWithDeepSeek(item);
+      if (!knowledge) continue;
+
+      const r = await saveToPlaybook(item, knowledge);
+      if (r === "saved") {
+        stats.learned++;
+        learnedTitles.push(`[俄] ${item.title}`);
+        for (const w of knowledge.keywords) allKeywords.add(`${w.ru}(${w.zh})`);
+      } else if (r === "gated") stats.gated++;
+      else if (r === "dup") stats.dup++;
     }
   }
 
   stats.newKeywords = allKeywords.size;
 
-  // 飞书摘要
-  if (stats.learned > 0) {
-    await emitEvent("DAILY_LEARNING", {
-      scanned: String(stats.scanned),
-      learned: String(stats.learned),
-      keywords: String(stats.newKeywords),
-      titles: learnedTitles.slice(0, 3).join("；").slice(0, 200),
-      topKeywords: Array.from(allKeywords).slice(0, 8).join("、").slice(0, 200),
-    }).catch(() => {});
-  }
+  // 飞书简报：无论是否有新入库都发（2026-09-06 用户要求——静默运行导致"没有启动"的误判）
+  const sourcesStr = Object.entries(stats.bySource).map(([k, v]) => `${k}:${v}`).join(" ");
+  await emitEvent("DAILY_LEARNING", {
+    scanned: String(stats.scanned),
+    learned: String(stats.learned),
+    keywords: String(stats.newKeywords),
+    sources: sourcesStr,
+    gated: String(stats.gated),
+    dup: String(stats.dup),
+    titles: learnedTitles.slice(0, 3).join("；").slice(0, 200) || "（无新内容入库）",
+    topKeywords: Array.from(allKeywords).slice(0, 8).join("、").slice(0, 200),
+  }).catch(() => {});
 
   logger.info(stats, "DailyLearning: cycle complete");
   return stats;

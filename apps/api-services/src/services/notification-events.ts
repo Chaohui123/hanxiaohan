@@ -141,8 +141,8 @@ export const NOTIFICATION_EVENTS: NotificationEvent[] = [
     key: "DAILY_LEARNING",
     level: "info",
     label: "每日学习",
-    template: "📚 每日学习完成: 扫描{{scanned}}个视频, 新沉淀{{learned}}条知识, 提取{{keywords}}个关键词.\n视频: {{titles}}\n关键词: {{topKeywords}}",
-    force: false,
+    template: "📚 每日学习完成: 扫描{{scanned}}条({{sources}}), 新沉淀{{learned}}条, 门禁拦{{gated}}条, 已去重{{dup}}条, 提取{{keywords}}个关键词.\n内容: {{titles}}\n关键词: {{topKeywords}}",
+    force: true,
     rateLimit: 2,
   },
   {
