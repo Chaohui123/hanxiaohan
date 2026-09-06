@@ -27,3 +27,4 @@
   - 子代理返回只收结论与关键数据；中间产物落盘 temp/ 并给路径
   - 长任务分段：每完成一个可验证的里程碑就汇报/落盘，避免一次性大交付失控
 - **工具增强**：优先复用已验证的开源 Skill/MCP（接入评估记录入知识库）；新工具接入前先在非生产数据上验证。
+- **MCP 自动调用（2026-09-06 用户定调）**：已接 excel / ozon-buyer / deepl 三个 server，**需要时直接自动调用，不特意开启、不请示**（config.toml 已配 `mcp__excel__*` / `mcp__ozon-buyer__*` / `mcp__deepl__*` allow 规则，任何权限模式免审批）。典型场景：Excel 模板读写→`mcp__excel__*`；Ozon 前台选品调研/竞品价格评论→`mcp__ozon-buyer__*`；俄语翻译/术语统一→`mcp__deepl__*`。MCP 故障时降级到既有链路（WebBridge/API/DeepSeek 翻译）并告知用户。
