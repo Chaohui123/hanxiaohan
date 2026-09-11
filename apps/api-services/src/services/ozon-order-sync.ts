@@ -16,7 +16,7 @@ import { decrypt, isEncrypted } from "./crypto.js";
 // Ozon posting list 端点是【每秒】级限流；旧配置 30/min + maxBurst 20
 // 允许单秒突发 20 个请求,叠加 webhook/库存等并发任务后必然 429。
 // 这里把配额对齐到秒级,并在 list 调用间加固定间隔 + 限流感知退避重试。
-const LIST_CALL_GAP_MS = 400;
+const LIST_CALL_GAP_MS = 800;
 const RATE_LIMIT_MAX_RETRIES = 3;
 
 function isRateLimitError(err: unknown): boolean {
@@ -124,7 +124,7 @@ export class OzonOrderSyncService {
     const auth = new AuthManager({ clients: [{ clientId, apiKey: resolvedKey, storeId }] });
     const ozonClient = new (await import("@onzo/ozon-api-wrapper")).OzonClient({
       auth,
-      rateLimiterConfig: { tokensPerInterval: 5, intervalMs: 1000, maxBurst: 1 },
+      rateLimiterConfig: { tokensPerInterval: 2, intervalMs: 1000, maxBurst: 1 },
     });
     const orderClient = new OzonOrderClient(ozonClient);
 
