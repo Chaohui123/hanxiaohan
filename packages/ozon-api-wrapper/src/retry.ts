@@ -59,7 +59,10 @@ export class RetryPolicy {
         }
 
         if (attempt < maxAttempts) {
-          const delay = this.calculateDelayMs(attempt);
+          // 服务端给了 Retry-After(如 Ozon 429)时必须服从,且 full jitter 可能
+          // 摇出 0ms 立即重试加重限流 —— 取下限兜底(2026-09-11 限流事故修复)
+          const retryAfterMs = (lastError as { retryAfterMs?: number }).retryAfterMs;
+          const delay = Math.max(retryAfterMs ?? 500, this.calculateDelayMs(attempt));
           this._metrics.totalRetries++;
           this._metrics.lastRetryTimestamp = new Date();
           await this.sleep(delay);

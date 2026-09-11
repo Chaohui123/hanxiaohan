@@ -12,6 +12,40 @@ import { acquireLock, releaseLock } from "./redis-lock.js";
 import { getActiveStoreConfigs } from "../db/models.js";
 import { decrypt, isEncrypted } from "./crypto.js";
 
+// ---- Rate-limit resilience (2026-09-11 限流事故修复) ----
+// Ozon posting list 端点是【每秒】级限流；旧配置 30/min + maxBurst 20
+// 允许单秒突发 20 个请求,叠加 webhook/库存等并发任务后必然 429。
+// 这里把配额对齐到秒级,并在 list 调用间加固定间隔 + 限流感知退避重试。
+const LIST_CALL_GAP_MS = 400;
+const RATE_LIMIT_MAX_RETRIES = 3;
+
+function isRateLimitError(err: unknown): boolean {
+  const e = err as { name?: string; message?: string };
+  return e?.name === "RateLimitError" || /rate limit/i.test(e?.message ?? "");
+}
+
+function rateLimitRetryAfterMs(err: unknown): number | undefined {
+  return (err as { retryAfterMs?: number }).retryAfterMs;
+}
+
+/** Retry a list call with backoff when Ozon returns a per-second rate limit. */
+async function withRateLimitRetry<T>(fn: () => Promise<T>): Promise<T> {
+  let lastErr: unknown;
+  for (let attempt = 0; attempt <= RATE_LIMIT_MAX_RETRIES; attempt++) {
+    try {
+      return await fn();
+    } catch (err) {
+      lastErr = err;
+      if (!isRateLimitError(err) || attempt === RATE_LIMIT_MAX_RETRIES) throw err;
+      // 优先服从 Ozon 的 Retry-After,否则指数退避 2s/4s/8s
+      const backoff = Math.max(rateLimitRetryAfterMs(err) ?? 0, 2000 * Math.pow(2, attempt));
+      logger.warn({ attempt: attempt + 1, backoffMs: backoff }, "OzonOrderSync: rate limited, backing off");
+      await new Promise((r) => setTimeout(r, backoff));
+    }
+  }
+  throw lastErr;
+}
+
 // ---- Types ----
 
 interface StoreSyncResult {
@@ -84,18 +118,30 @@ export class OzonOrderSyncService {
 
     const resolvedKey = isEncrypted(apiKey) ? decrypt(apiKey) : apiKey;
 
-    // Create per-store OzonClient
+    // Create per-store OzonClient — limiter aligned to Ozon's per-second quota.
+    // maxBurst 1: 每个 sync 周期新建 client,开局不能突发;稳态 5 req/s 留余量。
     const { AuthManager } = await import("@onzo/ozon-api-wrapper");
     const auth = new AuthManager({ clients: [{ clientId, apiKey: resolvedKey, storeId }] });
-    const ozonClient = new (await import("@onzo/ozon-api-wrapper")).OzonClient({ auth });
+    const ozonClient = new (await import("@onzo/ozon-api-wrapper")).OzonClient({
+      auth,
+      rateLimiterConfig: { tokensPerInterval: 5, intervalMs: 1000, maxBurst: 1 },
+    });
     const orderClient = new OzonOrderClient(ozonClient);
 
     const statuses = ["awaiting_packaging", "awaiting_deliver", "delivering", "cancelled", "delivered"];
 
+    let firstCall = true;
+    const paceListCalls = async () => {
+      // 请求间固定间隔,避免 10 次连续调用紧贴每秒配额上限
+      if (firstCall) { firstCall = false; return; }
+      await new Promise((r) => setTimeout(r, LIST_CALL_GAP_MS));
+    };
+
     for (const status of statuses) {
       // FBS
       try {
-        const fbsPostings = await orderClient.listPostings({ status: status as never, limit: 100 });
+        await paceListCalls();
+        const fbsPostings = await withRateLimitRetry(() => orderClient.listPostings({ status: status as never, limit: 100 }));
         for (const p of fbsPostings) {
           const result = await this.processPosting(p, storeId);
           if (result === "new") newOrders++;
@@ -108,7 +154,8 @@ export class OzonOrderSyncService {
 
       // FBO
       try {
-        const fboPostings = await orderClient.listFboPostings({ status: status as never, limit: 100 });
+        await paceListCalls();
+        const fboPostings = await withRateLimitRetry(() => orderClient.listFboPostings({ status: status as never, limit: 100 }));
         for (const p of fboPostings) {
           const result = await this.processPosting(p, storeId);
           if (result === "new") newOrders++;
