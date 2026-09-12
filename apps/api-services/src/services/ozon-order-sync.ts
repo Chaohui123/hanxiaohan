@@ -24,6 +24,12 @@ function isRateLimitError(err: unknown): boolean {
   return e?.name === "RateLimitError" || /rate limit/i.test(e?.message ?? "");
 }
 
+/** 熔断冷却中的跳过（非失败）：CircuitBreakerOpenError — 冷却后重试，不计入失败 streak */
+function isCircuitOpenError(err: unknown): boolean {
+  const e = err as { name?: string; message?: string };
+  return e?.name === "CircuitBreakerOpenError" || /circuit breaker is open/i.test(e?.message ?? "");
+}
+
 function rateLimitRetryAfterMs(err: unknown): number | undefined {
   return (err as { retryAfterMs?: number }).retryAfterMs;
 }
@@ -54,6 +60,8 @@ interface StoreSyncResult {
   flaggedOrders: number;
   skippedOrders: number;
   errors: string[];
+  /** 熔断冷却中跳过的状态（非失败——冷却后会补，不计入失败 streak，2026-09-12 误报告警修复） */
+  delayedBreakers: string[];
 }
 
 // ---- Main Service ----
@@ -94,6 +102,10 @@ export class OzonOrderSyncService {
         newOrders += result.newOrders;
         flaggedOrders += result.flaggedOrders;
         errors.push(...result.errors.map((e) => `[${storeId}] ${e}`));
+        // 熔断冷却跳过只记 info 日志，不进 errors（非失败，冷却后会补——2026-09-12 误报告警修复）
+        if (result.delayedBreakers.length > 0) {
+          logger.info({ storeId, delayed: result.delayedBreakers }, "OzonOrderSync: statuses delayed by circuit breaker cooldown");
+        }
       } catch (err) {
         errors.push(`[${storeId}] ${(err as Error).message}`);
       } finally {
@@ -112,6 +124,7 @@ export class OzonOrderSyncService {
   /** Sync a single store by storeId. Fetches FBS + FBO, enriches, persists. */
   async syncStore(storeId: string, clientId: string, apiKey: string): Promise<StoreSyncResult> {
     const errors: string[] = [];
+    const delayedBreakers: string[] = [];
     let newOrders = 0;
     let flaggedOrders = 0;
     let skippedOrders = 0;
@@ -149,7 +162,8 @@ export class OzonOrderSyncService {
           else skippedOrders++;
         }
       } catch (err) {
-        errors.push(`FBS/${status}: ${(err as Error).message}`);
+        if (isCircuitOpenError(err)) delayedBreakers.push(`FBS/${status}`);
+        else errors.push(`FBS/${status}: ${(err as Error).message}`);
       }
 
       // FBO
@@ -163,11 +177,12 @@ export class OzonOrderSyncService {
           else skippedOrders++;
         }
       } catch (err) {
-        errors.push(`FBO/${status}: ${(err as Error).message}`);
+        if (isCircuitOpenError(err)) delayedBreakers.push(`FBO/${status}`);
+        else errors.push(`FBO/${status}: ${(err as Error).message}`);
       }
     }
 
-    return { storeId, newOrders, flaggedOrders, skippedOrders, errors };
+    return { storeId, newOrders, flaggedOrders, skippedOrders, errors, delayedBreakers };
   }
 
   /**
