@@ -375,10 +375,12 @@ export async function scoreAllProducts(config: ApiConfig): Promise<ProductScore[
     const marginScore = scoreMargin(marginPercent);
 
     // 调价底价（2026-08-14 方案）：毛利率≥20% 与 净利率≥10% 双底线取大
-    // 毛利线：(P−C)/P ≥ 20% ⇒ P ≥ C/0.80；净利线：P×(1−佣金20%) − C − 物流₽ ≥ P×10% ⇒ P ≥ (C+物流₽)/0.70
+    // 毛利线：(P−C)/P ≥ 20% ⇒ P ≥ C/0.80；净利线：P×(1−佣金20%) − C − 物流₽ − 打包₽ ≥ P×10% ⇒ P ≥ (C+物流₽+打包₽)/0.70
     // 物流项按官方计算器费率表（globalcalculator.ozon.ru，China/Dongguan→Russia，8/20 实测）分档：
     // XS(≤135¥且≤500g) 95₽ ｜ Small(135-635¥且≤2kg) 300₽ ｜ Premium Small(635¥+且≤5kg) 2161₽
+    // 打包费 5 CNY/单（2026-09-19 用户确认成本结构：采购→货代包邮，打包 5 元/单）
     const costRub = cost * rate;
+    const packagingRub = 5 * rate;
     const priceCny = costRub > 0 ? Number(item.price || 0) / rate : 0;
     // weight 缺失按重货保守档计底价 — 缺失=0 会落最轻档(95₽)把底价方向性低估，重货可能亏本卖（2026-09-04 审查）
     const rawWeight = Number(item.weight || 0) || 0;
@@ -387,7 +389,7 @@ export async function scoreAllProducts(config: ApiConfig): Promise<ProductScore[
       : priceCny <= 635 && weightG <= 2000 ? 300
       : priceCny > 635 && weightG <= 5000 ? 2161
       : 2161; // 超大/超高价暂按 Premium Small 口径，有 Premium Big 品再实测回填
-    const floorPrice = Math.round(Math.max(costRub / 0.80, (costRub + logisticsRub) / 0.70) * 100) / 100;
+    const floorPrice = Math.round(Math.max(costRub / 0.80, (costRub + logisticsRub + packagingRub) / 0.70) * 100) / 100;
 
     // 价格优势评分
     const priceAdvantage = competitorAvg > 0

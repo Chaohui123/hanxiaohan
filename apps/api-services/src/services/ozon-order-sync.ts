@@ -19,6 +19,20 @@ import { decrypt, isEncrypted } from "./crypto.js";
 const LIST_CALL_GAP_MS = 800;
 const RATE_LIMIT_MAX_RETRIES = 3;
 
+// ---- 成本口径（2026-09-19 利润核算实证） ----
+/** 打包费 5 CNY/单（用户确认）；采购→货代段包邮，无国内运费 */
+const PACKAGING_FEE_CNY = 5;
+/**
+ * 国际物流分档（RUB，globalcalculator.ozon.ru China/Dongguan→Russia 8/20 实测，
+ * 与 promo-agent decision-engine 底价公式同口径；月报 realization 出来后校准）：
+ * XS(≤135¥ 且 ≤500g) 95₽ ｜ Small(135-635¥ 且 ≤2kg) 300₽ ｜ Premium Small(635¥+ 且 ≤5kg) 2161₽
+ */
+function logisticsFeeRub(priceCny: number, weightG: number): number {
+  if (priceCny <= 135 && weightG <= 500) return 95;
+  if (priceCny <= 635 && weightG <= 2000) return 300;
+  return 2161;
+}
+
 function isRateLimitError(err: unknown): boolean {
   const e = err as { name?: string; message?: string };
   return e?.name === "RateLimitError" || /rate limit/i.test(e?.message ?? "");
@@ -213,12 +227,33 @@ export class OzonOrderSyncService {
       if ((enriched.profitMargin ?? 0) < 10) allProfitOk = false;
     }
 
-    // Calculate overall margin
-    const totalPriceRub = posting.price;
-    const totalProfitRub = totalPriceRub - totalCostCny * await this.getExchangeRate();
-    const marginPercent = totalPriceRub > 0 ? Math.round((totalProfitRub / totalPriceRub) * 1000) / 10 : 0;
+    // ---- 金额与利润口径（2026-09-19 修复） ----
+    // posting.price 是订单货币金额（跨境店=CNY 定价），不能直接当 RUB 存。
+    // total_price_rub 统一为【到手口径 RUB】：有 payout（financial_data）用真实值，
+    // 否则按 CNY×汇率 换算（列表未带财务数据的兜底，利润标 needs_review）。
+    const rate = await this.getExchangeRate();
+    const isCny = (posting.currencyCode || "CNY") === "CNY";
+    const priceRubConverted = Math.round((isCny ? posting.price * rate : posting.price) * 100) / 100;
+    const hasPayout = (posting.payout ?? 0) > 0;
+    const totalPriceRub = hasPayout ? Math.round(posting.payout * 100) / 100 : priceRubConverted;
 
-    const needsReview = !hasSource || !allProfitOk;
+    // 成本：采购Σ + 打包费 5 CNY/单（取消单不计成本）
+    if (posting.status !== "cancelled") totalCostCny += PACKAGING_FEE_CNY;
+
+    // 物流档：按订单售价 CNY 与最重件重量分档
+    const maxWeightG = Math.max(0, ...enrichedProducts.map((p) => (p.weightKg ?? 0) * 1000));
+    const logisticsRub = posting.status === "cancelled" ? 0
+      : logisticsFeeRub(isCny ? posting.price : posting.price / rate, maxWeightG > 0 ? maxWeightG : Number.POSITIVE_INFINITY);
+
+    // 净利润（到手口径）：payout − 采购 − 打包 − 国际物流
+    // 无 payout 时佣金未扣（换算口径偏乐观），标 needs_review 人工复核
+    const totalProfitRub = posting.status === "cancelled" ? 0
+      : Math.round((totalPriceRub - totalCostCny * rate - logisticsRub) * 100) / 100;
+    const marginPercent = totalPriceRub > 0 && posting.status !== "cancelled"
+      ? Math.round((totalProfitRub / totalPriceRub) * 1000) / 10 : 0;
+    if (!hasPayout && posting.status !== "cancelled") allProfitOk = false;
+
+    const needsReview = !hasSource || !allProfitOk || (!hasPayout && posting.status !== "cancelled");
 
     const id = crypto.randomUUID();
     const now = new Date().toISOString();
@@ -241,7 +276,7 @@ export class OzonOrderSyncService {
         id, storeId, posting.postingNumber, posting.orderId, posting.orderNumber, posting.status,
         posting.createdAt, posting.shipmentDate ?? null, posting.buyerName, posting.buyerPhone,
         JSON.stringify(enrichedProducts),
-        totalPriceRub, Math.round(totalCostCny * 100) / 100, Math.round(totalProfitRub),
+        totalPriceRub, Math.round(totalCostCny * 100) / 100, totalProfitRub,
         marginPercent,
         hasSource ? 1 : 0, allProfitOk ? 1 : 0, needsReview ? 1 : 0,
         posting.trackingNumber ?? null, now, now,
@@ -283,7 +318,8 @@ export class OzonOrderSyncService {
           await emitEvent("ORDER_NEW", {
             postingNumber: posting.postingNumber,
             productCount: String(posting.products.length),
-            priceRub: String(posting.price),
+            // 到手口径 RUB（posting.price 是订单货币 CNY，勿直报）
+            priceRub: String(totalPriceRub),
           }, `order-${posting.postingNumber}`).catch(() => {});
         } else {
           await emitEvent("ORDER_CANCELLED", {
@@ -296,7 +332,7 @@ export class OzonOrderSyncService {
     return needsReview ? "flagged" : "new";
   }
 
-  /** Enrich a single product with 1688 source URL and cost estimate. */
+  /** Enrich a single product with 1688 source URL and real purchase cost. */
   private async enrichProduct(
     product: OzonPosting["products"][0],
     _storeId: string
@@ -311,7 +347,30 @@ export class OzonOrderSyncService {
 
     if (!this.db) return result;
 
-    // Match 1688 source via listing_records
+    // 成本与货源首选 sku_1688_mapping（真实采购价，2026-09-19 修复）：
+    // 旧逻辑用 price_history（竞品价格快照表）的售价倒推成本，是错误数据源。
+    try {
+      const mapRows = await this.db.all<{ purchase_price_cny: number; weight_kg: number; source_1688_url: string }>(
+        "SELECT purchase_price_cny, weight_kg, source_1688_url FROM sku_1688_mapping WHERE ozon_offer_id = ? LIMIT 1",
+        [product.offerId]
+      );
+      if (mapRows.length > 0) {
+        const m = mapRows[0];
+        if (m.source_1688_url && m.source_1688_url !== "manual-input") result.source1688Url = m.source_1688_url;
+        if (Number(m.purchase_price_cny) > 0) {
+          result.costCny = Number(m.purchase_price_cny);
+          const exRate = await this.getExchangeRate();
+          // price 为订单货币（跨境=CNY 定价口径），毛利估算同币种相减
+          if (result.price > 0) {
+            result.profitMargin = Math.round(((result.price - result.costCny) / result.price) * 1000) / 10;
+          }
+          result.weightKg = Number(m.weight_kg) || undefined;
+        }
+        return result;
+      }
+    } catch { /* sku_1688_mapping may not exist in SQLite fallback */ }
+
+    // Fallback: match 1688 source via listing_records（仅货源链接，无成本——无映射不估算成本，标 needs_review）
     try {
       const listingRows = await this.db.all<{ source_url: string; result_json: string }>(
         `SELECT lr.source_url, lr.result_json
@@ -326,23 +385,6 @@ export class OzonOrderSyncService {
         result.source1688Url = listingRows[0].source_url;
       }
     } catch { /* listing_records may not exist in SQLite fallback */ }
-
-    // Estimate cost from price_history
-    if (result.source1688Url) {
-      try {
-        const priceRows = await this.db.all<{ price_rub: number }>(
-          "SELECT price_rub FROM price_history WHERE product_sku = ? ORDER BY captured_at DESC LIMIT 1",
-          [String(product.sku)]
-        );
-        if (priceRows.length > 0) {
-          const exRate = await this.getExchangeRate();
-          result.costCny = Math.round((priceRows[0].price_rub / exRate) * 100) / 100;
-          if (result.costCny > 0 && result.price > 0) {
-            result.profitMargin = Math.round(((result.price - result.costCny * exRate) / result.price) * 1000) / 10;
-          }
-        }
-      } catch { /* price_history may not exist */ }
-    }
 
     return result;
   }

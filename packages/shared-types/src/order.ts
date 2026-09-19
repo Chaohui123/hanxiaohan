@@ -27,9 +27,12 @@ export interface OzonPosting {
   products: OzonPostingProduct[];
 
   // Financials
-  price: number;               // RUB, buyer paid
-  commission: number;          // RUB, Ozon fee
-  payout: number;              // RUB, seller receives
+  // 注意货币口径（2026-09-19 实证）：跨境店铺 products[].price 是 CNY 定价，
+  // price 汇总值同为订单货币（CNY），并非 RUB；RUB 口径需 ×汇率 或用 payout。
+  price: number;               // 订单货币金额（跨境=CNY 定价口径），勿直接当 RUB
+  currencyCode?: string;       // 订单货币，如 "CNY"/"RUB"（products[0].currency_code）
+  commission: number;          // RUB, Ozon fee（financial_data，list 需 with.financial_data=true）
+  payout: number;              // RUB, seller receives（financial_data，已扣佣金、未扣物流）
 
   // Logistics
   deliveryMethod: string;
@@ -68,10 +71,11 @@ export interface OzonOrderProduct {
   sku: number;
   name: string;
   quantity: number;
-  price: number;               // RUB per unit
+  price: number;               // 订单货币单价（跨境=CNY 定价口径，非 RUB）
   offerId: string;
-  source1688Url?: string;      // matched from listing_records
-  costCny?: number;            // from price_history
+  source1688Url?: string;      // matched from sku_1688_mapping / listing_records
+  costCny?: number;            // 真实采购价 CNY（sku_1688_mapping.purchase_price_cny）
+  weightKg?: number;           // 映射表重量（物流分档用）
   profitMargin?: number;       // calculated per product
 }
 

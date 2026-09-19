@@ -17,6 +17,7 @@ interface OzonPostingApi {
   products: Array<{
     sku: number; name: string; quantity: number;
     price: string; offer_id: string;
+    currency_code?: string; // 订单货币（跨境店铺="CNY"），2026-09-19 补
   }>;
   financial_data?: {
     products: Array<{ price: string; commission_amount: string; payout: string }>;
@@ -55,6 +56,8 @@ export class OzonOrderClient {
         },
         limit: filter?.limit ?? 100,
         offset: filter?.offset ?? 0,
+        // 必须显式请求 financial_data，否则 payout/commission 恒为 0（2026-09-19 货币口径修复）
+        with: { financial_data: true },
       }
     );
 
@@ -78,6 +81,7 @@ export class OzonOrderClient {
         },
         limit: filter?.limit ?? 100,
         offset: filter?.offset ?? 0,
+        with: { financial_data: true },
       }
     );
 
@@ -89,7 +93,7 @@ export class OzonOrderClient {
     const response = await this.client.request<{ result: OzonPostingApi }>(
       "POST",
       "/v3/posting/fbs/get",
-      { posting_number: postingNumber }
+      { posting_number: postingNumber, with: { financial_data: true } }
     );
 
     return this.mapPosting(response.result);
@@ -164,6 +168,7 @@ export class OzonOrderClient {
       buyerEmail: maskEmail(api.buyer?.email || ""),
       products,
       price: totalPrice,
+      currencyCode: api.products?.[0]?.currency_code,
       commission: parseFloat(financials?.commission_amount || "0"),
       payout: parseFloat(financials?.payout || "0"),
       deliveryMethod: api.delivery_method?.name || "",
