@@ -162,3 +162,44 @@
 5. 水印处理：供应商顶/横带先用涂白预处理（浅色低饱和像素置白）再分割；中文水印横带用 whiten_band（差异检测版）——处理后必过 QC。
 
 任何图未过 `image-qc.py` 不得进 pictures/import；改图后重新过闸再上传。
+
+## 七、建品上架标准流程（2026-09-13 定稿 · 一次到位禁重复摸索）
+
+每次建品按此清单逐项执行打勾，**禁止跳项**（跳项=本次 61N 漏视频/竞品链接的疏漏）：
+
+| # | 环节 | 工具/动作 | 过闸标准 |
+|---|---|---|---|
+| 1 | 选品验证 | 知识库检索 → Ozon 前台件号扫描（auto-scan.cjs）→ 1688 货源扫描 → 单元经济（佣金 /v5 prices 实查）→ **独立子代理交叉复核** | 四重验证全过+复核 PASS |
+| 2 | 货源质检 | src1688-*-detail.py 详情页：规格/重量/材质/起批量/回头率/跨境专供；dump 快照落盘 | 重量实测到手+素材干净 |
+| 3 | 素材下载 | `node scripts/download-1688-assets.cjs <offerId>` | 主图素材 ≥800px 白底无中文 |
+| 4 | 图集 | **6.6 工具链**：主图 build-main-sop→`image-qc --role main`；细节 split-parts→`--role detail`；信息图 build_images→`--role info` | 全过 QC 闸，否则打回 |
+| 5 | 文案 | 名称≤100 含主词零品牌词；4191≤500；description；23171 标签 | 零 Yamaha/无 оригинал*/OE 仅适配声明 |
+| 6 | 建品 | `temp/ozon-list-<sku>.cjs` 模板 import → 轮询 task **零错误** → 复查 attributes 生效 | 全属性+dimension+价格 CNY+8 图 |
+| 7 | 库存 | `/v2/products/stocks` 按价格×重量选仓（XS≤135¥≤500g/Small 135-635¥≤2kg/Premium≥635¥） | 价格×仓库档位匹配 |
+| 8 | 富内容 | attr 11254，`node scripts/validate-rich-json.cjs` 校验后 attributes/update | schema 校验过+复查在 |
+| 9 | **视频** | `temp/make-carousel-videos.py <sku>` 生成轮播 8-30s → **把 mp4 路径给用户手动上传**（自动化上传在分步编辑器/CDP 下不稳定，人工兜底最稳；若走脚本 upload-ozon-video.cjs 必须显式传 `--product <productId>`，默认写死旧品 ID 会传错商品） | 后台视频在+播放正常 |
+| 10 | **竞品链接** | `temp/add-competitor-links.py <offerId>` 后台价格页加 3 条精准竞品 + promo_competitor_links 留档 | 提交审核+入库 |
+| 11 | 质检 | 独立子代理逐项验收（图/文案/属性/价格档/合规/视频/竞品） | 全项 PASS |
+| 12 | 归档记录 | `temp/listing-payload-<sku>.json`（调研/定价/货源/文案）+ `temp/import-<sku>.json` 落盘；SOP 第九节在售表更新 | 交接可直接复用 |
+
+**ozon-list 模板字段清单**（建品脚本必带，缺一打回）：offer_id/name/description/description_category_id/type_id/price+old_price(CNY)/vat/currency_code/images(8)/depth+width+height(mm)+weight(g)+dimension_unit+weight_unit；attributes：8229(类型)/9048(型号名·唯一合并键)/85(无品牌 dict 126745801)/10096(颜色)/10400(质保)/4389(产地)/22661(品类)/4180(=name)/23171(标签)/4191(简介)/4383+4497(重量g)/7956+8416(尺寸cm)/23536(false)；有富内容时 11254 必须同批带（import attributes 全量替换，缺什么丢什么）。
+
+## 八、运营实战沉淀（2026-09-13 · 学习成果持续更新，交接必读）
+
+### 8.1 关键词优化方法论（2026-09-13 学习+实战）
+- **结构**：核心词（品名）+ 属性词（材质/尺寸/马力）+ 用途词（ремонт/замена/ремкомплект）+ 需求词（анalog/OE 件号/马力段）。名称按"核心+马力段+аналог OE"组（≤100 字符，零品牌词）。
+- **标签 23171**：按"核心/同义/马力/机型/用途/OE"扩到 12-15 个（不只 5 个！），全小写无空格词元（#ремкомплекткарбюратора），禁品牌词。
+- **老品名称品牌词红线**：不只新建品，**全部在售老品也要排查名称/图文 Yamaha 等品牌词**（61N 8/3 上架名称带 Yamaha 至 9/13 才清除——67F 侵权停售同款风险，属定时炸弹，建品和巡检都查）。
+- **主词验证**：Yandex Wordstat（前台 wordstat.yandex.ru 免凭证，或用 yandex-wordstat skill API 模式）——禁直译/凭感觉，一个词见"空白"先换 2-3 词形再搜。
+
+### 8.2 内容评级满分口径（2026-09-13 实证）
+- 构成：media 45（视频 cost 40 大分 + 8 图 cost 60）+ text 25（4191 100-500字符 cost 100 + 富内容）+ 其他属性 30（特征填充率）。
+- **满分公式**：8 图 + 视频 + 4191(100-500字) + 富内容(11254) + 特征填满 = 100。查询：/v1/product/rating-by-sku。
+- 缺视频是最大失分点（cost 40）——每个品都要轮播视频。
+
+### 8.3 视频环节（2026-09-13 定稿）
+- 流程：`temp/make-carousel-videos.py <sku>` 生成轮播 8-30s → **给用户 mp4 路径手动上传**（商品编辑页第3步「媒体」→ 添加视频 → 保存）。
+- 自动化上传（upload-ozon-video.cjs）不可靠：①必须显式传 `--product <productId>`（默认写死旧品 ID 会传错商品）②分步编辑器"3 媒体"tab/下一步 CDP 点击不前进 ③/edit/media 直达跳帮助中心。手动兜底最稳。
+
+### 8.4 每次学习必更新
+每日学习/实战踩坑/复核 FAIL/用户指正的方法论，**当天更新进本 SOP 或知识库**（knowledge-gate），禁止只留在对话里——交接/压缩后靠文档续命。

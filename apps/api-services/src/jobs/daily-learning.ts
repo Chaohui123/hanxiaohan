@@ -381,6 +381,26 @@ export interface LearningStats {
 
 export async function runDailyLearning(): Promise<LearningStats> {
   const stats: LearningStats = { scanned: 0, learned: 0, newKeywords: 0, gated: 0, dup: 0, bySource: {} };
+
+  // 每日一次守卫（2026-09-19 用户要求）：部署重建会触发调度器首跑导致一天跑多次——
+  // 用 PG 记录上次完成时间，距今 <20h 则跳过（容器随便重建也不重复跑）
+  try {
+    const db = await getDb().catch(() => null);
+    if (db) {
+      await db.run("CREATE TABLE IF NOT EXISTS job_run_log (job_name text PRIMARY KEY, last_run timestamptz NOT NULL)").catch(() => {});
+      const rows = await db.all<{ last_run: string }>(
+        "SELECT last_run FROM job_run_log WHERE job_name = 'daily-learning'",
+      ).catch(() => [] as Array<{ last_run: string }>);
+      const lastRun = rows[0]?.last_run ? new Date(rows[0].last_run).getTime() : 0;
+      if (Date.now() - lastRun < 20 * 3600_000) {
+        logger.info({ lastRun: rows[0]?.last_run }, "DailyLearning: 今日已跑过，跳过（部署重建首跑守卫）");
+        return stats;
+      }
+    }
+  } catch (err) {
+    logger.warn({ err: (err as Error).message }, "DailyLearning: run-guard check failed (fail-open)");
+  }
+
   const seen = new Set<string>();
   const learnedTitles: string[] = [];
   const allKeywords = new Set<string>();
@@ -474,6 +494,16 @@ export async function runDailyLearning(): Promise<LearningStats> {
   }).catch(() => {});
 
   logger.info(stats, "DailyLearning: cycle complete");
+
+  // 更新运行时间（每日一次守卫）
+  try {
+    const db = await getDb().catch(() => null);
+    if (db) {
+      await db.run(
+        "INSERT INTO job_run_log (job_name, last_run) VALUES ('daily-learning', NOW()) ON CONFLICT (job_name) DO UPDATE SET last_run = NOW()",
+      ).catch(() => {});
+    }
+  } catch { /* best effort */ }
   return stats;
 }
 
