@@ -36,11 +36,12 @@
 - 已知未扣项：realization 月报（10 月初）可能含少量附加扣费，届时校准物流费率。
 - 口径备忘：底价公式佣金假设 20%（实际 12%），floorPrice 偏保守有安全边际；61N 当前定价 1426 RUB 高于本单成交基数，后续订单利润率略高于本单。
 
-## 发现的数据质量问题（需修）
+## 数据质量问题（已修复，commit 477f63a 已部署）
 
-1. **货币单位错存**：`ozon_orders.total_price_rub = 105.36` 实际是 CNY 单价当 RUB 存（同步 bug）
-2. **成本未回填**：`total_cost_cny = 0`，`total_profit_rub` 系错误值
-3. **物流费未录**：`purchase_1688.logistics_cost_rub = 0`
-4. 利润自动核算链路未闭环，当前以人工核算为准（本文件）
+1. **货币单位错存**：`ozon_orders.total_price_rub = 105.36` 实际是 CNY 单价当 RUB 存 → 已修：`with.financial_data` + payout 到手口径 + currencyCode 透传
+2. **成本未回填**：`total_cost_cny = 0` → 已修：成本来源改 `sku_1688_mapping.purchase_price_cny`（原为竞品快照表，张冠李戴）
+3. **物流费未录**：`purchase_1688.logistics_cost_rub = 0` → 已补录 95₽；打包费 5 元/单计入成本公式（订单同步 + 调价底价公式）
+4. 历史脏数据已 SQL 修正：`temp/fix-order-profit-2026-09-19.sql`
+5. 待办：10 月初核对 9 月 realization 月报，校准 95₽ 物流费率与实际扣费差
 
 知识库已入库：`pb_1789797423969_e5gmmy`（scenario=pricing）。
