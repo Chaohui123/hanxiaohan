@@ -324,6 +324,17 @@ async function distillWithDeepSeek(item: LearningItem): Promise<DistilledKnowled
 
 type SaveResult = "saved" | "dup" | "gated" | "error";
 
+/** 已学条目检查（与 saveToPlaybook 同查询）——蒸馏【前】调用，已入库条目零 DeepSeek 消耗（2026-09-20 token 节流） */
+async function isAlreadyLearned(sourceId: string): Promise<boolean> {
+  const db = await getDb().catch(() => null);
+  if (!db) return false; // fail-open：DB 不可用不拦学习
+  const dup = await db.all<{ x: number }>(
+    "SELECT 1 AS x FROM rag_operations_playbook WHERE content LIKE ? LIMIT 1",
+    [`%${sourceId}%`],
+  ).catch(() => [] as Array<{ x: number }>);
+  return dup.length > 0;
+}
+
 async function saveToPlaybook(item: LearningItem, k: DistilledKnowledge): Promise<SaveResult> {
   const db = await getDb().catch(() => null);
   if (!db) return "error";
@@ -419,6 +430,10 @@ export async function runDailyLearning(): Promise<LearningStats> {
     for (const video of videos) {
       if (seen.has(video.bvid)) continue;
       seen.add(video.bvid);
+
+      // 蒸馏前已学去重（2026-09-20 token 节流）：已入库条目跳过字幕拉取/whisper/DeepSeek 全流程
+      if (await isAlreadyLearned(video.bvid)) { stats.dup++; continue; }
+
       stats.scanned++;
       stats.bySource.bilibili = (stats.bySource.bilibili || 0) + 1;
 
@@ -462,6 +477,10 @@ export async function runDailyLearning(): Promise<LearningStats> {
     for (const item of items) {
       if (seen.has(item.sourceId)) continue;
       seen.add(item.sourceId);
+
+      // 蒸馏前已学去重（2026-09-20 token 节流）
+      if (await isAlreadyLearned(item.sourceId)) { stats.dup++; continue; }
+
       stats.scanned++;
       stats.bySource["vc.ru"] = (stats.bySource["vc.ru"] || 0) + 1;
 
