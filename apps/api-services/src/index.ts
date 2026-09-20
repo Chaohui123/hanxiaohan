@@ -262,7 +262,9 @@ startScheduler();
 
 import { RagIndexer } from "./services/rag-indexer.js";
 const ragIndexer = new RagIndexer();
-const RAG_INDEX_INTERVAL = parseInt(process.env.RAG_INDEX_INTERVAL_MINUTES || "60", 10);
+// 索引任务默认 6h（2026-09-20 token 节流：60min 太频繁，文案/品类库一天变不了几次；
+// 且 rag-indexer 已加增量过滤，新增/变化才 embed）
+const RAG_INDEX_INTERVAL = parseInt(process.env.RAG_INDEX_INTERVAL_MINUTES || "360", 10);
 setInterval(async () => {
   try {
     const result = await ragIndexer.reindexAll();

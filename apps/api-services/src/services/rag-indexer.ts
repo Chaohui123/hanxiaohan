@@ -152,11 +152,26 @@ export class RagIndexer {
     if (!db) return 0;
     await this.setWatermark("category", 0, "running");
 
+    // 增量过滤（2026-09-20 token 节流）：只 embed 新增或内容变化的品类——
+    // 旧逻辑每小时全表重 embed（ON CONFLICT UPDATE 连向量一起重写），白白烧 API
     const opportunities = await db.all(`
-      SELECT category_id, category_name, overall_score, listing_count,
-             avg_price_rub, est_margin, month_orders, recommendation
-      FROM category_opportunities
-      WHERE overall_score > 0
+      SELECT co.category_id, co.category_name, co.overall_score, co.listing_count,
+             co.avg_price_rub, co.est_margin, co.month_orders, co.recommendation
+      FROM category_opportunities co
+      LEFT JOIN rag_product_knowledge rpk ON rpk.id = 'category_' || co.category_id
+      WHERE co.overall_score > 0
+        AND (
+          rpk.id IS NULL
+          OR rpk.content <> (
+            '品类: ' || co.category_name || ' (ID: ' || co.category_id || ')' || E'\n' ||
+            '评分: ' || co.overall_score || E'\n' ||
+            '在售数: ' || co.listing_count || E'\n' ||
+            '均价: ' || co.avg_price_rub || '₽' || E'\n' ||
+            '预估利润率: ' || co.est_margin || '%' || E'\n' ||
+            '月订单: ' || co.month_orders || E'\n' ||
+            '建议: ' || co.recommendation
+          )
+        )
     `) as Array<Record<string, unknown>>;
 
     if (opportunities.length === 0) return 0;
@@ -206,10 +221,14 @@ export class RagIndexer {
     if (!db) return 0;
     await this.setWatermark("copy", 0, "running");
 
+    // 增量过滤（2026-09-20 token 节流）：只 embed 新增或标题变化的记录——
+    // 旧逻辑每小时全表 317 条逐条重 embed（≈7600 次/天 API 调用，烧穿 Kimi 周额度实证）
     const copies = await db.all(`
-      SELECT offer_id, name, title_ru
-      FROM promo_copy_history
-      WHERE title_ru IS NOT NULL
+      SELECT pch.offer_id, pch.name, pch.title_ru
+      FROM promo_copy_history pch
+      LEFT JOIN rag_copy_templates rct ON rct.id = 'copy_' || pch.offer_id
+      WHERE pch.title_ru IS NOT NULL
+        AND (rct.id IS NULL OR rct.original_text <> pch.title_ru)
     `) as Array<Record<string, unknown>>;
 
     if (copies.length === 0) return 0;
