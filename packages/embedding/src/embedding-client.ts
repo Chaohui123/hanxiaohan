@@ -57,7 +57,8 @@ export class EmbeddingClient {
         const resp = await fetch(`${baseUrl}/embeddings`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${apiKey}` },
-          body: JSON.stringify({ model, input: texts }),
+          // dimensions 必传：embedding-3 默认 2048 维，与 PG vector(1024) 列配套需显式 1024（2026-09-25 切换实证）
+          body: JSON.stringify({ model, input: texts, dimensions: this.config.dimensions }),
           signal: AbortSignal.timeout(this.config.requestTimeoutMs),
         });
         if (!resp.ok) throw new Error(`Zhipu embedding API ${resp.status}: ${(await resp.text()).slice(0, 200)}`);

@@ -23,7 +23,10 @@ export class RagIndexer {
       "SELECT last_indexed_at FROM rag_index_watermark WHERE knowledge_type = $1",
       [knowledgeType],
     ) as Array<Record<string, unknown>>;
-    return rows.length > 0 ? String(rows[0].last_indexed_at) : null;
+    if (rows.length === 0) return null;
+    // PG 驱动返回 Date 对象，String() 会得到 "Sun Sep 20 2026..." 非法 SQL 时间串——转 ISO（2026-09-25 bug 实证）
+    const raw = rows[0].last_indexed_at as unknown;
+    return raw instanceof Date ? raw.toISOString() : new Date(String(raw)).toISOString();
   }
 
   private async setWatermark(knowledgeType: string, count: number, status: string): Promise<void> {
@@ -200,7 +203,8 @@ export class RagIndexer {
             o.category_name,
             `${o.category_name} 品类分析`,
             texts[i],
-            [o.category_name, `score_${o.overall_score}`].join(","),
+            // keywords 列为 text[]：必须 PG 数组字面量格式（2026-09-25 malformed array literal bug 实证）
+            `{${[o.category_name, `score_${o.overall_score}`].map((k) => `"${String(k).replace(/"/g, '\\"')}"`).join(",")}}`,
             `[${embeddings[i].vector.join(",")}]`,
           ],
         );
