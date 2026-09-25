@@ -154,6 +154,14 @@ export const NOTIFICATION_EVENTS: NotificationEvent[] = [
     rateLimit: 2,
   },
   {
+    key: "ACTION_WATCH_ALERT",
+    level: "warn",
+    label: "促销监控",
+    template: "{{message}}",
+    force: true,
+    rateLimit: 3,
+  },
+  {
     key: "EXCHANGE_RATE_STALE",
     level: "warn",
     label: "汇率过期",
@@ -379,6 +387,7 @@ export const EVENT_KEYS = {
   LOGISTICS_NO_PICKUP: "LOGISTICS_NO_PICKUP",
   LOGISTICS_CUSTOMS_HOLD: "LOGISTICS_CUSTOMS_HOLD",
   LOGISTICS_DELIVERED: "LOGISTICS_DELIVERED",
+  ACTION_WATCH_ALERT: "ACTION_WATCH_ALERT",
 } as const;
 
 export type EventKey = (typeof EVENT_KEYS)[keyof typeof EVENT_KEYS];

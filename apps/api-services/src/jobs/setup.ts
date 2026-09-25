@@ -135,6 +135,21 @@ export function registerCoreJobs(deps: CoreJobDeps): void {
     );
   });
 
+  // 促销活动监控（2026-09-25 接入 /v2/actions/* 新接口）：价格冻结+促销限价超标预警
+  registerJob("action-watch", 24 * 3600_000, async () => {
+    const { runActionWatch } = await import("../services/action-watch.js");
+    const result = await runActionWatch(ozonClient as never).catch((err) => {
+      logger.error({ err: (err as Error).message }, "Action watch cycle failed");
+      return null;
+    });
+    if (result && result.alerts.length > 0) {
+      const { emitEvent } = await import("../services/notification-events.js");
+      for (const alert of result.alerts.slice(0, 5)) {
+        await emitEvent("ACTION_WATCH_ALERT", { message: alert }, `action-watch-${Date.now()}`).catch(() => {});
+      }
+    }
+  });
+
   registerJob("token-monitor", 6 * 3600_000, async () => {
     const used = tokenTracker.getTodayUsage();
     const limit = parseInt(process.env.LLM_DAILY_TOKEN_LIMIT || "0", 10);
