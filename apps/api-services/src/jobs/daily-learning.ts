@@ -323,7 +323,7 @@ async function fetchRedditSub(sub: string): Promise<LearningItem[]> {
 // feed 列表（retail.ru 主备两个路径，404 自动换备用）
 const RU_MEDIA_FEEDS: Array<{ name: "habr" | "retail.ru"; urls: string[] }> = [
   // e-pepper.ru RSS 已失效（2026-09-26 实测 feed/rss/feed.xml 全 404）→ 换 Habr 俄文每日精选（电商/营销/创业内容多，RSS 稳定）
-  { name: "habr", urls: ["https://habr.com/ru/rss/best/daily/", "https://habr.com/ru/rss/all/all/"] },
+  { name: "habr", urls: ["https://habr.com/ru/rss/articles/top", "https://habr.com/ru/rss/all/all/"] },
   { name: "retail.ru", urls: ["https://www.retail.ru/rss/news/", "https://www.retail.ru/rss/"] },
 ];
 // 标题关键词过滤：只留电商/平台运营相关，防泛零售新闻稀释知识库
