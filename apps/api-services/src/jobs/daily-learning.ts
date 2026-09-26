@@ -53,7 +53,7 @@ const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 interface LearningItem {
   /** 幂等键：B 站=bvid，vc.ru/媒体/seller-edu=文章 URL，Reddit=permalink（与 isAlreadyLearned 的 LIKE 查询兼容） */
   sourceId: string;
-  source: "bilibili" | "vc.ru" | "reddit" | "e-pepper" | "retail.ru" | "seller-edu";
+  source: "bilibili" | "vc.ru" | "reddit" | "habr" | "retail.ru" | "seller-edu";
   title: string;
   author: string;
   /** 正文/字幕（可为空，空则仅基于标题提炼并从严） */
@@ -321,8 +321,9 @@ async function fetchRedditSub(sub: string): Promise<LearningItem[]> {
 // ---- 俄文电商媒体 RSS 源（e-pepper / retail.ru，2026-09-20 新增） ----
 
 // feed 列表（retail.ru 主备两个路径，404 自动换备用）
-const RU_MEDIA_FEEDS: Array<{ name: "e-pepper" | "retail.ru"; urls: string[] }> = [
-  { name: "e-pepper", urls: ["https://e-pepper.ru/feed/"] },
+const RU_MEDIA_FEEDS: Array<{ name: "habr" | "retail.ru"; urls: string[] }> = [
+  // e-pepper.ru RSS 已失效（2026-09-26 实测 feed/rss/feed.xml 全 404）→ 换 Habr 俄文每日精选（电商/营销/创业内容多，RSS 稳定）
+  { name: "habr", urls: ["https://habr.com/ru/rss/best/daily/", "https://habr.com/ru/rss/all/all/"] },
   { name: "retail.ru", urls: ["https://www.retail.ru/rss/news/", "https://www.retail.ru/rss/"] },
 ];
 // 标题关键词过滤：只留电商/平台运营相关，防泛零售新闻稀释知识库
@@ -338,7 +339,7 @@ export function isRuMediaRelevant(title: string): boolean {
   return RU_MEDIA_KEYWORDS.some((k) => t.includes(k));
 }
 
-async function fetchRuMedia(feed: { name: "e-pepper" | "retail.ru"; urls: string[] }): Promise<LearningItem[]> {
+async function fetchRuMedia(feed: { name: "habr" | "retail.ru"; urls: string[] }): Promise<LearningItem[]> {
   let xml = "";
   for (const url of feed.urls) {
     try {
@@ -556,7 +557,7 @@ const SOURCE_LABELS: Record<LearningItem["source"], string> = {
   bilibili: "B站",
   "vc.ru": "vc.ru(俄文)",
   reddit: "Reddit(英文)",
-  "e-pepper": "e-pepper.ru(俄文)",
+  habr: "Habr(俄文)",
   "retail.ru": "retail.ru(俄文)",
   "seller-edu": "Ozon官方教程(俄文)",
 };
