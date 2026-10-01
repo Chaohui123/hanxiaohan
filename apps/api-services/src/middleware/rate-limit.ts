@@ -16,7 +16,11 @@ interface Bucket {
 const buckets = new Map<string, Bucket>();
 
 const MAX_TOKENS = parseInt(process.env.RATE_LIMIT_MAX || "60", 10);
+// 内部服务（持 API-Key 的 promo-agent/ops-agent 等）独立高配额：
+// 决策周期按商品数线性放大调用量，与 IP 限流分开（2026-10-01 /rag/playbook 429 实证）
+const MAX_TOKENS_AUTH = parseInt(process.env.RATE_LIMIT_MAX_AUTH || "240", 10);
 const REFILL_RATE = MAX_TOKENS / 60_000;
+const REFILL_RATE_AUTH = MAX_TOKENS_AUTH / 60_000;
 const REFILL_INTERVAL_MS = 10_000;
 
 let lastCleanup = Date.now();
@@ -130,6 +134,8 @@ export async function rateLimitMiddleware(req: Request, res: Response, next: Nex
 
   // Prefer API-key-based key for authenticated requests (not spoofable)
   const rateLimitKey = authKey || `ip:${ip}`;
+  const maxTokens = authKey ? MAX_TOKENS_AUTH : MAX_TOKENS;
+  const refillRate = authKey ? REFILL_RATE_AUTH : REFILL_RATE;
 
   let bucket: Bucket | null = null;
   const redisBucket = await getRateLimitBucket(rateLimitKey);
@@ -139,13 +145,13 @@ export async function rateLimitMiddleware(req: Request, res: Response, next: Nex
   } else {
     bucket = buckets.get(rateLimitKey) || null;
     if (!bucket) {
-      bucket = { tokens: MAX_TOKENS, lastRefill: now };
+      bucket = { tokens: maxTokens, lastRefill: now };
     }
   }
 
   const elapsed = now - bucket.lastRefill;
   if (elapsed > 0) {
-    bucket.tokens = Math.min(MAX_TOKENS, bucket.tokens + elapsed * REFILL_RATE);
+    bucket.tokens = Math.min(maxTokens, bucket.tokens + elapsed * refillRate);
     bucket.lastRefill = now;
   }
 
@@ -161,9 +167,9 @@ export async function rateLimitMiddleware(req: Request, res: Response, next: Nex
 
     next();
   } else {
-    const retryAfter = Math.ceil((1 - bucket.tokens) / REFILL_RATE / 1000);
+    const retryAfter = Math.ceil((1 - bucket.tokens) / refillRate / 1000);
     res.set("Retry-After", String(Math.max(1, retryAfter)));
-    res.set("X-RateLimit-Limit", String(MAX_TOKENS));
+    res.set("X-RateLimit-Limit", String(maxTokens));
     res.set("X-RateLimit-Remaining", "0");
     res.status(429).json({
       success: false,
