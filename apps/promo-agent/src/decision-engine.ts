@@ -670,23 +670,44 @@ async function executePlan(
     }
   }
 
-  // Auto-save successful actions to RAG Playbook (fire-and-forget)
-  for (const result of results) {
-    if (!result.success) continue;
-    fetch(`${config.apiBase}/api/rag/playbook`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json", "X-API-Key": config.apiKey },
-      body: JSON.stringify({
+  // Auto-save successful actions to RAG Playbook（串行+间隔防突发；429 按 Retry-After 重试一次）
+  void (async () => {
+    for (const result of results) {
+      if (!result.success) continue;
+      const payload = {
         title: `${result.type}操作: ${result.name}`,
         scenario: result.type === "pricing" ? "pricing" : "promotion",
         content: `商品: ${result.name}\n操作: ${result.type}\n原因: ${result.message}\n结果: 成功`,
         tags: [result.type, result.offerId],
         author: "auto_decision",
         priority: 1,
-      }),
-      signal: AbortSignal.timeout(5_000),
-    }).catch(() => {}); // fire-and-forget
-  }
+      };
+      try {
+        let resp = await fetch(`${config.apiBase}/api/rag/playbook`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", "X-API-Key": config.apiKey },
+          body: JSON.stringify(payload),
+          signal: AbortSignal.timeout(5_000),
+        });
+        if (resp.status === 429) {
+          const waitSec = Math.min(Number(resp.headers.get("retry-after")) || 2, 10);
+          await new Promise((s) => setTimeout(s, waitSec * 1000));
+          resp = await fetch(`${config.apiBase}/api/rag/playbook`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "X-API-Key": config.apiKey },
+            body: JSON.stringify(payload),
+            signal: AbortSignal.timeout(5_000),
+          });
+        }
+        if (!resp.ok) {
+          logger.warn({ status: resp.status, offerId: result.offerId }, "Playbook write rejected");
+        }
+      } catch {
+        // fire-and-forget：写库失败不影响决策结果
+      }
+      await new Promise((s) => setTimeout(s, 250)); // 间隔防同毫秒突发打爆限流桶
+    }
+  })();
 
   return results;
 }
