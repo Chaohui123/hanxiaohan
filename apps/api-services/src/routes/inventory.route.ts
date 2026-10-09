@@ -15,6 +15,7 @@ interface OzonInventoryItem {
   offerId: string;
   name: string;
   price: number;
+  actionPriceRub: number | null; // 促销实付价（/v2/actions/products 的 action_price，RUB）；未参促/拉取失败为 null
   stock: number;
   cost: number;
   weight: number; // kg（sku_1688_mapping.weight_kg）
@@ -56,7 +57,7 @@ async function fetchOzonInventoryItems(): Promise<OzonInventoryItem[]> {
     }
 
     // 2. 商品详情（offer_id / name / 在售状态）
-    const infoResp = await client.request<{ items?: Array<{ offer_id?: string; name?: string; images?: string[]; statuses?: { status_name?: string } }> }>(
+    const infoResp = await client.request<{ items?: Array<{ id?: number; offer_id?: string; name?: string; images?: string[]; statuses?: { status_name?: string } }> }>(
       "POST", "/v3/product/info/list", { product_id: productIds },
     );
     // 排除停售品（statuses.status_name="Не продается"，如 67F 商标停售）——
@@ -75,6 +76,31 @@ async function fetchOzonInventoryItems(): Promise<OzonInventoryItem[]> {
       // v5 prices 返回店铺合同币种 CNY；契约 price 为 RUB —— 换算（decision-engine 以 cost(CNY)×rate 对齐）
       const cny = parseFloat(String(p.price?.price || "0")) || 0;
       if (offerId) priceByOffer.set(offerId, Math.round(cny * cnyToRub * 100) / 100);
+    }
+
+    // 3.5 促销实付价：/v2/actions/products（action_id 取 ACTION_WATCH_IDS 第一个，默认 1977747）。
+    // action_price.amount 为店铺合同币种 CNY（2026-10 实测：website_prices.currency="CNY"，且 8/14 品 amount×汇率 == v5 售价），
+    // 与 v5 prices 同口径乘 cnyToRub 换算为 RUB；按 product_id → offer_id 映射；
+    // 接口一次最多 100 条（当前 14 品一次够）；失败/超时降级为 null，不影响主返回。
+    const actionPriceByOffer = new Map<string, number>();
+    try {
+      const actionId = parseInt((process.env.ACTION_WATCH_IDS || "1977747").split(",")[0].trim(), 10) || 1977747;
+      const actionResp = await client.request<{ products?: Array<{ id?: number; action_price?: { amount?: string } }> }>(
+        "POST", "/v2/actions/products", { action_id: actionId, limit: 100 },
+      );
+      const offerByProductId = new Map<number, string>();
+      for (const i of infos) {
+        const pid = Number(i.id || 0);
+        const oid = String(i.offer_id || "").trim();
+        if (pid && oid) offerByProductId.set(pid, oid);
+      }
+      for (const p of actionResp.products || []) {
+        const offerId = offerByProductId.get(Number(p.id || 0));
+        const amountCny = parseFloat(String(p.action_price?.amount || "0")) || 0;
+        if (offerId && amountCny > 0) actionPriceByOffer.set(offerId, Math.round(amountCny * cnyToRub * 100) / 100);
+      }
+    } catch (err) {
+      logger.warn({ err: (err as Error).message }, "Action products fetch failed — actionPriceRub degraded to null");
     }
 
     // 4. 库存（stocks[].present 汇总）
@@ -114,6 +140,7 @@ async function fetchOzonInventoryItems(): Promise<OzonInventoryItem[]> {
         offerId,
         name: String(info.name || offerId),
         price,
+        actionPriceRub: actionPriceByOffer.get(offerId) ?? null,
         stock,
         cost: costByOffer.get(offerId) || 0,
         weight: weightByOffer.get(offerId) || 0,

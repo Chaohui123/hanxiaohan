@@ -104,6 +104,10 @@ function defaultOzonRequest(_method: unknown, path: unknown, _body: unknown) {
       ],
     });
   }
+  if (path === "/v2/actions/products") {
+    // product_id 1 = OFFER-1 在促销中，实付 1200 CNY（amount 为合同币种 CNY，×汇率10 → 12000₽）；OFFER-2 不在促销返回里
+    return Promise.resolve({ products: [{ id: 1, action_price: { amount: "1200.00" } }] });
+  }
   if (path === "/v4/product/info/stocks") {
     return Promise.resolve({
       items: [
@@ -160,6 +164,7 @@ describe("GET /api/inventory — Ozon fallback", () => {
       offerId: "OFFER-1",
       name: "Dog Boots",
       price: 15000, // 1500 CNY × 10（v5 prices 返回 CNY，契约输出 RUB）
+      actionPriceRub: 12000, // /v2/actions/products 促销实付价 1200 CNY × 10（product_id 1 → OFFER-1）
       stock: 10, // 8 + 2 汇总
       cost: 50.5, // sku_1688_mapping 匹配
       rating: 0,
@@ -169,7 +174,7 @@ describe("GET /api/inventory — Ozon fallback", () => {
     });
 
     const item2 = res.body.items.find((i: Record<string, unknown>) => i.offerId === "OFFER-2");
-    expect(item2).toMatchObject({ offerId: "OFFER-2", price: 32005, stock: 5, cost: 0 }); // 3200.5 × 10；无映射 → cost 0
+    expect(item2).toMatchObject({ offerId: "OFFER-2", price: 32005, stock: 5, cost: 0, actionPriceRub: null }); // 3200.5 × 10；无映射 → cost 0；未参促 → null
   });
 
   it("product_performance 有数据时走旧逻辑，不调用 Ozon API", async () => {
@@ -191,8 +196,8 @@ describe("GET /api/inventory — Ozon fallback", () => {
 
     expect(first.status).toBe(200);
     expect(second.body.items).toEqual(first.body.items);
-    // 4 个端点各调用一次
-    expect(state.ozonRequest).toHaveBeenCalledTimes(4);
+    // 5 个端点各调用一次（含 /v2/actions/products 促销实付价）
+    expect(state.ozonRequest).toHaveBeenCalledTimes(5);
   });
 
   it("Ozon API 失败时返回空 items 而不是 500", async () => {
@@ -201,6 +206,22 @@ describe("GET /api/inventory — Ozon fallback", () => {
 
     expect(res.status).toBe(200);
     expect(res.body).toEqual({ items: [] });
+  });
+
+  it("促销接口失败时 actionPriceRub 降级为 null，不影响主返回", async () => {
+    state.ozonRequest.mockImplementation((_m: unknown, path: unknown, _b: unknown) => {
+      if (path === "/v2/actions/products") return Promise.reject(new Error("actions api down"));
+      return defaultOzonRequest(_m, path, _b);
+    });
+
+    const res = await request(app).get("/api/inventory?limit=100");
+
+    expect(res.status).toBe(200);
+    expect(res.body.items).toHaveLength(2);
+    expect(res.body.items.every((i: Record<string, unknown>) => i.actionPriceRub === null)).toBe(true);
+    // 主字段不受促销接口失败影响
+    const item1 = res.body.items.find((i: Record<string, unknown>) => i.offerId === "OFFER-1");
+    expect(item1).toMatchObject({ price: 15000, stock: 10, cost: 50.5 });
   });
 });
 

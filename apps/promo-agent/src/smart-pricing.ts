@@ -1,6 +1,7 @@
 import type { FeishuBot } from "@onzo/feishu-bot";
 import type { ApiConfig } from "./api-client.js";
 import { promoApi, competitorApi } from "./api-client.js";
+import { threatWeightedAverage } from "./competitor-threat.js";
 import { logger } from "@onzo/logger";
 import { queryRag, extractRagContent, writeRag } from "@onzo/embedding";
 
@@ -32,7 +33,7 @@ const DEFAULT_MARGIN = 0.30; // 30% default margin
 const MIN_MARGIN = parseFloat(process.env.PROMO_MIN_PROFIT_RATE || "0.10"); // from env
 const MAX_CHANGE_PERCENT = 20; // ±20% per change
 const MAX_ADJUSTMENTS_PER_DAY = 3;
-const PRICING_INTERVAL_MS = 2 * 60 * 60 * 1000; // 2 hours
+const PRICING_INTERVAL_MS = (Number(process.env.PROMO_PRICING_INTERVAL_HOURS) || 24) * 60 * 60 * 1000; // 默认每日 1 次（env PROMO_PRICING_INTERVAL_HOURS 可覆盖，单位小时）
 const PRICE_CACHE_TTL_MS = 30 * 60 * 1000; // 30 minutes
 
 // ---- 竞品价格缓存 ----
@@ -112,7 +113,7 @@ export function stopSmartPricing(): void {
 
 // ---- 核心逻辑 ----
 
-async function runPricingCycle(
+export async function runPricingCycle(
   bot: FeishuBot,
   chatId: string,
   config: ApiConfig,
@@ -165,9 +166,11 @@ async function runPricingCycle(
     const offerId = String(item.offerId || item.offer_id || "");
     const name = String(item.name || item.title || offerId).slice(0, 50);
     const cost = Number(item.cost || 0);
-    const currentPrice = Number(item.price || 0);
+    // 促销实付价（actionPriceRub，/v2/actions/products 口径）优先于卖家设定价
+    const actionPriceRub = Number(item.actionPriceRub || 0);
+    const currentPrice = actionPriceRub > 0 ? actionPriceRub : Number(item.price || 0);
 
-    // 4. 获取竞品均价（30分钟缓存）
+    // 4. 获取竞品均价（30分钟缓存）——威胁分 <40 不纳入，剩余按威胁分加权；全被滤 → 0（成本定价分支）
     let competitorAvg = 0;
     const cached = getCachedCompetitorPrice(offerId);
     if (cached !== null) {
@@ -177,8 +180,8 @@ async function runPricingCycle(
         const priceData = await competitorApi.getPrices(config, offerId, 3);
         const prices = priceData.prices || [];
         if (prices.length > 0) {
-          competitorAvg = prices.reduce((s, p) => s + p.price, 0) / prices.length;
-          setCachedCompetitorPrice(offerId, competitorAvg);
+          competitorAvg = threatWeightedAverage(prices, currentPrice);
+          if (competitorAvg > 0) setCachedCompetitorPrice(offerId, competitorAvg);
         }
       } catch {
         // 无竞品数据，仅基于成本计算
@@ -228,6 +231,7 @@ async function runPricingCycle(
     } else {
       reason = `竞品定价: 竞品均价 ${competitorAvg.toFixed(0)} ₽ × 0.95`;
     }
+    if (actionPriceRub > 0) reason += "（含促销价口径）";
 
     suggestions.push({
       offerId,

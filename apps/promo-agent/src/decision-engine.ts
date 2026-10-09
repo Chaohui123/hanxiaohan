@@ -1,6 +1,7 @@
 import type { FeishuBot } from "@onzo/feishu-bot";
 import type { ApiConfig } from "./api-client.js";
 import { promoApi, competitorApi } from "./api-client.js";
+import { threatWeightedAverage } from "./competitor-threat.js";
 import { logger } from "@onzo/logger";
 import { crossValidate, type CrossValidationResult } from "./cross-validator.js";
 import { generateCopy, applyCopy } from "./copywriter.js";
@@ -99,7 +100,7 @@ export interface DecisionPlan {
 // 配置
 // ============================================================
 
-const DECISION_INTERVAL_HOURS = parseInt(process.env.PROMO_DECISION_INTERVAL_HOURS || "4", 10);
+const DECISION_INTERVAL_HOURS = parseInt(process.env.PROMO_DECISION_INTERVAL_HOURS || "24", 10);
 const DECISION_INTERVAL_MS = DECISION_INTERVAL_HOURS * 60 * 60 * 1000;
 const MAX_DAILY_AUTO_ACTIONS = parseInt(process.env.PROMO_MAX_DAILY_ACTIONS || "10", 10);
 const SCORE_THRESHOLD = parseInt(process.env.PROMO_SCORE_THRESHOLD || "40", 10);
@@ -338,7 +339,9 @@ export async function scoreAllProducts(config: ApiConfig): Promise<ProductScore[
     const offerId = String(item.offerId || item.offer_id || "");
     const name = String(item.name || item.title || offerId).slice(0, 50);
     const cost = Number(item.cost || 0);
-    const currentPrice = Number(item.price || 0);
+    // 促销实付价（actionPriceRub，/api/inventory 附加字段）优先于卖家设定价 —— 只替换 currentPrice 基准，底价双底线公式不动
+    const actionPriceRub = Number(item.actionPriceRub || 0);
+    const currentPrice = actionPriceRub > 0 ? actionPriceRub : Number(item.price || 0);
     const stock = Number(item.stock ?? item.quantity ?? 0);
 
     // 竞品均价
@@ -349,10 +352,10 @@ export async function scoreAllProducts(config: ApiConfig): Promise<ProductScore[
       // 精准快照（competitorUrl 非空，来自留档链接的本机抓取）优先；
       // 无精准数据时回退到全部快照（按名搜索的聚合数据）
       const precise = all.filter((p) => p.competitorUrl);
-      const prices = precise.length > 0 ? precise : all;
-      if (prices.length > 0) {
-        competitorAvg = prices.reduce((s, p) => s + p.price, 0) / prices.length;
-      }
+      const candidates = precise.length > 0 ? precise : all;
+      // 威胁分过滤：<40 分不纳入，剩余按威胁分加权；全被滤 → 保持 fallback 自己价格
+      const weighted = threatWeightedAverage(candidates, currentPrice);
+      if (weighted > 0) competitorAvg = weighted;
     } catch {
       // 无竞品数据
     }
@@ -444,7 +447,7 @@ export async function scoreAllProducts(config: ApiConfig): Promise<ProductScore[
         rating: Math.round(ratingScore * 100),
       },
       recommendation,
-      reason,
+      reason: actionPriceRub > 0 ? `${reason}（含促销价口径）` : reason,
     });
 
     // 避免 API 密集
@@ -914,7 +917,7 @@ export function formatExecutionReport(plan: DecisionPlan): string {
 
   lines.push(
     `📈 今日已执行: ${dailyActionCount}/${MAX_DAILY_AUTO_ACTIONS}`,
-    `🔄 下次决策: 4小时后`,
+    `🔄 下次决策: ${DECISION_INTERVAL_HOURS}小时后`,
     "",
     "📊 效果将在7天后自动评估，届时可在周报中查看增量数据",
   );
