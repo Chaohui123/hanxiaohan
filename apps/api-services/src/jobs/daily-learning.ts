@@ -4,9 +4,11 @@
 // 流水线（每日一次，scheduler 注册）：
 //   源1 B 站：关键词搜索（wbi 签名）→ 近 96h 高播放视频 → CC 字幕/whisper 转录
 //   源2 vc.ru：俄文电商标签 RSS（ozon/маркетплейсы/продвижение 等）→ 正文
-//   源3 Reddit：r/ecommerce 等 sub 周榜（公开 JSON，score≥20）→ 英文电商经验
+//   源3 Reddit：r/ecommerce 等 sub 周榜（公开 JSON，score≥20）→ 英文电商经验【走代理】
 //   源4 俄文电商媒体 RSS：e-pepper.ru / retail.ru（标题关键词过滤）→ 俄文行业新闻
 //   源5 Ozon seller-edu 官方教程（慢速爬取，fail-open）→ 权威平台规则
+//   源6 Telegram 公开频道（t.me/s/ 网页版无需登录，2026-10-10 新增）→ 俄文卖家频道【走代理】
+//   源7 YouTube 频道 RSS（feeds/videos.xml 无需认证，2026-10-10 新增）→ 俄汽修/DIY 教程【走代理】
 //   → DeepSeek 结构化提炼（关键词/搜索习惯/选品线索/主图视频实践/推广策略）
 //   → Knowledge Gate 门禁（边界+真实性+语义查重）→ rag_operations_playbook
 //   → 飞书推送学习简报（无论是否有新入库都发，2026-09-06 用户要求可见性）
@@ -16,11 +18,42 @@
 // ============================================================
 
 import crypto from "node:crypto";
+import { ProxyAgent, fetch as undiciFetch } from "undici";
 import { getDb } from "../db/connection.js";
 import { logger } from "@onzo/logger";
 import { emitEvent } from "../services/notification-events.js";
 
 // ---- 配置 ----
+
+// ---- 墙外源代理（Xray 客户端连自建 VPS，2026-10-10 新增） ----
+// 生产服务器直连 Reddit/Telegram/YouTube 被墙（000 超时实证）→ 墙外源统一走服务器本地 Xray 客户端。
+// Xray 客户端双协议监听：10808=socks5 / 10809=http；undici ProxyAgent（≥6.7，当前 8.x）原生支持
+// socks5:// scheme。若 socks5 握手异常，LEARNING_PROXY_URL 改 http://127.0.0.1:10809 即可。
+// 代理不可用时各墙外源 fail-open（记 warn 跳过该源），不炸整个学习周期；
+// 墙内源（B站/vc.ru/habr/retail.ru/seller-edu）保持直连不动。
+function getLearningProxyUrl(): string {
+  return process.env.LEARNING_PROXY_URL || "socks5://127.0.0.1:10808";
+}
+
+let proxyAgentCache: { url: string; agent: ProxyAgent } | null = null;
+
+/** 代理 dispatcher（按当前 env URL 缓存复用；URL 变化时重建） */
+function getProxyAgent(): ProxyAgent {
+  const url = getLearningProxyUrl();
+  if (!proxyAgentCache || proxyAgentCache.url !== url) {
+    proxyAgentCache = { url, agent: new ProxyAgent(url) };
+  }
+  return proxyAgentCache.agent;
+}
+
+/** 墙外源统一 fetch 入口：走本地代理 + 默认 UA（可被 headers 覆盖）+ 超时。失败抛错由调用方 fail-open */
+async function proxyFetch(url: string, headers: Record<string, string> = {}, timeoutMs = 15_000) {
+  return undiciFetch(url, {
+    dispatcher: getProxyAgent(),
+    headers: { "User-Agent": UA, ...headers },
+    signal: AbortSignal.timeout(timeoutMs),
+  });
+}
 
 // B 站搜索词（2026-09-06 扩容 4→14：覆盖运营/选品/广告/内容/物流+我方赛道船配/冰钓；
 // 2026-09-20 再扩 14→22：补破零/标签/搜索优化/流量/评价/冬季选品等高频痛点词）
@@ -51,9 +84,9 @@ const UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML,
 // ---- 统一学习条目（多源抽象） ----
 
 interface LearningItem {
-  /** 幂等键：B 站=bvid，vc.ru/媒体/seller-edu=文章 URL，Reddit=permalink（与 isAlreadyLearned 的 LIKE 查询兼容） */
+  /** 幂等键：B 站=bvid，vc.ru/媒体/seller-edu=文章 URL，Reddit=permalink，Telegram=消息链接，YouTube=视频 URL（与 isAlreadyLearned 的 LIKE 查询兼容） */
   sourceId: string;
-  source: "bilibili" | "vc.ru" | "reddit" | "habr" | "retail.ru" | "seller-edu";
+  source: "bilibili" | "vc.ru" | "reddit" | "habr" | "retail.ru" | "seller-edu" | "telegram" | "youtube";
   title: string;
   author: string;
   /** 正文/字幕（可为空，空则仅基于标题提炼并从严） */
@@ -267,10 +300,11 @@ async function fetchVcRu(tag: string): Promise<LearningItem[]> {
     }));
 }
 
-// ---- Reddit 源（英文电商经验，公开 JSON 无 key，2026-09-20 新增） ----
+// ---- Reddit 源（英文电商经验，公开 JSON 无 key，2026-09-20 新增；2026-10-10 改走代理） ----
 
-// 目标 sub：电商综合/创业经验/亚马逊 FBA（英文一手卖家经验，env 可覆盖）
-const REDDIT_SUBS = (process.env.LEARNING_REDDIT_SUBS || "ecommerce,Entrepreneur,FulfillmentByAmazon").split(",").map((s) => s.trim()).filter(Boolean);
+// 目标 sub：电商综合/创业经验/亚马逊 FBA + 垂直品类真实用户讨论（snowmobile 雪地摩托/boating 船艇，
+// 我方在售赛道，2026-10-10 加入），env 可覆盖
+const REDDIT_SUBS = (process.env.LEARNING_REDDIT_SUBS || "ecommerce,Entrepreneur,FulfillmentByAmazon,snowmobile,boating").split(",").map((s) => s.trim()).filter(Boolean);
 // 周榜热度门槛：score<20 的帖子多为水帖/求助帖，知识密度低
 const REDDIT_MIN_SCORE = parseInt(process.env.LEARNING_REDDIT_MIN_SCORE || "20", 10);
 const MAX_REDDIT_PER_SUB = 3;
@@ -306,16 +340,22 @@ export function parseRedditPosts(json: string, minScore: number, maxPerSub: numb
   return items;
 }
 
-async function fetchRedditSub(sub: string): Promise<LearningItem[]> {
-  const resp = await fetch(`https://www.reddit.com/r/${encodeURIComponent(sub)}/top.json?t=week&limit=15`, {
-    headers: { "User-Agent": REDDIT_UA, Accept: "application/json" },
-    signal: AbortSignal.timeout(15_000),
-  });
-  if (!resp.ok) {
-    logger.warn({ sub, status: resp.status }, "Reddit fetch failed");
+export async function fetchRedditSub(sub: string): Promise<LearningItem[]> {
+  try {
+    const resp = await proxyFetch(`https://www.reddit.com/r/${encodeURIComponent(sub)}/top.json?t=week&limit=15`, {
+      "User-Agent": REDDIT_UA, // Reddit 拦默认 UA，保留自定义 UA（代理 fetch 也要带）
+      Accept: "application/json",
+    });
+    if (!resp.ok) {
+      logger.warn({ sub, status: resp.status }, "Reddit fetch failed");
+      return [];
+    }
+    return parseRedditPosts(await resp.text(), REDDIT_MIN_SCORE, MAX_REDDIT_PER_SUB);
+  } catch (err) {
+    // 代理不可用/连接被拒时 fail-open：记 warn 跳过该 sub，不影响其他源与整个学习周期
+    logger.warn({ sub, err: (err as Error).message }, "Reddit fetch error (proxy unavailable?)");
     return [];
   }
-  return parseRedditPosts(await resp.text(), REDDIT_MIN_SCORE, MAX_REDDIT_PER_SUB);
 }
 
 // ---- 俄文电商媒体 RSS 源（e-pepper / retail.ru，2026-09-20 新增） ----
@@ -474,6 +514,137 @@ async function fetchSellerEdu(): Promise<LearningItem[]> {
   return items;
 }
 
+// ---- Telegram 公开频道源（t.me/s/{channel} 网页版无需登录，2026-10-10 新增；走代理） ----
+
+// 频道候选：ozon_seller=Ozon 卖家官方、marketplace_ru=电商综合（失效 404 时 fail-open，
+// 换同类型频道改 env 即可）。env LEARNING_TG_CHANNELS 逗号分隔频道名（@/s/ 前缀有无均可）
+const TG_CHANNELS = (process.env.LEARNING_TG_CHANNELS || "ozon_seller,marketplace_ru")
+  .split(",").map((s) => s.trim().replace(/^@/, "").replace(/^s\//, "")).filter(Boolean);
+const MAX_TG_MESSAGES = 20; // 每频道取最近 N 条消息
+
+/** HTML 实体反转义（含数字实体，t.me 页面常见；&amp; 必须最后解防二次反转义） */
+function unescapeHtmlEntities(s: string): string {
+  return s
+    .replace(/&nbsp;/g, " ")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;|&apos;/g, "'")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&#x([0-9a-fA-F]+);/g, (_, h: string) => String.fromCodePoint(parseInt(h, 16)))
+    .replace(/&#(\d+);/g, (_, d: string) => String.fromCodePoint(parseInt(d, 10)))
+    .replace(/&amp;/g, "&");
+}
+
+/**
+ * 解析 t.me/s/{channel} 页面 HTML 为学习条目（纯函数，便于单测）。
+ * 页面结构：每个消息 div.tgme_widget_message 带 data-post="channel/123"（消息锚点，唯一），
+ *   文本在 div.tgme_widget_message_text，发布时间在 time[datetime]；按时间升序排列。
+ * 取末尾 maxMessages 条（=最近消息）；纯图/视频消息（无文本 div）跳过。
+ */
+export function parseTelegramChannelHtml(html: string, channel: string, maxMessages: number): LearningItem[] {
+  const anchors = [...html.matchAll(/data-post="([^"]+)"/g)];
+  const items: LearningItem[] = [];
+  for (let i = 0; i < anchors.length; i++) {
+    const postId = anchors[i][1]; // 形如 "ozon_seller/1234"
+    const blockStart = anchors[i].index ?? 0;
+    const blockEnd = i + 1 < anchors.length ? (anchors[i + 1].index ?? html.length) : html.length;
+    const block = html.slice(blockStart, blockEnd);
+    const textMatch = block.match(/<div class="tgme_widget_message_text[^"]*"[^>]*>([\s\S]*?)<\/div>/);
+    if (!textMatch) continue; // 无文本消息（纯图/视频/贴纸）
+    const text = unescapeHtmlEntities(
+      textMatch[1].replace(/<br\s*\/?>/gi, "\n").replace(/<[^>]+>/g, ""),
+    ).replace(/[ \t]+/g, " ").replace(/\n{3,}/g, "\n\n").trim();
+    if (!text) continue;
+    const timeMatch = block.match(/datetime="([^"]+)"/);
+    const pubTs = timeMatch ? Date.parse(timeMatch[1]) / 1000 : 0;
+    const url = `https://t.me/${postId}`;
+    items.push({
+      sourceId: url, // 幂等键：消息链接（兼容 isAlreadyLearned LIKE）
+      source: "telegram",
+      title: text.split("\n")[0].slice(0, 80), // 首行截断当标题
+      author: `tg:${channel}`,
+      text: text.slice(0, 6000), // 限长防 token 爆炸
+      url,
+      publishedAt: pubTs || Math.floor(Date.now() / 1000),
+    });
+  }
+  return items.slice(-maxMessages); // 升序页面取末尾=最近 N 条
+}
+
+export async function fetchTelegramChannel(channel: string): Promise<LearningItem[]> {
+  try {
+    const resp = await proxyFetch(`https://t.me/s/${encodeURIComponent(channel)}`, { Accept: "text/html" });
+    if (!resp.ok) {
+      logger.warn({ channel, status: resp.status }, "Telegram channel fetch failed (404=频道失效，LEARNING_TG_CHANNELS 换同类型)");
+      return [];
+    }
+    return parseTelegramChannelHtml(await resp.text(), channel, MAX_TG_MESSAGES);
+  } catch (err) {
+    // 代理不可用/被墙时 fail-open：记 warn 跳过该频道
+    logger.warn({ channel, err: (err as Error).message }, "Telegram channel fetch error (proxy unavailable?)");
+    return [];
+  }
+}
+
+// ---- YouTube 频道 RSS 源（feeds/videos.xml?channel_id={id} 无需认证，2026-10-10 新增；走代理） ----
+
+// env LEARNING_YT_CHANNELS 逗号分隔频道 ID（UC 开头）。默认空=不抓（俄汽修/DIY 频道 ID 待主 Agent 配置后生效）
+const YT_CHANNELS = (process.env.LEARNING_YT_CHANNELS || "").split(",").map((s) => s.trim()).filter(Boolean);
+const YT_RECENT_DAYS = parseInt(process.env.LEARNING_YT_RECENT_DAYS || "7", 10); // 只学近 N 天新视频
+const MAX_YT_PER_CHANNEL = 5;
+
+/**
+ * 解析 YouTube 频道 RSS（Atom XML）为学习条目（纯函数，便于单测）。
+ * 只留 published ≥ minPubTs 的条目；sourceId=视频 URL（幂等键，兼容 isAlreadyLearned LIKE）。
+ */
+export function parseYouTubeRss(xml: string, minPubTs: number, maxPerChannel: number): LearningItem[] {
+  const items: LearningItem[] = [];
+  const entries = xml.match(/<entry>[\s\S]*?<\/entry>/g) || [];
+  const pick = (block: string, tag: string) => {
+    const m = block.match(new RegExp(`<${tag}[^>]*>([\\s\\S]*?)</${tag}>`));
+    return (m?.[1] || "").trim();
+  };
+  for (const e of entries) {
+    const videoId = pick(e, "yt:videoId");
+    const title = unescapeHtmlEntities(pick(e, "title"));
+    const pubTs = Date.parse(pick(e, "published")) / 1000 || 0;
+    if (!videoId || !title) continue;
+    if (pubTs > 0 && pubTs < minPubTs) continue; // 超窗口（默认 7 天）过滤
+    const linkMatch = e.match(/<link[^>]*rel="alternate"[^>]*href="([^"]+)"/);
+    const url = linkMatch?.[1] || `https://www.youtube.com/watch?v=${videoId}`;
+    items.push({
+      sourceId: url, // 幂等键：视频 URL
+      source: "youtube",
+      title,
+      author: unescapeHtmlEntities(pick(e, "name")) || "youtube", // author 下的 <name>=频道名
+      text: unescapeHtmlEntities(pick(e, "media:description")).replace(/\s+/g, " ").trim().slice(0, 6000),
+      url,
+      publishedAt: pubTs,
+    });
+    if (items.length >= maxPerChannel) break;
+  }
+  return items;
+}
+
+export async function fetchYouTubeChannel(channelId: string): Promise<LearningItem[]> {
+  try {
+    const resp = await proxyFetch(
+      `https://www.youtube.com/feeds/videos.xml?channel_id=${encodeURIComponent(channelId)}`,
+      { Accept: "application/atom+xml" },
+    );
+    if (!resp.ok) {
+      logger.warn({ channelId, status: resp.status }, "YouTube RSS fetch failed");
+      return [];
+    }
+    const minPubTs = Date.now() / 1000 - YT_RECENT_DAYS * 86400;
+    return parseYouTubeRss(await resp.text(), minPubTs, MAX_YT_PER_CHANNEL);
+  } catch (err) {
+    // 代理不可用/被墙时 fail-open：记 warn 跳过该频道
+    logger.warn({ channelId, err: (err as Error).message }, "YouTube RSS fetch error (proxy unavailable?)");
+    return [];
+  }
+}
+
 // ---- DeepSeek 结构化提炼 ----
 
 interface DistilledKnowledge {
@@ -560,6 +731,8 @@ const SOURCE_LABELS: Record<LearningItem["source"], string> = {
   habr: "Habr(俄文)",
   "retail.ru": "retail.ru(俄文)",
   "seller-edu": "Ozon官方教程(俄文)",
+  telegram: "Telegram频道",
+  youtube: "YouTube",
 };
 
 /** 知识库条目 id：B 站直接用 bvid；其余源用 源前缀+sourceId base64url 尾段（vc.ru 保持既有 learn_vc_ 前缀不变） */
@@ -838,6 +1011,24 @@ export async function runDailyLearning(): Promise<LearningStats> {
     } catch (err) {
       logger.error({ err: (err as Error).message }, "DailyLearning: seller-edu fetch failed");
     }
+  }
+
+  // ---- 源 6：Telegram 公开频道（俄文卖家频道，走代理，2026-10-10 新增） ----
+  for (const channel of TG_CHANNELS) {
+    // 每源每日蒸馏上限：用完后跳过后续频道
+    if (!hasDistillBudget(ctx, "telegram")) break;
+    // fetchTelegramChannel 内部 fail-open：代理不可用/频道失效返回空数组
+    const items = await fetchTelegramChannel(channel);
+    await processLearningItems(items, ctx, "[TG] ");
+  }
+
+  // ---- 源 7：YouTube 频道 RSS（俄汽修/DIY 教程，走代理，2026-10-10 新增；YT_CHANNELS 为空则整源跳过） ----
+  for (const channelId of YT_CHANNELS) {
+    // 每源每日蒸馏上限：用完后跳过后续频道
+    if (!hasDistillBudget(ctx, "youtube")) break;
+    // fetchYouTubeChannel 内部 fail-open：代理不可用/频道失效返回空数组
+    const items = await fetchYouTubeChannel(channelId);
+    await processLearningItems(items, ctx, "[YT] ");
   }
 
   stats.newKeywords = allKeywords.size;
