@@ -106,6 +106,8 @@ node scripts/download-1688-assets.cjs <1688链接或offerId> [输出根目录]
 
 ## 九、当前工作状态（交接快照 2026-08-07，供新会话衔接）
 
+**店铺资产**：前台店铺主页 https://www.ozon.ru/seller/tehnomir-5140601/（seller slug tehnomir-5140601，2026-10-10 前台实证）；YT 频道 @TehnoMirZapchasti（频道 ID UCVxD44fohcH4M9BPUlaGGrQ）；VK 频道 @club242100845。
+
 ### 在售商品（9 个，全部命中选品公式：型号门槛+本土无品牌墙+中国供应链）
 | offer_id | product_id / sku | 商品 | 价格 | 状态 |
 |---|---|---|---|---|
@@ -152,7 +154,7 @@ node scripts/download-1688-assets.cjs <1688链接或offerId> [输出根目录]
 - **`order_id` INTEGER 溢出（8/10-8/11 sync 154 次 errors:1 的真凶）**：Ozon order_id 为 11 位数（38394336004）超 PG int4 上限，sync 拉到订单后 INSERT 直接失败——这就是"凭据正常、API 正常但永远 0 单"的原因。修复：`local_orders.order_id` / `ozon_orders.order_id` / `purchase_1688.ozon_order_id` 三列改 BIGINT（schema.ts + 生产库已 ALTER）。8/10 首单已手动补录进 ozon_orders（cancelled 态）。
 - 教训：**job 报错必须带内容**，只记数量的日志等于没有日志。
 
-**每日学习多平台升级（2026-09-06，commit `6bcc85f`）**：源 1 B 站关键词 4→14（运营/选品/广告/内容评级/俄电商/Yandex/船外机维修/冰钓冬钓/跨境物流/选品方法）；源 2 新增 **vc.ru 俄文一手电商源**（标签 RSS `vc.ru/rss/tag/{ozon|маркетплейсы|wildberries|e-commerce}`，72h 窗口每标签 2 篇，content:encoded 全文提炼）。多源抽象 `LearningItem`（sourceId 幂等）；飞书简报**无论有无新入库都发**（force:true 突破静默，模板含分源扫描/门禁拦截/去重统计——此前 learned:0 静默导致"没启动"误判）。scheduler 首跑双跑修复（tick 等 stagger 时点，fake-timers 回归测试）。候选待扩：seller-edu.ozon.ru（SPA 需适配）、Habr（RSS 迁移中）、YouTube（需代理）。**2026-10-10 墙外源落地**：服务器直连 Reddit/TG/YouTube 被墙 → 容器内 Xray 客户端（socks5://127.0.0.1:10808，http 10809 备用）+ undici ProxyAgent 统一 `proxyFetch()`；源 3 Reddit 改走代理（默认 sub 加 snowmobile/boating 垂直品类），**源 6 Telegram 公开频道**（t.me/s/ 网页版，`LEARNING_TG_CHANNELS` 默认 ozon_seller,marketplace_ru，404 fail-open 换同类），**源 7 YouTube 频道 RSS**（feeds/videos.xml 无需认证，`LEARNING_YT_CHANNELS` 默认空待配频道 ID，只学 7 天内新视频）；代理不可用各墙外源 fail-open 记 warn 跳过，墙内源直连不动；配置详见 docs/proxy-setup.md 末节
+**每日学习多平台升级（2026-09-06，commit `6bcc85f`）**：源 1 B 站关键词 4→14（运营/选品/广告/内容评级/俄电商/Yandex/船外机维修/冰钓冬钓/跨境物流/选品方法）；源 2 新增 **vc.ru 俄文一手电商源**（标签 RSS `vc.ru/rss/tag/{ozon|маркетплейсы|wildberries|e-commerce}`，72h 窗口每标签 2 篇，content:encoded 全文提炼）。多源抽象 `LearningItem`（sourceId 幂等）；飞书简报**无论有无新入库都发**（force:true 突破静默，模板含分源扫描/门禁拦截/去重统计——此前 learned:0 静默导致"没启动"误判）。scheduler 首跑双跑修复（tick 等 stagger 时点，fake-timers 回归测试）。候选待扩：seller-edu.ozon.ru（SPA 需适配）、Habr（RSS 迁移中）、YouTube（需代理）。**2026-10-10 墙外源落地**：服务器直连 Reddit/TG/YouTube 被墙 → 容器内 Xray 客户端（socks5://127.0.0.1:10808，http 10809 备用）+ undici ProxyAgent 统一 `proxyFetch()`；源 3 Reddit 改走代理（默认 sub 加 snowmobile/boating 垂直品类），**源 6 Telegram 公开频道**（t.me/s/ 网页版，`LEARNING_TG_CHANNELS` 默认 ozon_seller,marketplace_ru，404 fail-open 换同类），**源 7 YouTube 频道 RSS**（feeds/videos.xml 无需认证，`LEARNING_YT_CHANNELS` 默认空待配频道 ID，只学 7 天内新视频）；代理不可用各墙外源 fail-open 记 warn 跳过，墙内源直连不动；配置详见 docs/proxy-setup.md 末节。**2026-10-11 源 7 升级抓视频正文（代码完成待部署）**：whisper 容器新增 `POST /transcribe-youtube`（yt-dlp 字幕优先 ru/ru-RU/en，无字幕走 bestaudio+whisper 兜底，走 YT_PROXY 默认 `http://172.28.0.1:10809`，单视频 180s 超时，失败 502 fail-open）；daily-learning 源 7 在蒸馏预算内调转录替换 `item.text`（拿不到回退 RSS 描述/标题），视频间隔 2s 防风控；Dockerfile pip 加 yt-dlp。测试：whisper python 单测 3 分支（mock yt_dlp）+ vitest 6 用例，api-services 265 全绿
 
 ### 推广汇报链路（2026-08-13 修复，commit `8acbe4c`+`2dce21f`）
 

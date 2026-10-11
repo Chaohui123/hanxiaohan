@@ -8,7 +8,7 @@
 //   源4 俄文电商媒体 RSS：e-pepper.ru / retail.ru（标题关键词过滤）→ 俄文行业新闻
 //   源5 Ozon seller-edu 官方教程（慢速爬取，fail-open）→ 权威平台规则
 //   源6 Telegram 公开频道（t.me/s/ 网页版无需登录，2026-10-10 新增）→ 俄文卖家频道【走代理】
-//   源7 YouTube 频道 RSS（feeds/videos.xml 无需认证，2026-10-10 新增）→ 俄汽修/DIY 教程【走代理】
+//   源7 YouTube 频道 RSS（feeds/videos.xml 无需认证，2026-10-10 新增）→ whisper 服务抓字幕/转录正文（2026-10-11 升级，对齐 B 站）【走代理】
 //   → DeepSeek 结构化提炼（关键词/搜索习惯/选品线索/主图视频实践/推广策略）
 //   → Knowledge Gate 门禁（边界+真实性+语义查重）→ rag_operations_playbook
 //   → 飞书推送学习简报（无论是否有新入库都发，2026-09-06 用户要求可见性）
@@ -645,6 +645,39 @@ export async function fetchYouTubeChannel(channelId: string): Promise<LearningIt
   }
 }
 
+// ---- YouTube 视频正文：whisper 服务 /transcribe-youtube（yt-dlp 字幕优先+whisper 兜底，2026-10-11 升级，对齐 B 站） ----
+
+/** 每个视频转录间隔（防 YouTube 风控；yt-dlp 在 whisper 容器内走代理，仍限速） */
+export const YT_TRANSCRIBE_INTERVAL_MS = 2000;
+
+/**
+ * 调 whisper 服务抓 YouTube 视频正文（字幕优先，无字幕 whisper 转录；语言默认俄语）。
+ * 失败/服务不可用返回空串——fail-open 回退 RSS 描述/标题提炼（与 B 站 transcribeWithWhisper 同口径）。
+ */
+export async function transcribeYouTubeWithWhisper(item: LearningItem): Promise<string> {
+  try {
+    const resp = await fetch(`${WHISPER_URL}/transcribe-youtube`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ videoUrl: item.url, language: "ru" }),
+      signal: AbortSignal.timeout(240_000), // 服务端单视频 180s 上限 + 网络余量
+    });
+    if (!resp.ok) {
+      logger.warn({ url: item.url, status: resp.status }, "YouTube whisper service error");
+      return "";
+    }
+    const data = await resp.json() as { text?: string; source?: string; duration?: number };
+    const text = (data.text || "").slice(0, 6000); // 限长防 token 爆炸（与 B 站一致）
+    if (text) {
+      logger.info({ url: item.url, source: data.source, duration: data.duration, chars: text.length }, "YouTube video transcribed");
+    }
+    return text;
+  } catch (err) {
+    logger.warn({ url: item.url, err: (err as Error).message }, "YouTube transcribe failed");
+    return "";
+  }
+}
+
 // ---- DeepSeek 结构化提炼 ----
 
 interface DistilledKnowledge {
@@ -811,9 +844,17 @@ function noteDistill(ctx: ProcessCtx, source: string): void {
 /**
  * 新源（Reddit/俄文媒体/seller-edu）统一处理流水线：
  * seen 去重 → 蒸馏前 isAlreadyLearned 已学去重（零 DeepSeek 消耗）
- * → 每源每日蒸馏上限 → DeepSeek 蒸馏 → Knowledge Gate 入库
+ * → 每源每日蒸馏上限 → [可选 enrichItem 正文增强，如 YouTube whisper 转录] → DeepSeek 蒸馏 → Knowledge Gate 入库
+ *
+ * enrichItem 只在蒸馏预算检查【之后】调用——超限/已学/重复条目零转录消耗；
+ * 实现方必须 fail-open（拿不到正文不抛错，保留 item.text 原值回退标题提炼）。
  */
-async function processLearningItems(items: LearningItem[], ctx: ProcessCtx, titlePrefix: string): Promise<void> {
+export async function processLearningItems(
+  items: LearningItem[],
+  ctx: ProcessCtx,
+  titlePrefix: string,
+  enrichItem?: (item: LearningItem) => Promise<void>,
+): Promise<void> {
   for (const item of items) {
     if (ctx.seen.has(item.sourceId)) continue;
     ctx.seen.add(item.sourceId);
@@ -827,6 +868,9 @@ async function processLearningItems(items: LearningItem[], ctx: ProcessCtx, titl
     ctx.stats.scanned++;
     ctx.stats.bySource[item.source] = (ctx.stats.bySource[item.source] || 0) + 1;
     noteDistill(ctx, item.source);
+
+    // 正文增强（YouTube 转录等）：预算内才触发；失败 fail-open 由实现方保证
+    if (enrichItem) await enrichItem(item);
 
     const knowledge = await distillWithDeepSeek(item);
     if (!knowledge) continue;
@@ -1022,13 +1066,19 @@ export async function runDailyLearning(): Promise<LearningStats> {
     await processLearningItems(items, ctx, "[TG] ");
   }
 
-  // ---- 源 7：YouTube 频道 RSS（俄汽修/DIY 教程，走代理，2026-10-10 新增；YT_CHANNELS 为空则整源跳过） ----
+  // ---- 源 7：YouTube 频道 RSS + whisper 抓正文（字幕优先/whisper 兜底，2026-10-11 升级对齐 B 站；走代理，YT_CHANNELS 为空则整源跳过） ----
   for (const channelId of YT_CHANNELS) {
     // 每源每日蒸馏上限：用完后跳过后续频道
     if (!hasDistillBudget(ctx, "youtube")) break;
     // fetchYouTubeChannel 内部 fail-open：代理不可用/频道失效返回空数组
     const items = await fetchYouTubeChannel(channelId);
-    await processLearningItems(items, ctx, "[YT] ");
+    // enrich 钩子只在蒸馏预算内触发（processLearningItems 保证）：拿到转录文本则替换正文，
+    // 拿不到 fail-open 保留 RSS 描述/标题（现状行为）；每个视频间隔 ≥2s 防 YouTube 风控
+    await processLearningItems(items, ctx, "[YT] ", async (item) => {
+      const text = await transcribeYouTubeWithWhisper(item);
+      if (text) item.text = text;
+      await sleep(YT_TRANSCRIBE_INTERVAL_MS);
+    });
   }
 
   stats.newKeywords = allKeywords.size;

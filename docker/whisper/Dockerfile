@@ -12,9 +12,9 @@ RUN sed -i 's|deb.debian.org|mirrors.aliyun.com|g; s|security.debian.org|mirrors
 RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg curl \
     && rm -rf /var/lib/apt/lists/*
 
-# pip 清华源（国内服务器）
+# pip 清华源（国内服务器）；yt-dlp 供 /transcribe-youtube 抓 YouTube 字幕/音频（2026-10-11 新增）
 RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple \
-    && pip install --no-cache-dir faster-whisper fastapi "uvicorn[standard]"
+    && pip install --no-cache-dir faster-whisper fastapi "uvicorn[standard]" yt-dlp
 
 # 预下载 base 模型（hf-mirror 镜像 + 禁 xet 后端）
 ENV HF_ENDPOINT=https://hf-mirror.com \
