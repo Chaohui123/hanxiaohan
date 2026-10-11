@@ -16,14 +16,10 @@ RUN apt-get update && apt-get install -y --no-install-recommends ffmpeg curl \
 RUN pip config set global.index-url https://pypi.tuna.tsinghua.edu.cn/simple \
     && pip install --no-cache-dir faster-whisper fastapi "uvicorn[standard]" yt-dlp
 
-# 预下载 base 模型（hf-mirror 镜像 + 禁 xet 后端）
-ENV HF_ENDPOINT=https://hf-mirror.com \
-    HF_HUB_DISABLE_XET=1
-# 构建期代理：hf-mirror 也会卡死（2026-10-10 实证 2.4h 零进展），改走本机 xray 客户端代理下官方源
-# 172.17.0.1=docker bridge 宿主网关，xray-client http 10809 监听 0.0.0.0（服务器侧已部署）
-RUN HTTPS_PROXY=http://172.17.0.1:10809 HTTP_PROXY=http://172.17.0.1:10809 HF_ENDPOINT=https://huggingface.co \
-    python -c "from faster_whisper import WhisperModel; WhisperModel('base', device='cpu', compute_type='int8')" \
-    || (echo "代理下载失败，回退 hf-mirror" && python -c "from faster_whisper import WhisperModel; WhisperModel('base', device='cpu', compute_type='int8')")
+# 模型本地预置（2026-10-11 实证：构建期下载全部卡死——hf-mirror 卡 2.4h、代理 32 分钟续传失败）
+# 模型 4 文件预置在 docker/whisper/hf-model/（服务器本地文件，git 不跟踪；huggingface 下载仅一次性）
+COPY hf-model/ /app/hf-model/
+ENV WHISPER_MODEL_PATH=/app/hf-model
 
 WORKDIR /app
 COPY app.py /app/app.py

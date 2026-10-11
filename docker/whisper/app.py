@@ -16,7 +16,7 @@ from pydantic import BaseModel
 from faster_whisper import WhisperModel
 
 app = FastAPI()
-model = WhisperModel("base", device="cpu", compute_type="int8")
+model = WhisperModel(os.environ.get("WHISPER_MODEL_PATH", "base"), device="cpu", compute_type="int8")
 
 UA = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
 

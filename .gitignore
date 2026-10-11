@@ -88,3 +88,4 @@ fix-all.mjs
 *-f2.mjs
 *-fixes.mjs
 *-cmd.mjs
+docker/whisper/hf-model/
