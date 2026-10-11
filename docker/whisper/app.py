@@ -201,6 +201,7 @@ def _youtube_transcribe(video_url: str, language: str) -> dict:
             "skip_download": True, "proxy": proxy, "noplaylist": True,
             "quiet": True, "no_warnings": True, "socket_timeout": 30, "retries": 2,
         }
+        _add_cookies(meta_opts)
         with yt_dlp.YoutubeDL(meta_opts) as ydl:
             info = ydl.extract_info(video_url, download=False)
 
