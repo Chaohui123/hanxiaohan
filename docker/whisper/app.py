@@ -79,6 +79,14 @@ def _yt_proxy() -> str | None:
     return None if p.strip().lower() in ("", "direct", "none") else p
 
 
+def _add_cookies(opts: dict) -> None:
+    """yt-dlp 登录态 cookies（YouTube 机房 IP 反爬「not a bot」绕行，2026-10-11 实证需要）：
+    YT_COOKIES env 指定 Netscape cookies.txt 路径，文件存在才注入；无则不设（不影响匿名可用场景）"""
+    cf = os.environ.get("YT_COOKIES", "").strip()
+    if cf and os.path.exists(cf):
+        opts["cookiefile"] = cf
+
+
 def _pick_subtitle_lang(info: dict) -> tuple[str | None, bool]:
     """按偏好挑字幕语言，人工字幕优先于自动字幕。返回 (lang, is_auto)；无字幕 (None, False)"""
     subs = info.get("subtitles") or {}
@@ -149,6 +157,7 @@ def _download_subtitle(video_url: str, lang: str, auto: bool, tmp: str, proxy: s
         "socket_timeout": 30,
         "retries": 2,
     }
+    _add_cookies(opts)
     with yt_dlp.YoutubeDL(opts) as ydl:
         ydl.extract_info(video_url, download=True)
     for path in sorted(glob.glob(os.path.join(tmp, "sub.*"))):
@@ -172,6 +181,7 @@ def _download_audio(video_url: str, tmp: str, proxy: str | None) -> str:
         "socket_timeout": 30,
         "retries": 2,
     }
+    _add_cookies(opts)
     with yt_dlp.YoutubeDL(opts) as ydl:
         ydl.extract_info(video_url, download=True)
     files = sorted(glob.glob(os.path.join(tmp, "audio.*")))

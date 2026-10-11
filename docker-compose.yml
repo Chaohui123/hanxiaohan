@@ -257,6 +257,11 @@ services:
       dockerfile: Dockerfile
     container_name: onzo-whisper
     restart: always
+    environment:
+      - YT_COOKIES=/app/yt-cookies.txt
+    volumes:
+      # YouTube 登录态 cookies（Netscape 格式，服务器本地文件，git 不跟踪；轮换不用重建镜像）
+      - ./docker/whisper/yt-cookies.txt:/app/yt-cookies.txt:ro
     deploy:
       resources:
         limits:
