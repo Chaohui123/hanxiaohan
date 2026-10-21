@@ -11,7 +11,7 @@ interface OzonPostingApi {
   order_id: number;
   order_number: string;
   status: string;
-  created_at: string;
+  created_at?: string; // v4 列表已无此字段（2026-10-22 实测 v4 posting 无 created_at），仅 v3/详情接口有
   in_process_at: string;
   shipment_date?: string;
   products: Array<{
@@ -173,7 +173,7 @@ export class OzonOrderClient {
       orderId: api.order_id,
       orderNumber: api.order_number,
       status: api.status as OzonOrderStatus,
-      createdAt: api.created_at,
+      createdAt: api.created_at ?? api.in_process_at ?? "", // v4 无 created_at，回退 in_process_at（≈下单时间，2026-10-22 实证 ozon_orders.created_at_ozon 两行为 NULL）
       inProcessAt: api.in_process_at,
       shipmentDate: api.shipment_date,
       buyerName: maskString(api.buyer?.name || "", 2, 1),

@@ -223,6 +223,12 @@ export async function runDecisionCycle(
     : actions;
   if (ASTRA_GUARD_ENABLED) saveAstraState(ASTRA_STATE_FILE, astraState); // 零单周期计数/试验留档每轮有更新
 
+  // 3.6 文案停用期间剔除纯 copy 动作——no-op 文案动作会占满每日执行名额导致 pricing 饿死
+  // （2026-10-22 首轮实证：15 动作截断至 10 全为 copy skip，pricing 动作一个都没轮到）
+  const effectiveActions = process.env.PROMO_COPY_ENABLED === "false"
+    ? guardedActions.filter((a) => a.type !== "copy")
+    : guardedActions;
+
   // 4. 交叉验证
   const crossValidation = await crossValidate(config, dailyActionCount);
 
@@ -231,7 +237,7 @@ export async function runDecisionCycle(
     id: `plan_${Date.now()}`,
     createdAt: new Date().toISOString(),
     products: scored,
-    actions: guardedActions,
+    actions: effectiveActions,
     crossValidation,
     status: crossValidation.passed ? "validated" : "pending",
   };
@@ -325,19 +331,27 @@ export async function scoreAllProducts(config: ApiConfig): Promise<ProductScore[
   // 从订单数据构建每个商品的近7天/前7天销量映射
   const now = Date.now();
   const DAY_MS = 24 * 60 * 60 * 1000;
-  const orders = (orders14d as { orders?: Array<Record<string, unknown>> })?.orders || [];
+  // /api/orders 实际契约 { success, data: [...] }（2026-10-22 实证；按 orders 键取一直为空导致销量恒 0）
+  const rawOrders = orders14d as Record<string, unknown> | null;
+  const orders = ((rawOrders?.orders as Array<Record<string, unknown>> | undefined)
+    ?? (rawOrders?.data as Array<Record<string, unknown>> | undefined)
+    ?? []);
 
   // offerId → { recent: number, prev: number }
   const salesByOffer = new Map<string, { recent: number; prev: number }>();
 
   for (const order of orders) {
-    const createdAt = String(order.createdAt || order.created_at || "");
+    // createdAt 可能为 null（v4 订单列表无 created_at，老同步行留 NULL），回退 synced_at（同步时间≈下单时间，14d 分桶够用）
+    const createdAt = String(order.createdAt || order.created_at || order.synced_at || "");
     const orderDate = new Date(createdAt).getTime();
     if (isNaN(orderDate)) continue;
 
     const ageDays = (now - orderDate) / DAY_MS;
-    // 订单中的商品列表
-    const orderItems = (order.items || order.products || []) as Array<Record<string, unknown>>;
+    // 订单中的商品列表；/api/orders 行是 products_json 字符串（内含 offerId），需解析
+    let orderItems = (order.items || order.products || []) as Array<Record<string, unknown>>;
+    if (orderItems.length === 0 && typeof order.products_json === "string") {
+      try { orderItems = JSON.parse(order.products_json) as Array<Record<string, unknown>>; } catch { orderItems = []; }
+    }
     for (const oi of orderItems) {
       const oid = String(oi.offerId || oi.offer_id || "");
       if (!oid) continue;
