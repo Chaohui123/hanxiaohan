@@ -26,6 +26,8 @@ RUN for f in packages/*/package.json; do sed -i "s|\"./src/index.ts\"|\"./dist/i
 FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+# apk 官方源国内 TLS 超时换 tuna 镜像（同 ops-agent 2026-10-22 修复，否则构建卡死）
+RUN sed -i 's|dl-cdn.alpinelinux.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apk/repositories
 RUN apk add --no-cache ca-certificates
 EXPOSE 8182 9101
 COPY --from=builder /app/node_modules ./node_modules
