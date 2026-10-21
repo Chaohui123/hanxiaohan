@@ -5,6 +5,10 @@ import { threatWeightedAverage } from "./competitor-threat.js";
 import { logger } from "@onzo/logger";
 import { crossValidate, type CrossValidationResult } from "./cross-validator.js";
 import { generateCopy, applyCopy } from "./copywriter.js";
+// astra 校验层（GPT astra 定价方案 2026-10）：planActions 之后、executePlan 之前拦截/修正向下调价
+import {
+  applyAstraGuard, loadAstraState, saveAstraState, recordAstraTrial, type AstraState,
+} from "./astra-guard.js";
 import { auditText } from "./compliance/index.js";
 import { decisionCycleCounter, productScoreGauge, actionCounter, dailyActionGauge } from "./metrics.js";
 import {
@@ -125,6 +129,18 @@ let lastSalesByOffer = new Map<string, { recent: number; prev: number }>();
 /** 每商品每日调价记录（key: `${YYYY-MM-DD}:${offerId}`）——同一商品每日最多调价 1 次 */
 const dailyPriceAdjustments = new Set<string>();
 
+// ---- astra 校验层状态（GPT astra 定价方案）----
+/** 总开关：默认启用；PROMO_ASTRA_GUARD=false 显式关闭（紧急回退用） */
+const ASTRA_GUARD_ENABLED = process.env.PROMO_ASTRA_GUARD !== "false";
+/** 状态落盘：降价试验要跨 14 天观察期（条款5），进程重启不能丢 */
+const ASTRA_STATE_FILE = process.env.PROMO_ASTRA_STATE_FILE || "data/astra-guard-state.json";
+const astraState: AstraState = loadAstraState(ASTRA_STATE_FILE);
+/** 有利指数 GREEN SKU（条款3）：Ozon 无公开 API，运营从后台「搜索推广」页人工维护，
+ *  env PROMO_GREEN_OFFERS 逗号分隔注入；默认空集 = 全部无 GREEN（流量增益按 0 计，最保守） */
+const greenOffers = new Set(
+  (process.env.PROMO_GREEN_OFFERS || "").split(",").map((s) => s.trim()).filter(Boolean),
+);
+
 export function isAutoDecisionEnabled(): boolean {
   return autoDecisionEnabled;
 }
@@ -194,6 +210,19 @@ export async function runDecisionCycle(
   // 3. 规划
   const actions = planActions(scored);
 
+  // 3.5 astra 校验层（GPT astra 定价方案）：planActions 输出后、executePlan 执行前，只做拦截/修正——
+  // 条款1 零单不降价 / 条款2 有优势不降价 / 条款3 g_BE 盈亏平衡 / 条款4 RED 分级 / 条款5 止损回退
+  const guardedActions = ASTRA_GUARD_ENABLED
+    ? applyAstraGuard(actions, scored, {
+        sales14d: (offerId) => lastSalesByOffer.get(offerId),
+        isAdjustedToday: (offerId) =>
+          dailyPriceAdjustments.has(`${new Date().toISOString().slice(0, 10)}:${offerId}`),
+        greenOffers,
+        state: astraState,
+      })
+    : actions;
+  if (ASTRA_GUARD_ENABLED) saveAstraState(ASTRA_STATE_FILE, astraState); // 零单周期计数/试验留档每轮有更新
+
   // 4. 交叉验证
   const crossValidation = await crossValidate(config, dailyActionCount);
 
@@ -202,7 +231,7 @@ export async function runDecisionCycle(
     id: `plan_${Date.now()}`,
     createdAt: new Date().toISOString(),
     products: scored,
-    actions,
+    actions: guardedActions,
     crossValidation,
     status: crossValidation.passed ? "validated" : "pending",
   };
@@ -794,6 +823,11 @@ async function executePricingAction(
     // 记录每商品每日调价（同日不再调该商品）
     const today = new Date().toISOString().slice(0, 10);
     dailyPriceAdjustments.add(`${today}:${action.offerId}`);
+    // astra 条款5（嵌入执行后回读）：降价试验留档试验前价格，14d 无订单证据则回退；涨价/回退不记
+    if (ASTRA_GUARD_ENABLED) {
+      recordAstraTrial(astraState, action.offerId, action.currentPrice, newPrice);
+      saveAstraState(ASTRA_STATE_FILE, astraState);
+    }
     logger.info({ offerId: action.offerId, price: newPrice }, "Auto price updated");
     return {
       offerId: action.offerId, name: action.name, type: "pricing", success: true,

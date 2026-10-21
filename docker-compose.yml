@@ -210,6 +210,9 @@ services:
       dockerfile: docker/promo-agent/Dockerfile
     container_name: onzo-promo-agent
     restart: always
+    volumes:
+      # astra-guard-state.json 等运行状态持久化（14 天降价试验留档随容器重建不能丢）
+      - promo_data:/app/data
     env_file:
       - .env.production
     environment:
@@ -493,6 +496,8 @@ volumes:
   app_logs:
     driver: local
   app_data:
+    driver: local
+  promo_data:
     driver: local
   caddy_data:
     driver: local

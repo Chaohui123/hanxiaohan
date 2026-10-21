@@ -30,6 +30,7 @@ packages/ozon-order/tests/sync.integration.test.ts
 **/tsconfig.tsbuildinfo
 data/backups/
 data/onzo.db*
+data/astra-guard-state.json
 
 # Temporary build/deploy scripts (may contain secrets)
 *.tar.gz
