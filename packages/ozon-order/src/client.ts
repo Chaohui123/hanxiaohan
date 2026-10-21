@@ -42,7 +42,7 @@ export class OzonOrderClient {
     const since = filter?.since || new Date(Date.now() - 7 * 86400000).toISOString();
     const until = filter?.until || new Date().toISOString();
 
-    const response = await this.client.request<{ result: { postings: OzonPostingApi[]; has_next: boolean; cursor: string } }>(
+    const response = await this.client.request<{ result?: { postings: OzonPostingApi[]; has_next: boolean; cursor: string }; postings?: OzonPostingApi[]; has_next?: boolean; cursor?: string }>(
       "POST",
       "/v4/posting/fbs/list",
       {
@@ -62,7 +62,8 @@ export class OzonOrderClient {
       }
     );
 
-    const res = response.result;
+    // 新端点响应不包 result 层（顶层即数据），老结构兼容兜底
+    const res = response.result ?? response;
     return {
       postings: (res.postings ?? []).map(this.mapPosting),
       cursor: res.cursor ?? "",
@@ -75,7 +76,7 @@ export class OzonOrderClient {
     const since = filter?.since || new Date(Date.now() - 7 * 86400000).toISOString();
     const until = filter?.until || new Date().toISOString();
 
-    const response = await this.client.request<{ result: { postings: OzonPostingApi[]; has_next: boolean; cursor: string } }>(
+    const response = await this.client.request<{ result?: { postings: OzonPostingApi[]; has_next: boolean; cursor: string }; postings?: OzonPostingApi[]; has_next?: boolean; cursor?: string }>(
       "POST",
       "/v3/posting/fbo/list",
       {
@@ -91,7 +92,8 @@ export class OzonOrderClient {
       }
     );
 
-    const res = response.result;
+    // 新端点响应不包 result 层（顶层即数据），老结构兼容兜底
+    const res = response.result ?? response;
     return {
       postings: (res.postings ?? []).map(this.mapPosting),
       cursor: res.cursor ?? "",
