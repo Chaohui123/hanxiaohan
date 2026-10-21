@@ -723,6 +723,12 @@ async function executeCopyAction(
   action: PlannedAction,
   appliedAt: string,
 ): Promise<ActionResult> {
+  // 2026-10-22 用户定调：全店文案已由 Kimi+GPT 统一精修上线，日常自动文案优化停用
+  // （PROMO_COPY_ENABLED=false 时 copy/copy_and_pricing 的文案部分跳过，pricing 不受影响）
+  if (process.env.PROMO_COPY_ENABLED === "false") {
+    logger.info({ offerId: action.offerId }, "Copy action skipped — PROMO_COPY_ENABLED=false");
+    return { offerId: action.offerId, name: action.name, type: "copy", success: false, message: "文案优化已停用（统一精修后关闭）", appliedAt };
+  }
   try {
     // a. 生成文案（可重试）
     const copy = await withRetry(() => generateCopy(config, action.offerId, chatId));
