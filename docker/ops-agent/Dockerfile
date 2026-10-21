@@ -26,6 +26,8 @@ RUN for f in packages/*/package.json; do sed -i "s|\"./src/index.ts\"|\"./dist/i
 FROM node:22-alpine AS runner
 WORKDIR /app
 ENV NODE_ENV=production
+# 2026-10-22 修复：apk 官方源国内 TLS 超时，换阿里云镜像（否则全量 compose 构建卡死，deploy-watch 自动部署被阻断实证）
+RUN sed -i 's|dl-cdn.alpinelinux.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apk/repositories
 RUN apk add --no-cache ca-certificates
 EXPOSE 8181
 COPY --from=builder /app/node_modules ./node_modules
