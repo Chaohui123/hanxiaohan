@@ -101,7 +101,7 @@ export async function drainOzonWebhookLog(limit = 10): Promise<{ processed: numb
           const built = await buildOrderClient();
           if (built) {
             storeId = built.storeId;
-            const postings = await built.orderClient.listPostings({ orderNumber: payload.postingNumber });
+            const postings = (await built.orderClient.listPostings({ orderNumber: payload.postingNumber })).postings;
             if (postings.length > 0) {
               order = {
                 ...postings[0],

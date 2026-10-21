@@ -12,8 +12,8 @@ describe('syncOrders', () => {
     ]
 
     const client = {
-      listPostings: vi.fn().mockImplementationOnce(() => Promise.resolve(postingsPage1)).mockImplementationOnce(() => Promise.resolve(postingsPage2)),
-      listFboPostings: vi.fn().mockResolvedValue([]),
+      listPostings: vi.fn().mockImplementationOnce(() => Promise.resolve({ postings: postingsPage1, cursor: 'c1', hasNext: true })).mockImplementationOnce(() => Promise.resolve({ postings: postingsPage2, cursor: '', hasNext: false })),
+      listFboPostings: vi.fn().mockResolvedValue({ postings: [], cursor: '', hasNext: false }),
     }
 
     const processPosting = vi.fn(async (_p: OzonPosting) => {})
@@ -29,8 +29,8 @@ describe('syncOrders', () => {
     ]
 
     const client = {
-      listPostings: vi.fn().mockResolvedValue(postings),
-      listFboPostings: vi.fn().mockResolvedValue([]),
+      listPostings: vi.fn().mockResolvedValue({ postings, cursor: '', hasNext: false }),
+      listFboPostings: vi.fn().mockResolvedValue({ postings: [], cursor: '', hasNext: false }),
     }
 
     const mockDb = {

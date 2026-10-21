@@ -168,7 +168,7 @@ export class OzonOrderSyncService {
       // FBS
       try {
         await paceListCalls();
-        const fbsPostings = await withRateLimitRetry(() => orderClient.listPostings({ status: status as never, limit: 100 }));
+        const fbsPostings = (await withRateLimitRetry(() => orderClient.listPostings({ status: status as never, limit: 100 }))).postings;
         for (const p of fbsPostings) {
           const result = await this.processPosting(p, storeId);
           if (result === "new") newOrders++;
@@ -183,7 +183,7 @@ export class OzonOrderSyncService {
       // FBO
       try {
         await paceListCalls();
-        const fboPostings = await withRateLimitRetry(() => orderClient.listFboPostings({ status: status as never, limit: 100 }));
+        const fboPostings = (await withRateLimitRetry(() => orderClient.listFboPostings({ status: status as never, limit: 100 }))).postings;
         for (const p of fboPostings) {
           const result = await this.processPosting(p, storeId);
           if (result === "new") newOrders++;

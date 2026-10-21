@@ -63,6 +63,14 @@ export interface OzonPostingFilter {
   orderNumber?: string;        // filter by order_number (fbs/list supports it)
   limit?: number;              // default 100
   offset?: number;
+  cursor?: string;             // v4 cursor 分页（2026-08 起 /v4/posting/fbs/list、/v3/posting/fbo/list）
+}
+
+/** 新版 posting 分页返回（cursor 制） */
+export interface OzonPostingPage {
+  postings: OzonPosting[];
+  cursor: string;              // 下一页游标（空=没有下一页）
+  hasNext: boolean;
 }
 
 // ---- Ozon Order Sync v2 ----

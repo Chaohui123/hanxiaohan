@@ -2,7 +2,7 @@
 // Ozon Order Client — Fetch, sync, and manage FBO/FBS orders
 // ============================================================
 
-import type { OzonPosting, OzonPostingFilter, OzonOrderStatus, LocalOrder } from "@onzo/shared-types";
+import type { OzonPosting, OzonPostingFilter, OzonPostingPage, OzonOrderStatus, LocalOrder } from "@onzo/shared-types";
 import { OzonClient } from "@onzo/ozon-api-wrapper";
 
 /** Raw Ozon API posting shape */
@@ -37,14 +37,14 @@ export class OzonOrderClient {
     this.client = client;
   }
 
-  /** Fetch FBS postings with optional filter. */
-  async listPostings(filter?: OzonPostingFilter): Promise<OzonPosting[]> {
+  /** Fetch FBS postings with optional filter. （2026-08 官方废弃 v3→v4，cursor 分页） */
+  async listPostings(filter?: OzonPostingFilter): Promise<OzonPostingPage> {
     const since = filter?.since || new Date(Date.now() - 7 * 86400000).toISOString();
     const until = filter?.until || new Date().toISOString();
 
-    const response = await this.client.request<{ result: { postings: OzonPostingApi[]; has_next: boolean } }>(
+    const response = await this.client.request<{ result: { postings: OzonPostingApi[]; has_next: boolean; cursor: string } }>(
       "POST",
-      "/v3/posting/fbs/list",
+      "/v4/posting/fbs/list",
       {
         dir: "asc",
         filter: {
@@ -55,23 +55,29 @@ export class OzonOrderClient {
           ...(filter?.orderNumber ? { order_number: filter.orderNumber } : {}),
         },
         limit: filter?.limit ?? 100,
-        offset: filter?.offset ?? 0,
+        // v4 为 cursor 分页：空串=第一页（offset 已废弃勿传）
+        cursor: filter?.cursor ?? "",
         // 必须显式请求 financial_data，否则 payout/commission 恒为 0（2026-09-19 货币口径修复）
         with: { financial_data: true },
       }
     );
 
-    return (response.result.postings ?? []).map(this.mapPosting);
+    const res = response.result;
+    return {
+      postings: (res.postings ?? []).map(this.mapPosting),
+      cursor: res.cursor ?? "",
+      hasNext: Boolean(res.has_next && (res.postings ?? []).length > 0),
+    };
   }
 
-  /** Fetch FBO postings. */
-  async listFboPostings(filter?: OzonPostingFilter): Promise<OzonPosting[]> {
+  /** Fetch FBO postings.（2026-08 官方废弃 v2→v3，cursor 分页） */
+  async listFboPostings(filter?: OzonPostingFilter): Promise<OzonPostingPage> {
     const since = filter?.since || new Date(Date.now() - 7 * 86400000).toISOString();
     const until = filter?.until || new Date().toISOString();
 
-    const response = await this.client.request<{ result: OzonPostingApi[] }>(
+    const response = await this.client.request<{ result: { postings: OzonPostingApi[]; has_next: boolean; cursor: string } }>(
       "POST",
-      "/v2/posting/fbo/list",
+      "/v3/posting/fbo/list",
       {
         dir: "asc",
         filter: {
@@ -80,12 +86,17 @@ export class OzonOrderClient {
           status: filter?.status || "",
         },
         limit: filter?.limit ?? 100,
-        offset: filter?.offset ?? 0,
+        cursor: filter?.cursor ?? "",
         with: { financial_data: true },
       }
     );
 
-    return (response.result ?? []).map(this.mapPosting);
+    const res = response.result;
+    return {
+      postings: (res.postings ?? []).map(this.mapPosting),
+      cursor: res.cursor ?? "",
+      hasNext: Boolean(res.has_next && (res.postings ?? []).length > 0),
+    };
   }
 
   /** Get a single posting by number */

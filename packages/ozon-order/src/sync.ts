@@ -3,7 +3,7 @@
 // ============================================================
 
 import type { OzonClient } from "@onzo/ozon-api-wrapper";
-import type { OzonPosting, OzonOrderStatus } from "@onzo/shared-types";
+import type { OzonPosting, OzonOrderStatus, OzonPostingPage } from "@onzo/shared-types";
 import { OzonOrderClient } from "./client.js";
 
 export interface SyncResult {
@@ -85,23 +85,24 @@ export async function syncOrders(
   let skippedCount = 0;
   let upsertedCount = 0;
 
-  // Paged iterator for Ozon postings
+  // Paged iterator for Ozon postings（2026-10-21 改 cursor 制：v4/v3 新端点 offset 废弃）
   async function iterateList(
-    listFn: (filter: Record<string, unknown>) => Promise<OzonPosting[]>
+    listFn: (filter: Record<string, unknown>) => Promise<OzonPostingPage>
   ): Promise<number> {
-    let offset = 0;
+    let cursor = "";
     let localCount = 0;
 
     while (true) {
-      const postings = await listFn({
+      const page = await listFn({
         status: options?.status,
         since,
         until,
         limit: pageSize,
-        offset,
+        cursor,
       });
 
-      if (!postings || postings.length === 0) break;
+      const postings = page.postings || [];
+      if (postings.length === 0) break;
 
       for (const p of postings) {
         const idempotencyKey = `${storeId}:${p.orderId}`;
@@ -145,9 +146,9 @@ export async function syncOrders(
         localCount++;
       }
 
-      // Pagination break: fewer than pageSize means last page
-      if (postings.length < pageSize) break;
-      offset += postings.length;
+      // Pagination: cursor 制（hasNext=false 或空页终止；条数<pageSize 冗余保护）
+      if (!page.hasNext || !page.cursor || postings.length < pageSize) break;
+      cursor = page.cursor;
     }
 
     return localCount;
