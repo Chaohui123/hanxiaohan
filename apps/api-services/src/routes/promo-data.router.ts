@@ -4,6 +4,12 @@
 
 import { Router } from "express";
 import { ragRateLimit } from "../middleware/rag-rate-limit.js";
+import {
+  getOperationsBoard,
+  operationsBoardErrorBody,
+  OperationsBoardSourceError,
+  type OperationsDays,
+} from "../services/operations-board.js";
 import { getCached, getCachedOrStale, invalidateCache } from "../cache/promo-cache.js";
 import {
   queryCompetitorPrices, insertCompetitorPrices,
@@ -18,6 +24,24 @@ import {
 export function createPromoDataRouter(): Router {
   const router = Router();
   router.use(ragRateLimit);
+
+  router.get("/promo/operations-board", async (req, res) => {
+    const rawDays = req.query.days === undefined ? "30" : String(req.query.days);
+    if (!["1", "7", "30"].includes(rawDays)) {
+      res.status(400).json({ success: false, error: "days must be one of 1, 7, 30" });
+      return;
+    }
+    const days = Number(rawDays) as OperationsDays;
+    try {
+      res.json(await getOperationsBoard(days));
+    } catch (err) {
+      if (err instanceof OperationsBoardSourceError) {
+        res.status(502).json(operationsBoardErrorBody(err));
+        return;
+      }
+      res.status(500).json({ success: false, error: (err as Error).message });
+    }
+  });
 
   // ---- Competitor Links (精准监控链接清单) ----
   // GET /api/promo/competitor-links[?offerId=] — 本机抓取脚本拉任务用
