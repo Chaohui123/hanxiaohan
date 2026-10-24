@@ -3,7 +3,7 @@ const fs = require("fs");
 
 const env = fs.readFileSync(".env", "utf8");
 const get = (key) => env.match(new RegExp(`^${key}=(.+)$`, "m"))?.[1]?.trim().replace(/^["']|["']$/g, "") || "";
-const CID = get("OZON_PERF_CLIENT_ID") || "98932307-1785397806000@advertising.performance.ozon.ru";
+const CID = get("OZON_PERF_CLIENT_ID") || "108243845-1792828891225@advertising.performance.ozon.ru";
 const secretFile = fs.existsSync("temp/.perf-secret") ? fs.readFileSync("temp/.perf-secret", "utf8").trim() : "";
 const SECRET = get("OZON_PERF_CLIENT_SECRET") || secretFile;
 if (!CID || !SECRET) throw new Error("Missing Ozon Performance credentials in environment or temp/.perf-secret");
