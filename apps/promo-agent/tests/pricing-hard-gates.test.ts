@@ -175,6 +175,17 @@ describe("24h 精准竞品硬闸门", () => {
     expect(planActions([product({ ...repair, pricingBlockers: ["MISSING_COST"] })])).toHaveLength(0);
   });
 
+  it("低总分负利润也生成向上 profit_repair，普通 copy 仍跳过", async () => {
+    const { planActions } = await import("../src/decision-engine.js");
+    const negative = product({ totalScore: 20, marginPercent: -5, floorPrice: 1600 });
+    const actions = planActions([negative]);
+    expect(actions).toHaveLength(1);
+    expect(actions[0].priceReason).toBe("profit_repair");
+    expect(actions[0].suggestedPrice!).toBeGreaterThan(1500);
+    expect(Number.isFinite(actions[0].suggestedPrice)).toBe(true);
+    expect(planActions([product({ totalScore: 20, recommendation: "copy" })])).toHaveLength(0);
+  });
+
   it("19.96% 原始利润率仍触发利润修复且建议价有限", async () => {
     const { planActions } = await import("../src/decision-engine.js");
     const actions = planActions([product({ marginPercent: 19.96, priceAdvantage: 0, competitorAvg: 1500 })]);

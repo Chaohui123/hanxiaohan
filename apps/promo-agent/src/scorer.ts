@@ -91,7 +91,7 @@ const PRICING_RAISE_ADVANTAGE_PCT = parseFloat(process.env.PROMO_PRICING_RAISE_P
 export function getRecommendation(
   totalScore: number, marginPct: number, priceAdvantagePct: number,
 ): { recommendation: ProductScore["recommendation"]; reason: string } {
-  if (totalScore < SCORE_THRESHOLD) {
+  if (totalScore < SCORE_THRESHOLD && marginPct >= 20) {
     return { recommendation: "skip", reason: `综合评分过低 (${totalScore}/100)` };
   }
   // 价格不利（高于竞品均价）：降价（核心场景，2026-08-14 方案定稿）

@@ -110,10 +110,11 @@ describe("scoreRating", () => {
 // ============================================================
 
 describe("getRecommendation", () => {
-  it("评分低于阈值 → skip", () => {
-    const r = getRecommendation(35, 15, 5);
+  it("利润达标但评分低于阈值 → skip；负利润低分仍进入修复", () => {
+    const r = getRecommendation(35, 30, 5);
     expect(r.recommendation).toBe("skip");
     expect(r.reason).toContain("评分过低");
+    expect(getRecommendation(35, -5, 5).recommendation).toBe("pricing");
   });
 
   it("高利润+价格劣势 → copy操作", () => {

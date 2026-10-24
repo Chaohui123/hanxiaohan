@@ -552,7 +552,8 @@ export function planActions(scored: ProductScore[]): PlannedAction[] {
   const actions: PlannedAction[] = [];
 
   for (const product of scored) {
-    if (product.recommendation === "skip" || product.totalScore < SCORE_THRESHOLD) continue;
+    const needsProfitRepair = product.recommendation !== "copy" && product.marginPercent < 20;
+    if (product.recommendation === "skip" || (product.totalScore < SCORE_THRESHOLD && !needsProfitRepair)) continue;
 
     let suggestedPrice: number | undefined;
     let priceReason: PlannedAction["priceReason"];
