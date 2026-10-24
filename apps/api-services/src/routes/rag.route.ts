@@ -81,6 +81,43 @@ function handleError(err: unknown): never {
 
 const embeddingClient = new EmbeddingClient();
 
+type PlaybookDb = Awaited<ReturnType<typeof dbOrFail>>;
+
+function isSqliteVectorUnsupportedError(err: unknown): boolean {
+  if (!(err instanceof Error) || err.name !== "SqliteError") return false;
+  return /near "(?:>|vector)": syntax error/i.test(err.message)
+    || /no such function: (?:<=>|vector)/i.test(err.message);
+}
+
+export async function searchPlaybook(db: PlaybookDb, query: string, scenario: string | undefined, topK: number) {
+  const queryVector = (await embeddingClient.embed(query)).vector;
+  const params: unknown[] = [`[${queryVector.join(",")}]`];
+  if (scenario) params.push(scenario);
+  params.push(topK);
+
+  try {
+    return await db.all(
+      `SELECT id, title, scenario, content, tags, author, priority,
+              1 - (embedding <=> $1::vector) AS score
+       FROM rag_operations_playbook WHERE 1=1 ${scenario ? "AND scenario = $2" : ""}
+       ORDER BY embedding <=> $1::vector LIMIT $${params.length}`, params,
+    );
+  } catch (err) {
+    if (!isSqliteVectorUnsupportedError(err)) throw err;
+    logger.warn({ err: (err as Error).message }, "SQLite vector search unavailable, falling back to playbook text search");
+  }
+
+  const textParams: unknown[] = [`%${query}%`, `%${query}%`];
+  if (scenario) textParams.push(scenario);
+  textParams.push(topK);
+  return db.all(
+    `SELECT id, title, scenario, content, tags, author, priority
+     FROM rag_operations_playbook
+     WHERE (title LIKE $1 OR content LIKE $2) ${scenario ? "AND scenario = $3" : ""}
+     ORDER BY priority DESC, id ASC LIMIT $${textParams.length}`, textParams,
+  );
+}
+
 // ---- Router ----
 
 export function createRagRouter(): Router {
@@ -252,16 +289,7 @@ export function createRagRouter(): Router {
     try {
       const { query, scenario, topK } = (req as unknown as Record<string, unknown>).validatedBody as z.infer<typeof SearchSchema>;
       const db = await dbOrFail();
-      const queryVector = (await embeddingClient.embed(query)).vector;
-      const params: unknown[] = [`[${queryVector.join(",")}]`];
-      if (scenario) params.push(scenario);
-      params.push(topK);
-      const rows = await db.all(
-        `SELECT id, title, scenario, content, tags, author, priority,
-                1 - (embedding <=> $1::vector) AS score
-         FROM rag_operations_playbook WHERE 1=1 ${scenario ? "AND scenario = $2" : ""}
-         ORDER BY embedding <=> $1::vector LIMIT $${params.length}`, params,
-      );
+      const rows = await searchPlaybook(db, query, scenario, topK);
       res.json({ results: rows, query });
     } catch (err) { handleError(err); }
   });
