@@ -1,7 +1,6 @@
 // ============================================================
 // Daily Scheduled Tasks — cron-based automation
 // 02:00 大盘轮询+自动上架
-// 08:00 全店商品调价
 // Falls back gracefully if node-cron is not installed
 // ============================================================
 
@@ -13,14 +12,13 @@ try {
 } catch { logger.warn("node-cron not installed — scheduled tasks disabled"); }
 
 import { executeDailyMarketPoll } from "../langgraph/daily-market-graph.js";
-import { executeDailyPriceAdjust } from "../langgraph/daily-price-graph.js";
 
 const ENABLED = process.env.TASK_SCHEDULE_ENABLE !== "false";
 
 // ---- Execution log (in-memory) ----
 export interface TaskLog {
   id: string;
-  type: "market_poll" | "price_adjust" | "manual";
+  type: "market_poll" | "manual";
   startedAt: string;
   completedAt?: string;
   status: "running" | "completed" | "failed";
@@ -73,39 +71,11 @@ async function runMarketPoll(): Promise<void> {
   }
 }
 
-// ---- Price Adjust (08:00 daily) ----
-async function runPriceAdjust(): Promise<void> {
-  const log = addLog("price_adjust");
-  logger.info("ScheduledTask: starting daily price adjustment");
-
-  try {
-    const result = await executeDailyPriceAdjust();
-    const adjusted = (result as { adjustedCount?: number }).adjustedCount || 0;
-    const msg = `全店调价完成，调整 ${adjusted} 个商品`;
-    completeLog(log, true, msg, {
-      adjustedCount: adjusted,
-      details: (result as { report?: Array<{ id: string; oldPrice: number; newPrice: number }> }).report || [],
-    });
-    logger.info(msg);
-  } catch (err) {
-    const msg = `调价失败: ${(err as Error).message}`;
-    completeLog(log, false, msg);
-    logger.error(msg);
-  }
-}
-
 // ---- Public triggers (for API) ----
 export async function triggerMarketPoll(): Promise<TaskLog> {
   const log = addLog("manual");
   log.type = "market_poll";
   await runMarketPoll();
-  return log;
-}
-
-export async function triggerPriceAdjust(): Promise<TaskLog> {
-  const log = addLog("manual");
-  log.type = "price_adjust";
-  await runPriceAdjust();
   return log;
 }
 
@@ -127,10 +97,5 @@ export function startScheduledTasks(): void {
     runMarketPoll().catch(() => {});
   });
 
-  // Daily price adjust: 08:00
-  schedule(process.env.PRICE_TASK_CRON || "0 8 * * *", () => {
-    runPriceAdjust().catch(() => {});
-  });
-
-  logger.info("ScheduledTask: cron jobs registered (02:00 market, 08:00 price)");
+  logger.info("ScheduledTask: cron job registered (02:00 market)");
 }

@@ -278,7 +278,7 @@ setInterval(async () => {
 logger.info({ intervalMin: RAG_INDEX_INTERVAL }, "RAG indexer scheduled");
 registerCleanup(async () => { await stopScheduler(); });
 
-// Start cron-based scheduled tasks (02:00 market poll, 08:00 price adjust)
+// Start cron-based scheduled tasks (02:00 market poll)
 const { startScheduledTasks } = await import("./task/schedule-task.js");
 startScheduledTasks();
 

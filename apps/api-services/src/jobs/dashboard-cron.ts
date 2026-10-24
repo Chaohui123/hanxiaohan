@@ -19,7 +19,7 @@ const ENABLED = process.env.DASHBOARD_CRON_ENABLE !== "false";
  * Start the dashboard cron schedule.
  * - 01:50 daily: Scrape keyword pool from promo-agent
  * - 02:00 daily: Full dashboard analysis pipeline
- * - 08:00 daily: Store-wide price adjustment
+ * - 22:00 daily: Daily report generation
  */
 export function startDashboardCron(): void {
   if (!ENABLED) {

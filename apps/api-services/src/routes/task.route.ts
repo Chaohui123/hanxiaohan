@@ -1,6 +1,6 @@
 import { Router } from "express";
 import { logger } from "@onzo/logger";
-import { triggerMarketPoll, triggerPriceAdjust, taskLogs } from "../task/schedule-task.js";
+import { triggerMarketPoll, taskLogs } from "../task/schedule-task.js";
 
 export function createTaskTriggerRouter(): Router {
   const router = Router();
@@ -14,13 +14,15 @@ export function createTaskTriggerRouter(): Router {
     }
   });
 
-  router.post("/run-price", async (_req, res) => {
-    try {
-      const log = await triggerPriceAdjust();
-      res.json({ success: true, data: log, correlationId: _req.correlationId });
-    } catch (err) {
-      res.status(500).json({ success: false, error: { code: "TASK_ERROR", message: (err as Error).message }, correlationId: _req.correlationId });
-    }
+  router.post("/run-price", (_req, res) => {
+    res.status(410).json({
+      success: false,
+      error: {
+        code: "LEGACY_PRICE_TASK_DISABLED",
+        message: "Legacy price task is disabled; use the decision-engine pricing workflow.",
+      },
+      correlationId: _req.correlationId,
+    });
   });
 
   // 手动触发每日学习（B站知识 → DeepSeek 提炼 → RAG 知识库）
