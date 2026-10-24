@@ -1,8 +1,9 @@
 // Quick test: 1688 API — try multiple path formats
 async function main() {
-  const appKey = "1390512";
-  const appSecret = "88CGgcf4v9m";
-  const accessToken = "06a9b42a-4290-4c48-bcc7-a41986724016";
+  const appKey = process.env.ALI1688_APP_KEY || "1390512";
+  const appSecret = process.env.ALI1688_APP_SECRET;
+  const accessToken = process.env.ALI1688_ACCESS_TOKEN;
+  if (!appSecret || !accessToken) throw new Error("Missing ALI1688_APP_SECRET or ALI1688_ACCESS_TOKEN in environment");
   const gateway = "https://gw.open.1688.com/openapi/";
 
   const { createHmac, randomUUID } = await import("node:crypto");

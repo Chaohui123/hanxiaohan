@@ -8,7 +8,8 @@ import { readdirSync, statSync, readFileSync } from "fs";
 import { join, basename } from "path";
 import { request } from "https";
 
-const API_KEY = "9e5b520d53c815006d0a4cfaea6557f5aae1e54d4bde68a13d2a96eed913ca2b";
+const API_KEY = process.env.ONZO_API_KEY || process.env.API_KEY;
+if (!API_KEY) throw new Error("Missing ONZO_API_KEY or API_KEY in environment");
 const API_HOST = "huashangshangmao.top";
 const STORE_DIR = process.argv[2] || process.argv[1]?.replace(/scripts\/.*/, "");
 
