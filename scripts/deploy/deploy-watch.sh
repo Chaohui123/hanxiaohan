@@ -17,8 +17,13 @@ export PATH HOME
 REPO_DIR="${ONZO_REPO_DIR:-/home/ubuntu/onzo}"
 LOG_FILE="${DEPLOY_WATCH_LOG:-/home/ubuntu/deploy-watch.log}"
 COMPOSE_PROFILE="${COMPOSE_PROFILE:-production}"
-FEISHU_WEBHOOK="https://open.feishu.cn/open-apis/bot/v2/hook/96f1bb74-11a3-4e64-bb31-ec378e5b15f7"
-FEISHU_SECRET="7Uhmy9a6AnsuIS2brTn8cg"
+read_env_value() {
+  local key="$1"
+  [[ -f .env.production ]] || return 0
+  sed -n "s/^${key}=//p" .env.production | tail -1 | sed -e 's/^"//' -e 's/"$//' -e "s/^'//" -e "s/'$//"
+}
+FEISHU_WEBHOOK="${FEISHU_WEBHOOK:-${NOTIFY_FEISHU_WEBHOOK:-$(read_env_value NOTIFY_FEISHU_WEBHOOK)}}"
+FEISHU_SECRET="${FEISHU_SECRET:-${NOTIFY_FEISHU_SECRET:-$(read_env_value NOTIFY_FEISHU_SECRET)}}"
 
 set -euo pipefail
 cd "$REPO_DIR"
@@ -31,6 +36,10 @@ feishu_alert() {
   # 飞书签名算法实证：sign = Base64(HMAC-SHA256(key="${timestamp}\n${secret}", data=""))
   # ——key 是「时间戳+换行+secret」，data 为空串（不是 key=secret/data=时间戳+secret，别搞反）
   local level="$1" msg="$2" ts key sign
+  if [[ -z "$FEISHU_WEBHOOK" || -z "$FEISHU_SECRET" ]]; then
+    echo "[$(date -Is)] WARN: feishu credentials unavailable; alert suppressed" >>"$LOG_FILE"
+    return 0
+  fi
   ts=$(date +%s)
   key="${ts}"$'\n'"${FEISHU_SECRET}"
   sign=$(printf '' | openssl dgst -sha256 -hmac "$key" -binary 2>/dev/null | openssl base64 2>/dev/null || echo "")
