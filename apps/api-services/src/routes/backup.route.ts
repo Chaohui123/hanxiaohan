@@ -63,75 +63,90 @@ async function runBackup(): Promise<{ name: string; path: string; sizeBytes: num
 
 /**
  * Try pg_dump for a full PostgreSQL backup.
+ * Resolves only after both the process exits and the compressed file is fully written.
  */
-function tryPgDump(dbUrl: string, outputPath: string): Promise<boolean> {
-  return new Promise((resolve) => {
-    const gzip = createGzip();
-    const output = createWriteStream(outputPath);
-
-    execFile(
-      "pg_dump",
-      ["--no-owner", "--no-privileges", "--compress=0", dbUrl],
-      { timeout: 120_000 },
-      (err) => {
-        if (err) {
-          console.warn(`[Backup] pg_dump unavailable: ${err.message} — falling back to table export`);
-          resolve(false);
-        } else {
-          resolve(true);
-        }
-      }
-    ).stdout?.pipe(gzip).pipe(output);
-  });
-}
-
-/**
- * Fallback: export key tables as SQL via pg Pool SELECT queries.
- */
-async function fallbackExport(outputPath: string): Promise<void> {
-  const { getDb } = await import("../db/connection.js");
-  const db = await getDb().catch(() => null);
-  if (!db) return;
-
-  const tables = [
-    "task_queue", "failed_tasks", "listing_records", "local_orders",
-    "webhook_events", "inventory", "stock_movements", "token_usage",
-    "store_configs", "category_cache", "stock_alerts", "aftersales_cases",
-    "daily_sales", "product_performance", "images",
-  ];
-
+export async function tryPgDump(dbUrl: string, outputPath: string): Promise<boolean> {
   const gzip = createGzip();
   const output = createWriteStream(outputPath);
-  // Fallback: export key tables as JSON Lines via parameterized SELECT queries.
-  // JSONL is safer than SQL INSERT dumps (no escaping issues, no injection risk).
-  // Restore: parse each JSON line and execute parameterized INSERT via db.run().
-  const write = (s: string): Promise<void> =>
-    new Promise<void>((resolve, reject) => {
-      if (!output.write(s)) {
-        output.once("drain", resolve);
+  const child = execFile(
+    "pg_dump",
+    ["--no-owner", "--no-privileges", "--compress=0", dbUrl],
+    { timeout: 120_000, maxBuffer: Infinity },
+  );
+
+  const processResult = new Promise<Error | null>((resolve) => {
+    child.once("error", resolve);
+    child.once("close", (code, signal) => {
+      if (code === 0) {
+        resolve(null);
       } else {
-        resolve();
+        resolve(new Error(`pg_dump exited with code ${code ?? "null"}${signal ? ` (${signal})` : ""}`));
       }
-      output.once("error", reject);
     });
+  });
 
+  if (!child.stdout) {
+    output.destroy();
+    child.kill();
+    await processResult;
+    return false;
+  }
+
+  const streamResult = pipeline(child.stdout, gzip, output).then(
+    () => null,
+    (err: Error) => {
+      if (child.exitCode === null && child.signalCode === null) child.kill();
+      return err;
+    },
+  );
+  const [processError, streamError] = await Promise.all([processResult, streamResult]);
+  const error = processError || streamError;
+  if (error) {
+    console.warn(`[Backup] pg_dump unavailable: ${error.message} — falling back to table export`);
+    return false;
+  }
+  return true;
+}
+
+export const FALLBACK_TABLES = [
+  "task_queue", "failed_tasks", "listing_records", "local_orders",
+  "webhook_events", "inventory", "stock_movements", "token_usage",
+  "store_configs", "category_cache", "stock_alerts", "aftersales_cases",
+  "daily_sales", "product_performance", "images", "ozon_orders",
+  "sku_1688_mapping", "promo_competitor_prices", "promo_pricing_history",
+  "promo_competitor_links", "promo_audit_log",
+] as const;
+
+/**
+ * Fallback: export key tables as gzip-compressed JSON Lines via SELECT queries.
+ * Restore: decompress, parse each JSON line, then execute parameterized INSERT via db.run().
+ */
+export async function fallbackExport(outputPath: string): Promise<void> {
   try {
-    for (const table of tables) {
-      const rows = await db
-        .all(`SELECT * FROM ${table}`)
-        .catch(() => [] as Record<string, unknown>[]);
+    const { getDb } = await import("../db/connection.js");
+    const db = await getDb().catch((err: Error) => {
+      throw new Error(`[Backup] Database connection failed: ${err.message}`);
+    });
+    if (!db) throw new Error("[Backup] Database unavailable for fallback export");
 
-      for (const row of rows) {
-        await write(JSON.stringify({ __table: table, ...row }) + "\n");
+    const { Readable } = await import("node:stream");
+    const database = db;
+    async function* exportRows() {
+      for (const table of FALLBACK_TABLES) {
+        const rows = await database.all(`SELECT * FROM ${table}`).catch((err: Error) => {
+          throw new Error(`[Backup] Failed to export table ${table}: ${err.message}`);
+        });
+
+        for (const row of rows) {
+          yield JSON.stringify({ __table: table, ...row }) + "\n";
+        }
       }
     }
-    await new Promise<void>((resolve, reject) => {
-      gzip.end();
-      gzip.on("finish", resolve);
-      gzip.on("error", reject);
-    });
-  } finally {
-    output.close();
+
+    await pipeline(Readable.from(exportRows()), createGzip(), createWriteStream(outputPath));
+  } catch (err) {
+    await unlink(outputPath).catch(() => {});
+    throw err;
   }
 }
 
