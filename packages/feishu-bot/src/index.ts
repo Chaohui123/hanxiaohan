@@ -66,7 +66,7 @@ export class FeishuBot {
 
   // ---- REST API methods (unchanged) ----
 
-  async sendMessage(chatId: string, text: string): Promise<void> {
+  async sendMessage(chatId: string, text: string): Promise<boolean> {
     try {
       await this.client.im.message.create({
         params: { receive_id_type: "chat_id" },
@@ -76,8 +76,10 @@ export class FeishuBot {
           content: JSON.stringify({ text: this.withTag(text) }),
         },
       });
+      return true;
     } catch (err) {
       logger.error({ err, chatId }, "Feishu sendMessage failed");
+      return false;
     }
   }
 

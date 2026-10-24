@@ -42,6 +42,7 @@ const WEEKLY_DAY = 1; // Monday
 // ---- 状态 ----
 
 let reportTimer: ReturnType<typeof setInterval> | null = null;
+let reportCheckRunning = false;
 let lastDailySent = ""; // date string YYYY-MM-DD
 let lastWeeklySent = ""; // monday date string
 let lastRetroDate = ""; // last retrospective date
@@ -54,8 +55,12 @@ export function startPerformanceReports(bot: FeishuBot, chatId: string, config: 
   logger.info("Performance reports scheduler started");
 
   reportTimer = setInterval(() => {
+    if (reportCheckRunning) return;
+    reportCheckRunning = true;
     checkAndSend(bot, chatId, config).catch((err) => {
       logger.error({ err }, "Performance report check failed");
+    }).finally(() => {
+      reportCheckRunning = false;
     });
   }, REPORT_CHECK_INTERVAL_MS);
 }
@@ -70,18 +75,17 @@ export function stopPerformanceReports(): void {
 
 // ---- 调度检查 ----
 
-async function checkAndSend(bot: FeishuBot, chatId: string, config: ApiConfig): Promise<void> {
+export async function checkAndSend(bot: FeishuBot, chatId: string, config: ApiConfig): Promise<void> {
   const now = new Date();
   const hour = now.getHours();
   const minute = now.getMinutes();
   const dayOfWeek = now.getDay(); // 0=Sun, 1=Mon
 
-  // 09:00 日报
-  if (hour === DAILY_HOUR && minute === 0) {
+  // 09:00 起发送；失败后下一分钟重试，成功后才防重。
+  if (hour === DAILY_HOUR) {
     const today = now.toISOString().slice(0, 10);
-    if (lastDailySent !== today) {
+    if (lastDailySent !== today && await sendDailyReport(bot, chatId, config)) {
       lastDailySent = today;
-      await sendDailyReport(bot, chatId, config);
     }
   }
 
@@ -94,77 +98,86 @@ async function checkAndSend(bot: FeishuBot, chatId: string, config: ApiConfig): 
     }
   }
 
-  // 周一 09:00 周报
-  if (dayOfWeek === WEEKLY_DAY && hour === DAILY_HOUR && minute === 1) {
+  // 周一 09:01 起发送；失败后下一分钟重试，成功后才防重。
+  if (dayOfWeek === WEEKLY_DAY && hour === DAILY_HOUR && minute >= 1) {
     const monday = getMonday(now);
-    if (lastWeeklySent !== monday) {
+    if (lastWeeklySent !== monday && await sendWeeklyReport(bot, chatId, config)) {
       lastWeeklySent = monday;
-      await sendWeeklyReport(bot, chatId, config);
     }
+  }
+}
+
+type SourceResult<T> = { data: T | null; failed: boolean };
+
+async function loadSource<T>(name: string, request: Promise<T>): Promise<SourceResult<T>> {
+  try {
+    const data = await request;
+    if (data == null) throw new Error("empty API response");
+    return { data, failed: false };
+  } catch (err) {
+    logger.warn({ err, source: name }, "Report data source failed");
+    return { data: null, failed: true };
   }
 }
 
 // ---- 日报 ----
 
-async function sendDailyReport(bot: FeishuBot, chatId: string, config: ApiConfig): Promise<void> {
+export async function sendDailyReport(bot: FeishuBot, chatId: string, config: ApiConfig): Promise<boolean> {
   const yesterday = daysAgo(1);
   const yesterday2 = daysAgo(2);
 
   logger.info({ date: yesterday }, "Generating daily report");
 
   try {
-    // 并行获取数据
-    const [dailyData, prevDaily, pricingData, copyData, costData] = await Promise.all([
-      statsApi.daily(config, yesterday).catch(() => null),
-      statsApi.daily(config, yesterday2).catch(() => null),
-      statsApi.pricingHistory(config, 1).catch(() => null),
-      statsApi.copyHistory(config, 1).catch(() => null),
-      statsApi.promoCost(config, yesterday, yesterday).catch(() => null),
+    const [dailyResult, prevResult, pricingResult, copyResult, costResult] = await Promise.all([
+      loadSource("daily", statsApi.daily(config, yesterday)),
+      loadSource("previousDaily", statsApi.daily(config, yesterday2)),
+      loadSource("pricing", statsApi.pricingHistory(config, 1)),
+      loadSource("copy", statsApi.copyHistory(config, 1)),
+      loadSource("ads", statsApi.promoCost(config, yesterday, yesterday)),
     ]);
+    const dailyData = dailyResult.data;
+    const prevDaily = prevResult.data;
+    const pricingData = pricingResult.data;
+    const copyData = copyResult.data;
+    const costData = costResult.data;
 
-    const orders = dailyData?.orders || 0;
-    const revenue = dailyData?.revenue || 0;
-    const prevOrders = prevDaily?.orders || 0;
-    const prevRevenue = prevDaily?.revenue || 0;
+    const orders = dailyData?.orders ?? null;
+    const revenue = dailyData?.revenue ?? null;
+    const prevOrders = prevDaily?.orders ?? null;
+    const prevRevenue = prevDaily?.revenue ?? null;
 
-    const orderDiff = prevOrders > 0
+    const orderDiff = orders === null || prevOrders === null ? null : prevOrders > 0
       ? ((orders - prevOrders) / prevOrders * 100)
       : 0;
-    const revenueDiff = prevRevenue > 0
+    const revenueDiff = revenue === null || prevRevenue === null ? null : prevRevenue > 0
       ? ((revenue - prevRevenue) / prevRevenue * 100)
       : 0;
 
-    const avgOrderValue = orders > 0 ? revenue / orders : 0;
-    const cancelledOrders = dailyData?.cancelledOrders || 0;
-
-    // 竞品变动数（从定价历史中推断）
-    const pricingAdjustments = pricingData?.adjustments?.length || 0;
-
-    // 文案优化数
-    const copyOptimizations = copyData?.copies?.length || 0;
-
-    // 广告花费与 ROI（广告 API 未接入时为 null，不显示假 0）
+    const avgOrderValue = orders === null || revenue === null ? null : orders > 0 ? revenue / orders : 0;
+    const cancelledOrders = dailyData?.cancelledOrders ?? null;
+    const pricingAdjustments = pricingResult.failed ? null : Array.isArray(pricingData?.adjustments) ? pricingData.adjustments.length : 0;
+    const copyOptimizations = copyResult.failed ? null : Array.isArray(copyData?.copies) ? copyData.copies.length : 0;
     const adSpend = costData?.adSpend ?? null;
     const roi = costData?.roi ?? null;
 
     const lines = [
       `📊 **日报 ${yesterday}**`,
       "",
-      `📦 订单: **${orders}** 笔 ${formatDiff(orderDiff)}`,
-      `💰 销售额: **${fmtRub(revenue)}** ${formatDiff(revenueDiff)}`,
+      `📦 订单: ${orders === null ? "**未知/同步失败**" : `**${orders}** 笔 ${formatDiff(orderDiff)}`}`,
+      `💰 销售额: ${revenue === null ? "**未知/同步失败**" : `${fmtRub(revenue)} ${formatDiff(revenueDiff)}`}`,
       `🧾 客单价: ${fmtRub(avgOrderValue)}`,
-      cancelledOrders > 0 ? `🚫 取消: ${cancelledOrders} 笔` : "",
+      cancelledOrders === null ? "🚫 取消: 未知/同步失败" : cancelledOrders > 0 ? `🚫 取消: ${cancelledOrders} 笔` : "",
       "",
       `📈 推广效果`,
-      adSpend !== null ? `🔥 广告花费: ${fmtRub(adSpend)}` : `🔥 广告花费: 未接入/无数据`,
-      roi !== null ? `💎 ROI: **${roi.toFixed(2)}x**` : `💎 ROI: 暂无数据`,
-      `🔧 调价: ${pricingAdjustments} 次`,
-      `✍️ 文案优化: ${copyOptimizations} 次`,
+      costResult.failed ? "🔥 广告花费: 未知/同步失败" : adSpend !== null ? `🔥 广告花费: ${fmtRub(adSpend)}` : `🔥 广告花费: 未接入/无数据`,
+      costResult.failed ? "💎 ROI: 未知/同步失败" : roi !== null ? `💎 ROI: **${roi.toFixed(2)}x**` : `💎 ROI: 暂无数据`,
+      `🔧 调价: ${pricingAdjustments ?? "未知/同步失败"}${pricingAdjustments === null ? "" : " 次"}`,
+      `✍️ 文案优化: ${copyOptimizations ?? "未知/同步失败"}${copyOptimizations === null ? "" : " 次"}`,
       "",
     ];
 
-    // Top 商品
-    const tops = dailyData?.topProducts || [];
+    const tops = Array.isArray(dailyData?.topProducts) ? dailyData.topProducts : [];
     if (tops.length > 0) {
       lines.push(`🏆 **Top 商品**`);
       tops.slice(0, 3).forEach((p, i) => {
@@ -175,67 +188,72 @@ async function sendDailyReport(bot: FeishuBot, chatId: string, config: ApiConfig
 
     lines.push(`💡 /promo — 查看推广总览 | /promo sales — 销售趋势`);
 
-    await bot.sendMessage(chatId, lines.join("\n"));
+    const sent = await bot.sendMessage(chatId, lines.join("\n"));
+    if (!sent) {
+      logger.error({ date: yesterday }, "Daily report was not sent");
+      return false;
+    }
     logger.info("Daily report sent");
+    return true;
   } catch (err) {
     logger.error({ err }, "Failed to send daily report");
     await bot.sendMessage(chatId, `⚠️ 日报生成失败: ${(err as Error).message}`).catch(() => {});
+    return false;
   }
 }
 
 // ---- 周报 ----
 
-async function sendWeeklyReport(bot: FeishuBot, chatId: string, config: ApiConfig): Promise<void> {
+export async function sendWeeklyReport(bot: FeishuBot, chatId: string, config: ApiConfig): Promise<boolean> {
   const from = daysAgo(7);
   const to = daysAgo(1);
 
   logger.info({ from, to }, "Generating weekly report");
 
   try {
-    const [weeklyData, costData, pricingData, copyData] = await Promise.all([
-      statsApi.weekly(config, from, to).catch(() => null),
-      statsApi.promoCost(config, from, to).catch(() => null),
-      statsApi.pricingHistory(config, 7).catch(() => null),
-      statsApi.copyHistory(config, 7).catch(() => null),
+    const [weeklyResult, costResult, pricingResult, copyResult] = await Promise.all([
+      loadSource("weekly", statsApi.weekly(config, from, to)),
+      loadSource("ads", statsApi.promoCost(config, from, to)),
+      loadSource("pricing", statsApi.pricingHistory(config, 7)),
+      loadSource("copy", statsApi.copyHistory(config, 7)),
     ]);
+    const weeklyData = weeklyResult.data;
+    const costData = costResult.data;
+    const pricingData = pricingResult.data;
+    const copyData = copyResult.data;
 
-    const orders = weeklyData?.orders || 0;
-    const revenue = weeklyData?.revenue || 0;
-
-    // 广告花费与 ROI（广告 API 未接入时为 null）
+    const orders = weeklyData?.orders ?? null;
+    const revenue = weeklyData?.revenue ?? null;
     const adSpend = costData?.adSpend ?? null;
     const roi = costData?.roi ?? null;
-    const organicRatio = costData?.organicRevenue != null && costData?.totalRevenue
+    const organicRatio = !costResult.failed && costData?.organicRevenue != null && costData?.totalRevenue
       ? (costData.organicRevenue / costData.totalRevenue * 100)
       : null;
 
-    // 调价与文案
-    const pricingAdjustments = pricingData?.adjustments?.length || 0;
-    const copyOptimizations = copyData?.copies?.length || 0;
-
-    // 调价带来的销售增量
-    const pricingSalesAfter = pricingData?.adjustments
-      ?.reduce((sum, a) => sum + (a.salesAfter || 0), 0) || 0;
+    const pricingActions = Array.isArray(pricingData?.adjustments) ? pricingData.adjustments : [];
+    const copyActions = Array.isArray(copyData?.copies) ? copyData.copies : [];
+    const pricingAdjustments = pricingResult.failed ? null : pricingActions.length;
+    const copyOptimizations = copyResult.failed ? null : copyActions.length;
+    const pricingSalesAfter = pricingResult.failed ? null : pricingActions.reduce((sum, a) => sum + (a.salesAfter || 0), 0);
 
     const lines = [
       `📈 **周报 ${from} ~ ${to}**`,
       "",
-      `📦 总订单: **${orders}** 笔`,
-      `💰 总销售额: **${fmtRub(revenue)}**`,
-      `🧾 日均: ${(orders / 7).toFixed(0)} 笔 / ${fmtRub(revenue / 7)}`,
+      `📦 总订单: ${orders === null ? "**未知/同步失败**" : `**${orders}** 笔`}`,
+      `💰 总销售额: ${revenue === null ? "**未知/同步失败**" : `**${fmtRub(revenue)}**`}`,
+      `🧾 日均: ${orders === null || revenue === null ? "未知/同步失败" : `${(orders / 7).toFixed(0)} 笔 / ${fmtRub(revenue / 7)}`}`,
       "",
       `📊 **推广效果**`,
-      adSpend !== null ? `🔥 广告花费: ${fmtRub(adSpend)}` : `🔥 广告花费: 未接入/无数据`,
-      roi !== null ? `💎 ROI: **${roi.toFixed(2)}x**` : `💎 ROI: 暂无数据`,
-      organicRatio !== null ? `🌿 自然流占比: **${organicRatio.toFixed(0)}%**` : "",
-      `🔧 调价次数: ${pricingAdjustments}`,
-      `✍️ 文案优化: ${copyOptimizations}`,
-      pricingSalesAfter > 0 ? `📈 调价后增量: ${pricingSalesAfter} 笔` : "",
+      costResult.failed ? "🔥 广告花费: 未知/同步失败" : adSpend !== null ? `🔥 广告花费: ${fmtRub(adSpend)}` : `🔥 广告花费: 未接入/无数据`,
+      costResult.failed ? "💎 ROI: 未知/同步失败" : roi !== null ? `💎 ROI: **${roi.toFixed(2)}x**` : `💎 ROI: 暂无数据`,
+      costResult.failed ? "🌿 自然流占比: 未知/同步失败" : organicRatio !== null ? `🌿 自然流占比: **${organicRatio.toFixed(0)}%**` : "",
+      `🔧 调价次数: ${pricingAdjustments ?? "未知/同步失败"}`,
+      `✍️ 文案优化: ${copyOptimizations ?? "未知/同步失败"}`,
+      pricingSalesAfter === null ? "📈 调价后增量: 未知/同步失败" : pricingSalesAfter > 0 ? `📈 调价后增量: ${pricingSalesAfter} 笔` : "",
       "",
     ];
 
-    // 7 天趋势
-    const byDay = weeklyData?.byDay || [];
+    const byDay = Array.isArray(weeklyData?.byDay) ? weeklyData.byDay : [];
     if (byDay.length > 0) {
       lines.push(`📉 **7 天趋势**`);
       const maxOrders = Math.max(...byDay.map((d) => d.orders), 1);
@@ -247,8 +265,7 @@ async function sendWeeklyReport(bot: FeishuBot, chatId: string, config: ApiConfi
       lines.push("");
     }
 
-    // Top 5
-    const top5 = weeklyData?.top5 || [];
+    const top5 = Array.isArray(weeklyData?.top5) ? weeklyData.top5 : [];
     if (top5.length > 0) {
       lines.push(`🏆 **Top 5 热销**`);
       top5.forEach((p, i) => {
@@ -257,8 +274,7 @@ async function sendWeeklyReport(bot: FeishuBot, chatId: string, config: ApiConfi
       lines.push("");
     }
 
-    // Bottom 5
-    const bottom5 = weeklyData?.bottom5 || [];
+    const bottom5 = Array.isArray(weeklyData?.bottom5) ? weeklyData.bottom5 : [];
     if (bottom5.length > 0) {
       lines.push(`🐌 **滞销 Top 5**`);
       bottom5.forEach((p, i) => {
@@ -267,7 +283,6 @@ async function sendWeeklyReport(bot: FeishuBot, chatId: string, config: ApiConfi
       lines.push("");
     }
 
-    // 下周建议
     const suggestions = await generateWeeklySuggestions({
       top5,
       bottom5,
@@ -279,40 +294,40 @@ async function sendWeeklyReport(bot: FeishuBot, chatId: string, config: ApiConfi
       copyOptimizations,
     }, config);
 
-    // 效果回溯摘要
-    const pricingImproved = pricingData?.adjustments?.filter((a: Record<string, unknown>) => Number(a.salesAfter || 0) > Number(a.salesBefore || 0)).length || 0;
-    const pricingTotal = pricingData?.adjustments?.length || 0;
-    const copyImproved = copyData?.copies?.filter((c: Record<string, unknown>) => Number(c.salesAfter || 0) > Number(c.salesBefore || 0)).length || 0;
-    const copyTotal = copyData?.copies?.length || 0;
-    const allActions = [...(pricingData?.adjustments || []), ...(copyData?.copies || [])];
-    const avgIncrement = allActions.length > 0
-      ? (allActions.reduce((sum: number, a: Record<string, unknown>) => sum + (Number(a.salesAfter || 0) - Number(a.salesBefore || 0)), 0) / allActions.length).toFixed(1)
+    const retrospectiveFailed = pricingResult.failed || copyResult.failed;
+    const pricingImproved = pricingActions.filter((a: Record<string, unknown>) => Number(a.salesAfter || 0) > Number(a.salesBefore || 0)).length;
+    const copyImproved = copyActions.filter((c: Record<string, unknown>) => Number(c.salesAfter || 0) > Number(c.salesBefore || 0)).length;
+    const allActions: Record<string, unknown>[] = [...pricingActions, ...copyActions];
+    const avgIncrement = retrospectiveFailed ? null : allActions.length > 0
+      ? (allActions.reduce((sum, a) => sum + (Number(a.salesAfter || 0) - Number(a.salesBefore || 0)), 0) / allActions.length).toFixed(1)
       : "0";
 
     lines.push("");
-    // A/B 测试对比 (if enabled)
     if (process.env.PROMO_AB_TEST === "true") {
-      const expActions = allActions.filter((a: Record<string, unknown>) => String(a.reason || "").includes("pricing") || String(a.reason || "").includes("copy"));
-      const ctrlActions = allActions.filter((a: Record<string, unknown>) => String(a.reason || "").includes("control"));
-      const expGrowth = expActions.length > 0
-        ? (expActions.reduce((sum: number, a: Record<string, unknown>) => sum + (Number(a.salesAfter || 0) - Number(a.salesBefore || 0)), 0) / expActions.length).toFixed(1)
-        : "0";
-      const ctrlGrowth = ctrlActions.length > 0
-        ? (ctrlActions.reduce((sum: number, a: Record<string, unknown>) => sum + (Number(a.salesAfter || 0) - Number(a.salesBefore || 0)), 0) / ctrlActions.length).toFixed(1)
-        : "0";
-      const netEffect = (parseFloat(expGrowth) - parseFloat(ctrlGrowth)).toFixed(1);
-
       lines.push("🧪 **A/B 测试结果**");
-      lines.push(`实验组(推广): 平均增量 +${expGrowth}%`);
-      lines.push(`对照组(无推广): 平均增量 +${ctrlGrowth}%`);
-      lines.push(`推广净效果: +${netEffect}%`);
+      if (retrospectiveFailed) {
+        lines.push("实验/对照数据: 未知/同步失败");
+      } else {
+        const expActions = allActions.filter((a) => String(a.reason || "").includes("pricing") || String(a.reason || "").includes("copy"));
+        const ctrlActions = allActions.filter((a) => String(a.reason || "").includes("control"));
+        const expGrowth = expActions.length > 0
+          ? (expActions.reduce((sum, a) => sum + (Number(a.salesAfter || 0) - Number(a.salesBefore || 0)), 0) / expActions.length).toFixed(1)
+          : "0";
+        const ctrlGrowth = ctrlActions.length > 0
+          ? (ctrlActions.reduce((sum, a) => sum + (Number(a.salesAfter || 0) - Number(a.salesBefore || 0)), 0) / ctrlActions.length).toFixed(1)
+          : "0";
+        const netEffect = (parseFloat(expGrowth) - parseFloat(ctrlGrowth)).toFixed(1);
+        lines.push(`实验组(推广): 平均增量 +${expGrowth}%`);
+        lines.push(`对照组(无推广): 平均增量 +${ctrlGrowth}%`);
+        lines.push(`推广净效果: +${netEffect}%`);
+      }
       lines.push("");
     }
 
     lines.push("📊 **推广效果回溯**");
-    lines.push(`调价效果: ${pricingImproved}/${pricingTotal} 商品销量提升`);
-    lines.push(`文案效果: ${copyImproved}/${copyTotal} 商品销量提升`);
-    lines.push(`平均增量: +${avgIncrement}%`);
+    lines.push(pricingResult.failed ? "调价效果: 未知/同步失败" : `调价效果: ${pricingImproved}/${pricingActions.length} 商品销量提升`);
+    lines.push(copyResult.failed ? "文案效果: 未知/同步失败" : `文案效果: ${copyImproved}/${copyActions.length} 商品销量提升`);
+    lines.push(avgIncrement === null ? "平均增量: 未知/同步失败" : `平均增量: +${avgIncrement}%`);
     lines.push("");
 
     lines.push(`💡 **下周推广建议**`);
@@ -320,25 +335,53 @@ async function sendWeeklyReport(bot: FeishuBot, chatId: string, config: ApiConfi
       lines.push(`   ${i + 1}. ${s}`);
     });
 
-    await bot.sendMessage(chatId, lines.join("\n"));
+    const sent = await bot.sendMessage(chatId, lines.join("\n"));
+    if (!sent) {
+      logger.error({ from, to }, "Weekly report was not sent");
+      return false;
+    }
     logger.info("Weekly report sent");
+    return true;
   } catch (err) {
     logger.error({ err }, "Failed to send weekly report");
     await bot.sendMessage(chatId, `⚠️ 周报生成失败: ${(err as Error).message}`).catch(() => {});
+    return false;
   }
 }
 
 // ---- 效果回溯 ----
 
-async function runEffectRetrospective(config: ApiConfig): Promise<void> {
+export function extractOrderList(payload: unknown): Array<Record<string, unknown>> | null {
+  if (!payload || typeof payload !== "object") return null;
+  const body = payload as { orders?: unknown; data?: unknown };
+  if (Array.isArray(body.orders)) return body.orders;
+  if (Array.isArray(body.data)) return body.data;
+  return null;
+}
+
+function orderItems(order: Record<string, unknown>): Array<Record<string, unknown>> | null {
+  if (order.items != null) return Array.isArray(order.items) ? order.items : null;
+  if (order.products != null) return Array.isArray(order.products) ? order.products : null;
+  if (typeof order.products_json === "string") {
+    try {
+      const parsed: unknown = JSON.parse(order.products_json);
+      return Array.isArray(parsed) ? parsed : null;
+    } catch {
+      return null;
+    }
+  }
+  return [];
+}
+
+export async function runEffectRetrospective(config: ApiConfig): Promise<void> {
   try {
     const [pricingData, copyData] = await Promise.all([
       statsApi.pricingHistory(config, 7).catch(() => null),
       statsApi.copyHistory(config, 7).catch(() => null),
     ]);
 
-    const pricingActions = pricingData?.adjustments || [];
-    const copyActions = copyData?.copies || [];
+    const pricingActions = Array.isArray(pricingData?.adjustments) ? pricingData.adjustments : [];
+    const copyActions = Array.isArray(copyData?.copies) ? copyData.copies : [];
     let updated = 0;
 
     for (const action of [...pricingActions, ...copyActions]) {
@@ -351,23 +394,41 @@ async function runEffectRetrospective(config: ApiConfig): Promise<void> {
       const sevenDaysLater = new Date(appliedDate.getTime() + 7 * 24 * 60 * 60 * 1000);
       if (new Date() < sevenDaysLater) continue; // not yet 7 days
 
-      // Get post-action sales from orders API
       let recentOrders = 0;
       try {
         const orders = await promoApi.orders(config, 7);
-        const orderList = (orders as { orders?: Array<Record<string, unknown>> })?.orders || [];
-        for (const o of orderList) {
-          const orderDate = new Date(String(o.createdAt || o.created_at || ""));
+        const orderList = extractOrderList(orders);
+        if (!orderList) {
+          logger.warn({ offerId: a.offerId }, "Orders API returned no valid orders/data array; retrospective skipped");
+          continue;
+        }
+        for (const order of orderList) {
+          if (!order || typeof order !== "object" || Array.isArray(order)) {
+            logger.warn({ offerId: a.offerId }, "Malformed order row skipped during retrospective");
+            continue;
+          }
+          const orderDate = new Date(String(order.createdAt || order.created_at || order.synced_at || ""));
           if (orderDate >= appliedDate && orderDate <= sevenDaysLater) {
-            const items = (o.items || o.products || []) as Array<Record<string, unknown>>;
+            const items = orderItems(order);
+            if (!items) {
+              logger.warn({ offerId: a.offerId }, "Malformed order items skipped during retrospective");
+              continue;
+            }
             for (const item of items) {
+              if (!item || typeof item !== "object" || Array.isArray(item)) {
+                logger.warn({ offerId: a.offerId }, "Malformed order item skipped during retrospective");
+                continue;
+              }
               if (String(item.offerId || item.offer_id || "") === String(a.offerId)) {
                 recentOrders++;
               }
             }
           }
         }
-      } catch { /* skip */ }
+      } catch (err) {
+        logger.warn({ err, offerId: a.offerId }, "Orders API failed; retrospective skipped");
+        continue;
+      }
 
       if (recentOrders > 0) {
         try {
@@ -402,10 +463,10 @@ async function generateWeeklySuggestions(ctx: {
   bottom5: Array<{ name: string; orders: number; stock: number }>;
   roi: number | null;
   organicRatio: number | null;
-  orders: number;
-  revenue: number;
-  pricingAdjustments: number;
-  copyOptimizations: number;
+  orders: number | null;
+  revenue: number | null;
+  pricingAdjustments: number | null;
+  copyOptimizations: number | null;
 }, config: ApiConfig): Promise<string[]> {
   const suggestions: string[] = [];
 
@@ -468,11 +529,12 @@ async function generateWeeklySuggestions(ctx: {
 
 // ---- 工具函数 ----
 
-function fmtRub(n: number): string {
-  return `${n.toFixed(0)} ₽`;
+function fmtRub(n: number | null): string {
+  return n === null ? "未知/同步失败" : `${n.toFixed(0)} ₽`;
 }
 
-function formatDiff(pct: number): string {
+function formatDiff(pct: number | null): string {
+  if (pct === null) return "环比未知/同步失败";
   if (pct === 0) return "→0%";
   const sign = pct > 0 ? "↑" : "↓";
   return `${sign}${Math.abs(pct).toFixed(1)}%`;
