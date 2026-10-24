@@ -611,7 +611,8 @@ export function planActions(scored: ProductScore[]): PlannedAction[] {
         let diffPct = Math.abs((suggestedPrice - cur) / cur);
         if (diffPct > 0.10) {
           const clamped = suggestedPrice < cur ? Math.ceil(cur * 0.90) : Math.floor(cur * 1.10);
-          if (clamped < floor) {
+          const validRepairStep = priceReason === "profit_repair" && suggestedPrice > cur && clamped > cur && clamped <= suggestedPrice;
+          if (clamped < floor && !validRepairStep) {
             logger.warn({ offerId: product.offerId, clamped, floor }, "Clamped price below floor — skipping");
             continue;
           }

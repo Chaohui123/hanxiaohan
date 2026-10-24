@@ -186,6 +186,17 @@ describe("24h 精准竞品硬闸门", () => {
     expect(planActions([product({ totalScore: 20, recommendation: "copy" })])).toHaveLength(0);
   });
 
+  it("current<floor 时向上利润修复允许 10% 中间步骤", async () => {
+    const { planActions } = await import("../src/decision-engine.js");
+    const repair = product({ currentPrice: 772.77, floorPrice: 917.97, marginPercent: -5 });
+    const actions = planActions([repair]);
+    expect(actions).toHaveLength(1);
+    expect(actions[0].priceReason).toBe("profit_repair");
+    expect(actions[0].suggestedPrice).toBe(850);
+    expect(actions[0].suggestedPrice!).toBeGreaterThan(772.77);
+    expect(actions[0].suggestedPrice!).toBeLessThan(917.97);
+  });
+
   it("19.96% 原始利润率仍触发利润修复且建议价有限", async () => {
     const { planActions } = await import("../src/decision-engine.js");
     const actions = planActions([product({ marginPercent: 19.96, priceAdvantage: 0, competitorAvg: 1500 })]);
@@ -227,6 +238,15 @@ describe("applyAstraGuard 最终执行前硬闸门", () => {
   it("即使绕过 planActions，缺重量和过期竞品也不能进入最终动作", () => {
     expect(applyAstraGuard([action({ suggestedPrice: 1600, priceReason: "profit_repair" })], [product({ pricingBlockers: ["MISSING_WEIGHT"] })], ctx())).toHaveLength(0);
     expect(applyAstraGuard([action()], [product()], ctx())).toHaveLength(0);
+  });
+
+  it("astra 放行向上修复中间价，仍拒绝向下穿 floor", () => {
+    const repair = product({ currentPrice: 772.77, floorPrice: 917.97, marginPercent: -5 });
+    const upward = action({ currentPrice: 772.77, suggestedPrice: 850, priceReason: "profit_repair" });
+    expect(applyAstraGuard([upward], [repair], ctx())).toHaveLength(1);
+    const downwardProduct = product({ currentPrice: 772.77, floorPrice: 917.97, competitorAvg: 700, pricingCompetitorAvg: 700, hasFreshPreciseCompetitor: true });
+    const downward = action({ currentPrice: 772.77, suggestedPrice: 700, priceReason: "competitor_drop" });
+    expect(applyAstraGuard([downward], [downwardProduct], ctx())).toHaveLength(0);
   });
 
   it("新鲜布尔也不能让过期展示均价驱动 astra 涨价", () => {
