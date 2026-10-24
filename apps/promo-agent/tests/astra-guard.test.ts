@@ -7,15 +7,30 @@ import {
 } from "../src/astra-guard.js";
 import type { PlannedAction } from "../src/decision-engine.js";
 import type { ProductScore } from "../src/scorer.js";
+import { oglFixedCostRub, unitEconomicsConfigFromEnv, unitProfitRub } from "../src/unit-economics.js";
 
 // ---- 测试夹具 ----
 
 function baseProduct(extra: Partial<ProductScore> = {}): ProductScore {
+  const synced = extra.competitorAvg !== undefined && extra.pricingCompetitorAvg === undefined
+    ? { ...extra, pricingCompetitorAvg: extra.competitorAvg }
+    : extra;
   return {
     offerId: "P1",
     name: "Test Product",
     cost: 50,
-    costRub: 500,
+    costRub: 50,
+    logisticsRub: 40,
+    packagingRub: 10,
+    fixedCostRub: 100,
+    unitProfitRub: 406.7,
+    weightG: 44.534,
+    exchangeRate: 10,
+    pricingBlockers: [],
+    hasFreshPreciseCompetitor: true,
+    latestPreciseCapturedAt: new Date().toISOString(),
+    pricingCompetitorAvg: 1000,
+    pricingCompetitorCapturedAt: new Date().toISOString(),
     currentPrice: 1000,
     stock: 50,
     marginPercent: 50,
@@ -28,7 +43,7 @@ function baseProduct(extra: Partial<ProductScore> = {}): ProductScore {
     breakdown: { margin: 80, priceAdvantage: 50, stock: 80, salesGrowth: 0, rating: 60 },
     recommendation: "pricing",
     reason: "test",
-    ...extra,
+    ...synced,
   };
 }
 
@@ -75,9 +90,9 @@ describe("astra-guard — 直通", () => {
     expect(out[0].suggestedPrice).toBe(1050);
   });
 
-  it("无评分数据的 action 直通", () => {
+  it("无评分数据的 pricing action 硬阻断", () => {
     const out = applyAstraGuard([dropAction({ offerId: "UNKNOWN" })], [baseProduct()], makeCtx());
-    expect(out).toHaveLength(1);
+    expect(out).toHaveLength(0);
   });
 });
 
@@ -177,7 +192,7 @@ describe("astra-guard — 条款4 RED 分级", () => {
     // P1: cur=1000, compAvg=1000 → d=3% → 试点标记 priority=0 排最前
     // P2: cur=1010, compAvg=1000 → d≈3.96% → 3-5% 分两步（不标 high），降一半至 990
     const p2Action = dropAction({ offerId: "P2", suggestedPrice: 970, currentPrice: 1010 });
-    const p2 = baseProduct({ offerId: "P2", currentPrice: 1010, competitorAvg: 1000, costRub: 400 });
+    const p2 = baseProduct({ offerId: "P2", currentPrice: 1010, competitorAvg: 1000 });
     const out = applyAstraGuard(
       [dropAction(), p2Action],
       [baseProduct(), p2],
@@ -248,34 +263,65 @@ describe("astra-guard — 条款3 g_BE 盈亏平衡", () => {
   });
 
   it("有 GREEN 但幅度过大 → 幅度减到 g_BE 可达的临界值", () => {
-    // p=900 → π(p)=175，g_BE=250/175=1.43 > 1.075；
-    // 临界价 = ceil((250/1.075+500)/0.75) = ceil(976.74) = 977；π(977)=232.75 ≥ 250/1.075=232.56
+    const config = unitEconomicsConfigFromEnv();
+    const piCur = unitProfitRub(1000, 100, config);
     const out = applyAstraGuard(
       [dropAction({ suggestedPrice: 900 })], [baseProduct({ competitorAvg: 1000 })],
       makeCtx({ greenOffers: new Set(["P1"]) }),
     );
     expect(out).toHaveLength(1);
-    expect(out[0].suggestedPrice).toBe(977);
+    expect(out[0].suggestedPrice).toBe(945);
     expect(out[0].reason).toContain("临界值");
-    // 修正后 g_BE ≤ 1.075
-    const piNew = 977 * 0.75 - 500;
-    expect(250 / piNew).toBeLessThanOrEqual(1.075);
+    const piNew = unitProfitRub(945, 100, config);
+    expect(piCur / piNew).toBeLessThanOrEqual(1.075);
+  });
+
+  it("61N 的 g_BE/pCrit 使用 35% CPS 覆盖", () => {
+    const previous = process.env.PROMO_CPS_RATE_OVERRIDES;
+    process.env.PROMO_CPS_RATE_OVERRIDES = '{"MAR-YAM-61N-01":0.35}';
+    try {
+      const p = baseProduct({ offerId: "MAR-YAM-61N-01", competitorAvg: 1000 });
+      const out = applyAstraGuard(
+        [dropAction({ offerId: p.offerId, suggestedPrice: 900 })], [p],
+        makeCtx({ greenOffers: new Set([p.offerId]) }),
+      );
+      expect(out).toHaveLength(1);
+      expect(out[0].suggestedPrice).toBe(949);
+      expect(out[0].reason).toContain("临界值");
+    } finally {
+      if (previous === undefined) delete process.env.PROMO_CPS_RATE_OVERRIDES;
+      else process.env.PROMO_CPS_RATE_OVERRIDES = previous;
+    }
+  });
+
+  it("候选价跨 Small→XS 时 g_BE 使用 XS 物流重算利润", () => {
+    const config = unitEconomicsConfigFromEnv();
+    const p = baseProduct({
+      currentPrice: 1550, competitorAvg: 1550, costRub: 60, packagingRub: 60,
+      logisticsRub: 243.84, fixedCostRub: 363.84, weightG: 200, exchangeRate: 12, floorPrice: 0,
+    });
+    const action = dropAction({ suggestedPrice: 1400, currentPrice: 1550 });
+    const out = applyAstraGuard([action], [p], makeCtx({ greenOffers: new Set(["P1"]) }));
+    expect(out).toHaveLength(1);
+    expect(out[0].suggestedPrice).toBe(1400);
+    const targetFixed = oglFixedCostRub(1400, { baseFixedCostRub: 120, weightG: 200, exchangeRate: 12 })!;
+    const piCur = unitProfitRub(1550, 363.84, config);
+    const piNew = unitProfitRub(1400, targetFixed, config);
+    expect(piCur / piNew).toBeLessThanOrEqual(1.075);
   });
 
   it("新价单均利润 ≤0 → 剔除（降价即亏损）", () => {
-    // p=650 → π(p)=650×0.75-500=-12.5
     const out = applyAstraGuard(
-      [dropAction({ suggestedPrice: 650 })], [baseProduct({ competitorAvg: 1000 })],
+      [dropAction({ suggestedPrice: 650 })], [baseProduct({ competitorAvg: 1000, fixedCostRub: 400 })],
       makeCtx({ greenOffers: new Set(["P1"]) }),
     );
     expect(out).toHaveLength(0);
   });
 
   it("现价单均利润 ≤0 → 剔除（应走利润修复而非降价）", () => {
-    // cur=600, cost=500 → π(P)=600×0.75-500=-50；d=(600-582)/600=3% → 试点不修正，条款3 拦截
     const action = dropAction({ suggestedPrice: 580, currentPrice: 600 });
     const out = applyAstraGuard(
-      [action], [baseProduct({ currentPrice: 600, competitorAvg: 600, floorPrice: 500 })],
+      [action], [baseProduct({ currentPrice: 600, competitorAvg: 600, floorPrice: 500, fixedCostRub: 400 })],
       makeCtx({ greenOffers: new Set(["P1"]) }),
     );
     expect(out).toHaveLength(0);
@@ -288,30 +334,25 @@ describe("astra-guard — 条款3 g_BE 盈亏平衡", () => {
 
 describe("astra-guard — 条款5 净利率止损", () => {
   it("修正价净利率 <20%（含退货5%）→ 提到 20% 水位", () => {
-    // cur=1850, compAvg=1830, cost=1000 → d=(1850-1775.1)/1850≈4.05% → 分两步至 1813
-    // π(P)=387.5, π(1813)=359.75 → g_BE=1.077>1.075 → 临界 1814
-    // 1814 净利率=(1360.5-1000)/1814≈19.87% <20% → 提到 ceil(1000/0.55)=1819
-    const action = dropAction({ suggestedPrice: 1750, currentPrice: 1850 });
+    const action = dropAction({ suggestedPrice: 1700, currentPrice: 1800 });
+    const fixedCostRub = 525.577235627;
     const out = applyAstraGuard(
       [action],
-      [baseProduct({ currentPrice: 1850, competitorAvg: 1830, costRub: 1000, floorPrice: 1500 })],
+      [baseProduct({ currentPrice: 1800, competitorAvg: 1800, costRub: 350, fixedCostRub, floorPrice: 500 })],
       makeCtx({ greenOffers: new Set(["P1"]) }),
     );
     expect(out).toHaveLength(1);
-    expect(out[0].suggestedPrice).toBe(1819);
+    expect(out[0].suggestedPrice).toBe(1772);
     expect(out[0].reason).toContain("净利率止损");
-    // 1819 净利率 ≥ 20%
-    expect((1819 * 0.75 - 1000) / 1819).toBeGreaterThanOrEqual(0.20);
+    const config = unitEconomicsConfigFromEnv();
+    expect(unitProfitRub(1772, fixedCostRub, config) / 1772).toBeGreaterThanOrEqual(0.20);
   });
 
   it("净利率 20% 水位 ≥ 现价 → 禁止扩大优惠，剔除", () => {
-    // cur=1200, compAvg=1180, cost=800 → d≈4.62% → 分两步至 1172
-    // π(P)=100, π(1172)=79 → g_BE=1.27>1.075 → 临界 1191
-    // 净利率水位 ceil(800/0.55)=1455 ≥ 现价 1200 → 禁止扩大优惠
     const action = dropAction({ suggestedPrice: 1100, currentPrice: 1200 });
     const out = applyAstraGuard(
       [action],
-      [baseProduct({ currentPrice: 1200, competitorAvg: 1180, costRub: 800, floorPrice: 1100 })],
+      [baseProduct({ currentPrice: 1200, competitorAvg: 1180, fixedCostRub: 800, floorPrice: 1100 })],
       makeCtx({ greenOffers: new Set(["P1"]) }),
     );
     expect(out).toHaveLength(0);

@@ -15,6 +15,9 @@ import {
   type ProductScore,
   scoreMargin, scorePriceAdvantage, scoreStock, scoreSalesGrowth, scoreRating, getRecommendation,
 } from "./scorer.js";
+import {
+  calculateUnitEconomics, effectivePriceRub, priceForTargetMargin, unitEconomicsConfigFromEnv,
+} from "./unit-economics.js";
 
 // ---- 飞书卡片构建 ----
 
@@ -78,6 +81,7 @@ export interface PlannedAction {
   currentPrice: number;
   priority: number; // 1=highest
   reason: string;
+  priceReason?: "competitor_drop" | "competitor_raise" | "profit_repair" | "trial_revert";
 }
 
 export interface ActionResult {
@@ -304,7 +308,21 @@ export async function scoreAllProducts(config: ApiConfig): Promise<ProductScore[
     promoApi.orders(config, 14).catch(() => null),
   ]);
 
-  const rate = Number((fxData as Record<string, unknown>)?.rate || 12);
+  const rate = Number((fxData as Record<string, unknown>)?.rate || 0);
+  const rawOrders = orders14d as Record<string, unknown> | null;
+  let orders: Array<Record<string, unknown>> = [];
+  let ordersAvailable = false;
+  if (rawOrders && Object.prototype.hasOwnProperty.call(rawOrders, "orders")) {
+    if (Array.isArray(rawOrders.orders)) {
+      orders = rawOrders.orders as Array<Record<string, unknown>>;
+      ordersAvailable = true;
+    }
+  } else if (rawOrders && Array.isArray(rawOrders.data)) {
+    orders = rawOrders.data as Array<Record<string, unknown>>;
+    ordersAvailable = true;
+  }
+  if (!(rate > 0) || !Number.isFinite(rate)) logger.error("Exchange rate unavailable — all pricing actions blocked");
+  if (!ordersAvailable) logger.error("Orders unavailable — all pricing actions blocked");
   const stores = (storesData as { items?: Array<{ storeId: string; storeName: string; active: number }> })?.items || [];
 
   // 从所有活跃店铺获取商品
@@ -331,12 +349,6 @@ export async function scoreAllProducts(config: ApiConfig): Promise<ProductScore[
   // 从订单数据构建每个商品的近7天/前7天销量映射
   const now = Date.now();
   const DAY_MS = 24 * 60 * 60 * 1000;
-  // /api/orders 实际契约 { success, data: [...] }（2026-10-22 实证；按 orders 键取一直为空导致销量恒 0）
-  const rawOrders = orders14d as Record<string, unknown> | null;
-  const orders = ((rawOrders?.orders as Array<Record<string, unknown>> | undefined)
-    ?? (rawOrders?.data as Array<Record<string, unknown>> | undefined)
-    ?? []);
-
   // offerId → { recent: number, prev: number }
   const salesByOffer = new Map<string, { recent: number; prev: number }>();
 
@@ -367,79 +379,66 @@ export async function scoreAllProducts(config: ApiConfig): Promise<ProductScore[
   lastSalesByOffer = salesByOffer;
   logger.info({ orderCount: orders.length, trackedOffers: salesByOffer.size }, "Sales growth data prepared");
 
-  // 过滤有效商品
-  const eligible = allItems.filter((item) => {
-    const offerId = String(item.offerId || item.offer_id || "").trim();
-    const price = Number(item.price || 0);
-    const stock = Number(item.stock ?? item.quantity ?? 0);
-    const cost = Number(item.cost || 0);
-    return offerId && price > 0 && stock > 0 && cost > 0;
-  });
-
+  const eligible = allItems.filter((item) => String(item.offerId || item.offer_id || "").trim());
   const scored: ProductScore[] = [];
 
   for (const item of eligible) {
     const offerId = String(item.offerId || item.offer_id || "");
     const name = String(item.name || item.title || offerId).slice(0, 50);
     const cost = Number(item.cost || 0);
-    // 促销实付价（actionPriceRub，/api/inventory 附加字段）优先于卖家设定价 —— 只替换 currentPrice 基准，底价双底线公式不动
     const actionPriceRub = Number(item.actionPriceRub || 0);
-    const currentPrice = actionPriceRub > 0 ? actionPriceRub : Number(item.price || 0);
+    const currentPrice = effectivePriceRub(Number(item.price || 0), actionPriceRub);
     const stock = Number(item.stock ?? item.quantity ?? 0);
+    const weightG = Number(item.weight || 0) * 1000;
+    const economicsConfig = unitEconomicsConfigFromEnv(offerId);
+    const economics = calculateUnitEconomics({ priceRub: currentPrice, costCny: cost, weightG, exchangeRate: rate, offerId, config: economicsConfig });
+    const pricingBlockers = [...economics.pricingBlockers];
+    if (!(stock > 0)) pricingBlockers.push("OUT_OF_STOCK");
+    if (!ordersAvailable) pricingBlockers.push("ORDERS_UNAVAILABLE");
+    if (pricingBlockers.length > 0) logger.warn({ offerId, pricingBlockers }, "Product pricing data incomplete");
 
-    // 竞品均价
-    let competitorAvg = currentPrice; // fallback = 自己的价格
+    let competitorAvg = currentPrice;
+    let pricingCompetitorAvg: number | null = null;
+    let pricingCompetitorCapturedAt: string | null = null;
+    let latestPreciseCapturedAt: string | null = null;
     try {
       const priceData = await competitorApi.getPrices(config, offerId, 3);
       const all = priceData.prices || [];
-      // 精准快照（competitorUrl 非空，来自留档链接的本机抓取）优先；
-      // 无精准数据时回退到全部快照（按名搜索的聚合数据）
       const precise = all.filter((p) => p.competitorUrl);
-      const candidates = precise.length > 0 ? precise : all;
-      // 威胁分过滤：<40 分不纳入，剩余按威胁分加权；全被滤 → 保持 fallback 自己价格
-      const weighted = threatWeightedAverage(candidates, currentPrice);
-      if (weighted > 0) competitorAvg = weighted;
-    } catch {
-      // 无竞品数据
+      const preciseTimes = precise.map((p) => new Date(p.capturedAt).getTime()).filter(Number.isFinite);
+      if (preciseTimes.length > 0) latestPreciseCapturedAt = new Date(Math.max(...preciseTimes)).toISOString();
+      const displayCandidates = precise.length > 0 ? precise : all;
+      const displayWeighted = threatWeightedAverage(displayCandidates, currentPrice);
+      if (displayWeighted > 0) competitorAvg = displayWeighted;
+      const freshPrecise = precise.filter((p) => {
+        const time = new Date(p.capturedAt).getTime();
+        return Number.isFinite(time) && now - time >= 0 && now - time <= DAY_MS;
+      });
+      const pricingWeighted = threatWeightedAverage(freshPrecise, currentPrice);
+      if (pricingWeighted > 0) {
+        pricingCompetitorAvg = pricingWeighted;
+        const freshTimes = freshPrecise.map((p) => new Date(p.capturedAt).getTime());
+        pricingCompetitorCapturedAt = new Date(Math.max(...freshTimes)).toISOString();
+      }
+    } catch (err) {
+      logger.warn({ err, offerId }, "Competitor snapshots unavailable — price changes requiring competitors blocked");
     }
+    const hasFreshPreciseCompetitor = pricingCompetitorAvg !== null;
 
-    // 销量增长（从订单数据计算）
     const salesData = salesByOffer.get(offerId);
     let salesGrowth7d = 0;
     if (salesData) {
       const { recent, prev } = salesData;
       salesGrowth7d = prev > 0 ? ((recent - prev) / prev) * 100 : (recent > 0 ? 100 : 0);
     }
-
-    // 评分（从商品数据中获取）
     const rating = Number(item.rating || item.productRating || 0);
-
-    // === 计算各维度分数 ===
-
-    // 利润率评分
-    const marginPercent = ((currentPrice - cost * rate) / currentPrice) * 100;
+    const marginPercent = economics.marginPercent;
     const marginScore = scoreMargin(marginPercent);
 
-    // 调价底价（2026-08-14 方案）：毛利率≥20% 与 净利率≥10% 双底线取大
-    // 毛利线：(P−C)/P ≥ 20% ⇒ P ≥ C/0.80；净利线：P×(1−佣金20%) − C − 物流₽ − 打包₽ ≥ P×10% ⇒ P ≥ (C+物流₽+打包₽)/0.70
-    // 物流项按官方计算器费率表（globalcalculator.ozon.ru，China/Dongguan→Russia，8/20 实测）分档：
-    // XS(≤135¥且≤500g) 95₽ ｜ Small(135-635¥且≤2kg) 300₽ ｜ Premium Small(635¥+且≤5kg) 2161₽
-    // 打包费 5 CNY/单（2026-09-19 用户确认成本结构：采购→货代包邮，打包 5 元/单）
-    const costRub = cost * rate;
-    const packagingRub = 5 * rate;
-    const priceCny = costRub > 0 ? Number(item.price || 0) / rate : 0;
-    // weight 缺失按重货保守档计底价 — 缺失=0 会落最轻档(95₽)把底价方向性低估，重货可能亏本卖（2026-09-04 审查）
-    const rawWeight = Number(item.weight || 0) || 0;
-    const weightG = rawWeight > 0 ? rawWeight * 1000 : Number.POSITIVE_INFINITY;
-    const logisticsRub = priceCny <= 135 && weightG <= 500 ? 95
-      : priceCny <= 635 && weightG <= 2000 ? 300
-      : priceCny > 635 && weightG <= 5000 ? 2161
-      : 2161; // 超大/超高价暂按 Premium Small 口径，有 Premium Big 品再实测回填
-    const floorPrice = Math.round(Math.max(costRub / 0.80, (costRub + logisticsRub + packagingRub) / 0.70) * 100) / 100;
-
-    // 价格优势评分
-    const priceAdvantage = competitorAvg > 0
-      ? ((competitorAvg - currentPrice) / competitorAvg) * 100
+    // 有可定价新鲜均价时推荐与评分同口径；否则旧数据仅作展示，planActions 不会生成竞品调价。
+    const scoringCompetitorAvg = pricingCompetitorAvg ?? competitorAvg;
+    const priceAdvantage = scoringCompetitorAvg > 0
+      ? ((scoringCompetitorAvg - currentPrice) / scoringCompetitorAvg) * 100
       : 0;
     const priceAdvScore = scorePriceAdvantage(priceAdvantage);
 
@@ -474,14 +473,25 @@ export async function scoreAllProducts(config: ApiConfig): Promise<ProductScore[
       cost,
       currentPrice,
       stock,
-      marginPercent: Math.round(marginPercent * 10) / 10,
+      marginPercent,
       competitorAvg,
       priceAdvantage: Math.round(priceAdvantage * 10) / 10,
       salesGrowth7d: Math.round(salesGrowth7d * 10) / 10,
       rating: Math.round(rating * 10) / 10,
       totalScore,
-      costRub: Math.round(costRub * 100) / 100,
-      floorPrice,
+      costRub: Math.round(economics.costRub * 100) / 100,
+      logisticsRub: Math.round(economics.logisticsRub * 100) / 100,
+      packagingRub: Math.round(economics.packagingRub * 100) / 100,
+      fixedCostRub: Math.round(economics.fixedCostRub * 100) / 100,
+      unitProfitRub: Math.round(economics.unitProfitRub * 100) / 100,
+      weightG,
+      exchangeRate: rate,
+      pricingBlockers,
+      hasFreshPreciseCompetitor,
+      latestPreciseCapturedAt,
+      pricingCompetitorAvg,
+      pricingCompetitorCapturedAt,
+      floorPrice: Math.ceil(economics.floorPrice * 100) / 100,
       breakdown: {
         margin: Math.round(marginScore * 100),
         priceAdvantage: Math.round(priceAdvScore * 100),
@@ -544,35 +554,61 @@ export function planActions(scored: ProductScore[]): PlannedAction[] {
   for (const product of scored) {
     if (product.recommendation === "skip" || product.totalScore < SCORE_THRESHOLD) continue;
 
-    // ---- 建议价（2026-08-14 方案：双底线 + 双向调价）----
     let suggestedPrice: number | undefined;
+    let priceReason: PlannedAction["priceReason"];
     if (product.recommendation !== "copy") {
       const floor = product.floorPrice;
       const cur = product.currentPrice;
-      if (product.priceAdvantage < -5) {
-        // 不利降价：略低于精准竞品均价，不破底价
-        suggestedPrice = Math.round(Math.max(floor, Math.min(cur, product.competitorAvg * 0.97)));
-      } else if (product.priceAdvantage > 15) {
-        // 明显便宜：小幅涨价，不超竞品均价
-        suggestedPrice = Math.round(Math.min(product.competitorAvg, cur * 1.05));
-      } else if (product.marginPercent < 20) {
-        // 利润修复：提到毛利率 25% 水位（P = C/0.75），不破底价
-        suggestedPrice = Math.round(Math.max(product.floorPrice, product.costRub / 0.75));
+      const pricingCompetitorAvg = product.pricingCompetitorAvg;
+      const pricingPriceAdvantage = pricingCompetitorAvg !== null && pricingCompetitorAvg > 0 && cur > 0
+        ? (pricingCompetitorAvg - cur) / pricingCompetitorAvg * 100
+        : null;
+      if (product.marginPercent < 20) {
+        const config = unitEconomicsConfigFromEnv(product.offerId);
+        const ogl = { baseFixedCostRub: product.costRub + product.packagingRub, weightG: product.weightG, exchangeRate: product.exchangeRate };
+        suggestedPrice = Math.ceil(Math.max(floor, priceForTargetMargin(ogl.baseFixedCostRub, config.astraNetMarginRate, config, ogl)));
+        priceReason = "profit_repair";
+      } else if (pricingPriceAdvantage !== null && pricingPriceAdvantage < -5) {
+        suggestedPrice = Math.round(Math.max(floor, Math.min(cur, (pricingCompetitorAvg as number) * 0.97)));
+        priceReason = "competitor_drop";
+      } else if (pricingPriceAdvantage !== null && pricingPriceAdvantage > 15) {
+        suggestedPrice = Math.round(Math.min(pricingCompetitorAvg as number, cur * 1.05));
+        priceReason = "competitor_raise";
       }
       if (suggestedPrice !== undefined) {
-        // 底价校验：建议价低于底价（含计算结果等于现价的无效动作）→ 跳过
-        if (suggestedPrice < floor) {
+        if (priceReason === "profit_repair" && suggestedPrice <= cur) {
+          logger.warn({ offerId: product.offerId, reason: "PROFIT_REPAIR_NOT_UPWARD", currentPrice: cur, suggestedPrice }, "Pricing action blocked");
+          if (product.recommendation === "copy_and_pricing") {
+            actions.push({
+              offerId: product.offerId, name: product.name, storeId: product.storeId, storeName: product.storeName,
+              type: "copy", currentPrice: cur, priority: actions.length + 1,
+              reason: `${product.reason} | PROFIT_REPAIR_NOT_UPWARD，保留文案`,
+            });
+          }
+          continue;
+        }
+        const dataBlockers = product.pricingBlockers || [];
+        const competitorRequired = suggestedPrice < cur || priceReason === "competitor_raise";
+        const competitorBlocked = competitorRequired && product.pricingCompetitorAvg === null;
+        if (dataBlockers.length > 0 || competitorBlocked) {
+          const reason = competitorBlocked ? "NO_FRESH_PRECISE_COMPETITOR" : dataBlockers.join(",");
+          logger.warn({ offerId: product.offerId, reason, suggestedPrice }, "Pricing action blocked");
+          if (product.recommendation === "copy_and_pricing") {
+            actions.push({
+              offerId: product.offerId, name: product.name, storeId: product.storeId, storeName: product.storeName,
+              type: "copy", currentPrice: cur, priority: actions.length + 1,
+              reason: `${product.reason} | 调价阻断: ${reason}`,
+            });
+          }
+          continue;
+        }
+        if (!Number.isFinite(suggestedPrice) || suggestedPrice < floor) {
           logger.warn({ offerId: product.offerId, suggestedPrice, floor }, "Suggested price below floor — skipping");
           continue;
         }
-        if (suggestedPrice === Math.round(cur)) continue; // 无变化
-        // 单次幅度 >10% 时**分步调价**：本轮按 10% 上限调整，后续周期继续逼近目标
-        // （一次性降到位永远不触发 = 不利品永远卡死，2026-08-15 实证 DOOR 差 28%）
+        if (suggestedPrice === Math.round(cur)) continue;
         let diffPct = Math.abs((suggestedPrice - cur) / cur);
         if (diffPct > 0.10) {
-          // 取整方向必须朝现价（降 ceil / 涨 floor）：round 可能把 -10% 压过线
-          // （2502.69×0.9=2252.42→round 2252=10.017%），执行侧 10% 校验必拒 →
-          // 价差最大的品永远卡死（2026-08-18 DOOR/6E7 实证）
           const clamped = suggestedPrice < cur ? Math.ceil(cur * 0.90) : Math.floor(cur * 1.10);
           if (clamped < floor) {
             logger.warn({ offerId: product.offerId, clamped, floor }, "Clamped price below floor — skipping");
@@ -583,7 +619,6 @@ export function planActions(scored: ProductScore[]): PlannedAction[] {
           suggestedPrice = clamped;
           diffPct = 0.10;
         }
-        // 每商品每日最多 1 次调价
         const today = new Date().toISOString().slice(0, 10);
         const adjustKey = `${today}:${product.offerId}`;
         if (dailyPriceAdjustments.has(adjustKey)) {
@@ -593,16 +628,23 @@ export function planActions(scored: ProductScore[]): PlannedAction[] {
       }
     }
 
+    const validSuggestedPrice = suggestedPrice !== undefined && Number.isFinite(suggestedPrice) && suggestedPrice > 0;
+    if (product.recommendation === "pricing" && !validSuggestedPrice) {
+      logger.warn({ offerId: product.offerId }, "Pricing recommendation without a finite suggested price — skipping");
+      continue;
+    }
+    const keepOnlyCopy = product.recommendation === "copy_and_pricing" && !validSuggestedPrice;
     actions.push({
       offerId: product.offerId,
       name: product.name,
       storeId: product.storeId,
       storeName: product.storeName,
-      type: product.recommendation,
-      suggestedPrice,
+      type: keepOnlyCopy ? "copy" : product.recommendation,
+      suggestedPrice: keepOnlyCopy ? undefined : suggestedPrice,
       currentPrice: product.currentPrice,
       priority: actions.length + 1,
-      reason: product.reason,
+      reason: keepOnlyCopy ? `${product.reason} | 无可执行调价，保留文案` : product.reason,
+      priceReason: keepOnlyCopy ? undefined : priceReason,
     });
   }
 

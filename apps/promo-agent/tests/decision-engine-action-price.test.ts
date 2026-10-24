@@ -51,11 +51,22 @@ describe("scoreAllProducts — 促销实付价口径", () => {
 
     expect(scored).toHaveLength(1);
     expect(scored[0].currentPrice).toBe(800); // 不是 price 1000
-    // 利润率按促销价口径：(800 − 360)/800 = 55%
-    expect(scored[0].marginPercent).toBe(55);
+    // 全费用口径：固定成本=采购360+OGL 94.08+打包60，variable=48.33%×800+电子服务16
+    expect(scored[0].fixedCostRub).toBe(514.08);
+    expect(scored[0].unitProfitRub).toBe(-116.72);
+    expect(scored[0].marginPercent).toBeCloseTo(-14.6, 1);
     // 无竞品数据 → fallback 自己价格（促销价口径）
     expect(scored[0].competitorAvg).toBe(800);
     expect(scored[0].reason).toContain("（含促销价口径）");
+  });
+
+  it("actionPriceRub 高于卖家设定价时取较低设定价，避免高估利润", async () => {
+    mocks.products.mockResolvedValue({ items: [baseItem({ actionPriceRub: 1200 })] });
+    mocks.getPrices.mockResolvedValue({ prices: [] });
+    const { scoreAllProducts } = await import("../src/decision-engine.js");
+    const scored = await scoreAllProducts(config);
+    expect(scored[0].currentPrice).toBe(1000);
+    expect(scored[0].unitProfitRub).toBe(-17.38);
   });
 
   it("actionPriceRub 为 0 或缺失时回退 price，reason 不标注", async () => {

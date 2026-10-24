@@ -154,7 +154,18 @@ describe("planActions", () => {
     offerId: "test1",
     name: "Test Product",
     cost: 100,
-    costRub: 1234,          // 100 CNY × 12.34
+    costRub: 1234,
+    logisticsRub: 240,
+    packagingRub: 60,
+    fixedCostRub: 1534,
+    unitProfitRub: 100,
+    weightG: 200,
+    exchangeRate: 12,
+    pricingBlockers: [],
+    hasFreshPreciseCompetitor: true,
+    latestPreciseCapturedAt: new Date().toISOString(),
+    pricingCompetitorAvg: 1400,
+    pricingCompetitorCapturedAt: new Date().toISOString(),
     currentPrice: 1500,
     stock: 50,
     marginPercent: 20,
@@ -182,7 +193,7 @@ describe("planActions", () => {
 
   it("pricing推荐生成调价action（价格劣势场景：建议价=竞品均价×0.97，不低于底价）", () => {
     // 价格高于竞品均价（劣势 -10%）→ 降价建议
-    const scored = [{ ...baseProduct, priceAdvantage: -10, competitorAvg: 1600, recommendation: "pricing" as const }];
+    const scored = [{ ...baseProduct, priceAdvantage: -10, competitorAvg: 1400, pricingCompetitorAvg: 1400, recommendation: "pricing" as const }];
     const actions = planActions(scored);
     expect(actions).toHaveLength(1);
     expect(actions[0].type).toBe("pricing");
@@ -196,7 +207,7 @@ describe("planActions", () => {
   it("幅度超10%时分步调价：本轮 clamp 到 10%（DOOR 实证：价差 28% 不再永远卡死）", () => {
     const scored = [{
       ...baseProduct,
-      priceAdvantage: -28, competitorAvg: 1000, currentPrice: 1500,
+      priceAdvantage: -28, competitorAvg: 1000, pricingCompetitorAvg: 1000, currentPrice: 1500,
       floorPrice: 1200, recommendation: "pricing" as const,
     }];
     const actions = planActions(scored);
@@ -208,7 +219,7 @@ describe("planActions", () => {
   it("降价 clamp 向上取整：-10% 不因 round 越过执行侧 10% 上限（6E7 2502.69 实证）", () => {
     const scored = [{
       ...baseProduct,
-      priceAdvantage: -28, competitorAvg: 1000, currentPrice: 2502.69,
+      priceAdvantage: -28, competitorAvg: 1000, pricingCompetitorAvg: 1000, currentPrice: 2502.69,
       floorPrice: 1000, recommendation: "pricing" as const,
     }];
     const actions = planActions(scored);

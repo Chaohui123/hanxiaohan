@@ -2,6 +2,8 @@
 // Product Scoring Engine — types + pure scoring functions
 // ============================================================
 
+import type { PricingBlocker } from "./unit-economics.js";
+
 // ---- 类型 ----
 
 export interface ProductScore {
@@ -10,17 +12,29 @@ export interface ProductScore {
   storeId?: string;
   storeName?: string;
   cost: number;
-  /** 成本折算 RUB（cost(CNY)×实时汇率），评分阶段算好供调价使用 */
   costRub: number;
+  logisticsRub: number;
+  packagingRub: number;
+  fixedCostRub: number;
+  unitProfitRub: number;
+  weightG: number;
+  exchangeRate: number;
+  pricingBlockers: PricingBlocker[];
+  hasFreshPreciseCompetitor: boolean;
+  latestPreciseCapturedAt: string | null;
+  /** 仅由24h内精准快照经威胁过滤得出；null 时禁止竞品驱动调价 */
+  pricingCompetitorAvg: number | null;
+  pricingCompetitorCapturedAt: string | null;
   currentPrice: number;
   stock: number;
+  /** 扣除全部平台费用、CPS、退货计提与固定成本后的单均净贡献率 */
   marginPercent: number;
   competitorAvg: number;
   priceAdvantage: number;
   salesGrowth7d: number;
   rating: number;
   totalScore: number;
-  /** 调价底价（RUB）：毛利≥20% 与 净利≥10% 双底线取大，低于此价不调 */
+  /** 10% 单均净贡献率底价（RUB），与 astra 共用全部费用口径 */
   floorPrice: number;
   breakdown: { margin: number; priceAdvantage: number; stock: number; salesGrowth: number; rating: number };
   recommendation: "copy" | "pricing" | "copy_and_pricing" | "skip";

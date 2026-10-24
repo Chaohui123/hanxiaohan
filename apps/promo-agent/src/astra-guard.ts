@@ -20,13 +20,11 @@ import { dirname } from "node:path";
 import { logger } from "@onzo/logger";
 import type { PlannedAction } from "./decision-engine.js";
 import type { ProductScore } from "./scorer.js";
+import {
+  oglFixedCostRub, priceForTargetMargin, priceForUnitProfit, unitEconomicsConfigFromEnv, unitProfitRub,
+} from "./unit-economics.js";
 
 // ---- 口径常量 ----
-
-/** 佣金率：与底价公式同口径（decision-engine scoreAllProducts 注释"佣金20%"） */
-const COMMISSION_RATE = 0.20;
-/** 退货计提（任务书硬约束：净利率含退货率 5%） */
-const RETURN_RATE = 0.05;
 /** 条款3：仅有 GREEN 时预期流量增益保守按 7.5% 计；无 GREEN 按 0 计 */
 const GREEN_TRAFFIC_GAIN = parseFloat(process.env.PROMO_ASTRA_GREEN_GAIN || "0.075");
 /** 条款1：访问数据不可得时的近似判定——连续 N 周期零单（默认 2）且已降价 ≥2 次 */
@@ -34,8 +32,6 @@ const ZERO_CYCLE_THRESHOLD = parseInt(process.env.PROMO_ASTRA_ZERO_CYCLES || "2"
 const MIN_DROPS_FOR_ZERO_STOP = 2;
 /** 条款5：试验观察期（默认 14 天） */
 const TRIAL_DAYS = parseInt(process.env.PROMO_ASTRA_TRIAL_DAYS || "14", 10);
-/** 条款5 + 硬约束：净利率底线 20%（含退货） */
-const NET_MARGIN_FLOOR = 0.20;
 /** 条款4：翻绿降幅分档 */
 const RED_PILOT_MAX = 0.03;  // ≤3% 优先试点
 const RED_STEP_MAX = 0.05;   // 3-5% 分两步；>5% 不追绿
@@ -110,13 +106,6 @@ export function recordAstraTrial(
   }
 }
 
-// ---- 单均利润（条款3 口径） ----
-
-/** π(P) = P − 成本 − 佣金 − 退货计提 = P×(1−0.20−0.05) − costRub */
-function unitProfit(price: number, costRub: number): number {
-  return price * (1 - COMMISSION_RATE - RETURN_RATE) - costRub;
-}
-
 function orders14dOf(ctx: AstraGuardContext, offerId: string): number {
   const s = ctx.sales14d(offerId);
   return (s?.recent || 0) + (s?.prev || 0);
@@ -161,14 +150,33 @@ export function applyAstraGuard(
   const guarded: PlannedAction[] = [];
   for (const action of actions) {
     const p = byOffer.get(action.offerId);
-    // 无评分数据、copy 动作、涨价动作（利润修复/优势涨价/回退）→ 直通：
-    // astra 五条款只约束"向下调价/加入弹性提升"（引擎无弹性提升动作类型，统一作用于向下调价）
-    if (!p || !action.suggestedPrice || action.suggestedPrice >= action.currentPrice) {
+    const pricingType = action.type === "pricing" || action.type === "copy_and_pricing";
+    const validSuggestedPrice = typeof action.suggestedPrice === "number" && Number.isFinite(action.suggestedPrice) && action.suggestedPrice > 0;
+    if (pricingType && !validSuggestedPrice) {
+      logger.warn({ offerId: action.offerId }, "astra guard: pricing action without finite suggested price blocked");
+      if (action.type === "copy_and_pricing") guarded.push({ ...action, type: "copy", suggestedPrice: undefined, priceReason: undefined });
+      continue;
+    }
+    const hasPricing = pricingType;
+    const competitorRequired = hasPricing && ((action.suggestedPrice as number) < action.currentPrice || action.priceReason === "competitor_raise");
+    const profitRepairNotUpward = hasPricing && action.priceReason === "profit_repair" && (action.suggestedPrice as number) <= action.currentPrice;
+    const reason = profitRepairNotUpward ? "PROFIT_REPAIR_NOT_UPWARD"
+      : !p ? "MISSING_PRODUCT_SCORE"
+      : p.pricingBlockers.length > 0 ? p.pricingBlockers.join(",")
+      : competitorRequired && p.pricingCompetitorAvg === null ? "NO_FRESH_PRECISE_COMPETITOR" : "";
+    if (hasPricing && reason) {
+      logger.warn({ offerId: action.offerId, reason }, "astra guard: pricing action blocked");
+      if (action.type === "copy_and_pricing") {
+        guarded.push({ ...action, type: "copy", suggestedPrice: undefined, priceReason: undefined, reason: `${action.reason} | 调价阻断: ${reason}` });
+      }
+      continue;
+    }
+    if (!p || !hasPricing || (action.suggestedPrice as number) >= action.currentPrice) {
       guarded.push(action);
       continue;
     }
-    const verdict = guardPriceDrop(action, p, ctx);
-    if (verdict) guarded.push(verdict); // null = 整条剔除
+    const verdict = guardPriceDrop(action, p as ProductScore, ctx);
+    if (verdict) guarded.push(verdict);
   }
 
   // 条款5 止损回退：试验 ≥14d 无订单证据 → 回退到试验前价格（分步，单次 ≤10% 硬约束）
@@ -176,6 +184,10 @@ export function applyAstraGuard(
   for (const [offerId, trial] of Object.entries(ctx.state.trials)) {
     const p = byOffer.get(offerId);
     if (!p || inPlan.has(offerId)) continue;
+    if (p.pricingBlockers.length > 0) {
+      logger.warn({ offerId, pricingBlockers: p.pricingBlockers }, "astra trial revert blocked by invalid pricing data");
+      continue;
+    }
     if (orders14dOf(ctx, offerId) > 0) continue;
     const ageDays = (Date.now() - new Date(trial.startedAt).getTime()) / 86_400_000;
     if (ageDays < TRIAL_DAYS) continue;
@@ -194,6 +206,7 @@ export function applyAstraGuard(
       currentPrice: p.currentPrice,
       priority: 0, // high：止损优先
       reason: `astra条款5止损回退：降价试验${Math.floor(ageDays)}d无订单证据，回退到试验前价格 ${trial.preTrialPrice.toFixed(0)}₽（本轮 ${p.currentPrice.toFixed(0)}→${target}₽，单次≤10%分步）`,
+      priceReason: "trial_revert",
     });
   }
 
@@ -232,16 +245,16 @@ function guardPriceDrop(
     return dropPricing(`astra条款1需求止损：连续${zeroCycles}周期零单且已降价${drops}次，零单不降价（没需求的品降价救不回来）`);
   }
 
+  const competitorAvg = p.pricingCompetitorAvg as number;
   // 条款2 有优势不降价（防"61N 白降"）：现价 ≤ 竞品均价×0.98 →
   // 价格本有优势，0 转化不是价格问题，再降白亏利润
-  if (p.competitorAvg > 0 && cur <= p.competitorAvg * 0.98) {
-    return dropPricing(`astra条款2有优势不降价：现价${cur.toFixed(0)}₽ ≤ 竞品均价×0.98（${(p.competitorAvg * 0.98).toFixed(0)}₽），再降白亏利润`);
+  if (cur <= competitorAvg * 0.98) {
+    return dropPricing(`astra条款2有优势不降价：现价${cur.toFixed(0)}₽ ≤ 竞品均价×0.98（${(competitorAvg * 0.98).toFixed(0)}₽），再降白亏利润`);
   }
 
   // 条款4 RED 分级：翻绿所需降幅 d =（现价 → 竞品均价×0.97）
-  // （条款2 之后必有 cur > 竞品×0.98 > 竞品×0.97，d>0；无竞品数据时竞品均价=现价 fallback，此块不进入）
-  if (p.competitorAvg > 0) {
-    const greenTarget = p.competitorAvg * 0.97;
+  {
+    const greenTarget = competitorAvg * 0.97;
     const d = (cur - greenTarget) / cur;
     if (d > RED_STEP_MAX || greenTarget < p.floorPrice) {
       return dropPricing(
@@ -260,8 +273,12 @@ function guardPriceDrop(
 
   // 条款3 g_BE 盈亏平衡校验（弹性提升让利）：
   // g_BE = π(P)/π(p)；预期流量增益保守估计——仅 GREEN 按 7.5% 计，无 GREEN 按 0 计
-  const piCur = unitProfit(cur, p.costRub);
-  const piNew = unitProfit(suggested, p.costRub);
+  const economicsConfig = unitEconomicsConfigFromEnv(p.offerId);
+  const ogl = { baseFixedCostRub: p.costRub + p.packagingRub, weightG: p.weightG, exchangeRate: p.exchangeRate };
+  const piCur = unitProfitRub(cur, p.fixedCostRub, economicsConfig);
+  const suggestedFixedCostRub = oglFixedCostRub(suggested, ogl);
+  if (suggestedFixedCostRub === null) return dropPricing("astra条款3 g_BE：候选价无适用 OGL 档位");
+  const piNew = unitProfitRub(suggested, suggestedFixedCostRub, economicsConfig);
   if (piNew <= 0) {
     return dropPricing(`astra条款3 g_BE：新价单均利润 ${piNew.toFixed(0)}₽ ≤0，降价即亏损`);
   }
@@ -272,7 +289,7 @@ function guardPriceDrop(
   const gain = ctx.greenOffers.has(p.offerId) ? GREEN_TRAFFIC_GAIN : 0;
   if (gBE > 1 + gain) {
     // 不允许该幅度 → 幅度减到 g_BE 可达的临界值：π(p_crit) = π(P)/(1+gain)
-    const pCrit = Math.ceil((piCur / (1 + gain) + p.costRub) / (1 - COMMISSION_RATE - RETURN_RATE));
+    const pCrit = Math.ceil(priceForUnitProfit(piCur / (1 + gain), ogl.baseFixedCostRub, economicsConfig, ogl));
     if (pCrit >= cur || pCrit < p.floorPrice) {
       return dropPricing(
         `astra条款3 g_BE=${gBE.toFixed(3)} > 1+预期流量增益${(gain * 100).toFixed(1)}%：${gain === 0 ? "无GREEN加持增益按0计，临界降幅为0" : "临界价破底价"}，不允许该幅度降价`,
@@ -283,7 +300,7 @@ function guardPriceDrop(
   }
 
   // 条款5 止损线：净利率 <20%（含退货5%）禁止扩大优惠 → 提到净利率20%水位
-  const pMarginMin = Math.ceil(p.costRub / (1 - COMMISSION_RATE - RETURN_RATE - NET_MARGIN_FLOOR));
+  const pMarginMin = Math.ceil(priceForTargetMargin(ogl.baseFixedCostRub, economicsConfig.astraNetMarginRate, economicsConfig, ogl));
   if (suggested < pMarginMin) {
     if (pMarginMin >= cur) {
       return dropPricing(`astra条款5净利率止损：20%水位 ${pMarginMin}₽ ≥ 现价，禁止扩大优惠`);
