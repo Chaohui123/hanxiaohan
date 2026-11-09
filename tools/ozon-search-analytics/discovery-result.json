@@ -44,6 +44,7 @@
     "collectorIngestApiUiAndIsolatedValidation": "PASS",
     "productionDeployment": "DEPLOYED_AND_SCHEDULED",
     "initialDeployCommit": "18d1b077363ee6b3d102b5a4ed646134098f9c70",
+    "validationCommit": "1654775265dfef890efc61537789c5e26f01c277",
     "dashboard": "https://huashangshangmao.top/search-analytics",
     "scheduledTask": {
       "name": "ONZO Ozon Search Analytics",

@@ -402,3 +402,6 @@ pnpm exec vitest run apps/api-services/tests/search-analytics.test.ts apps/api-s
 - `run-local.ps1` 已修正 Node 中文输出的 UTF-8 读取与日志写入；旧 UTF-16 日志已转换为 UTF-8，历史乱码不重造。任务日志为 `data/search-analytics/scheduled.log`。
 - 独立密钥仅存在于本机用户环境和服务器权限 600 的 `data/secrets/search-analytics.env`，未读取或改写原 `.env.production`，未进入 Git、日志或前端。部署前数据库备份为 `/home/ubuntu/onzo/scripts/data/backups/onzo-pre-deploy-20261109-084448.sql.gz`，回滚镜像标签为 `onzo-api-services:rollback-search-analytics-20261109` 和 `onzo-web-dashboard:rollback-search-analytics-20261109`。
 - 以上是首次部署、首次调度与直接复跑证据，不承诺连续多日无人值守。采集仍依赖本机 Chrome 登录态和前台标签页；登录失效、风控或页面结构变化必须停止告警，不自动改通道。28 天仍需四个不重叠周窗口，当前不伪造完整 28 天或季节性。
+
+
+补充验收：提交 `16547752` 已同步到生产，`/ready` 通过。知识条目 `pb_ozon_search_query_local_fallback_20261109` 已按同 ID 更新为生产与定时任务实证，`persisted=true`，远端和本机正常检索命中第一；回执 `temp/ops-exec/ozon-search-query-knowledge-production-result-20261109.log`，替换前备份在服务端 `knowledge-before-ozon-search-query-production-20261109.json`。定时 `knowledge-janitor` 清理的是低质条目，当前生产实证已回读确认保留。
