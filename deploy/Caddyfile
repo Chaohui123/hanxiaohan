@@ -1,5 +1,7 @@
-﻿124-221-11-222.nip.io {
+124-221-11-222.nip.io {
     encode gzip zstd
+    reverse_proxy /assets/* web-dashboard:80
+    reverse_proxy /search-analytics* web-dashboard:80
     reverse_proxy /api/* api-services:3000
     reverse_proxy /tmp-images/* api-services:3000
     reverse_proxy /health api-services:3000
