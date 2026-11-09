@@ -42,15 +42,26 @@
     "rows": 9942,
     "contentSha256": "ee29ab5653863691c0ffc93f1794d0bf0a3b761662923b17853b9cdceb8892e5",
     "collectorIngestApiUiAndIsolatedValidation": "PASS",
-    "productionDeployment": "PENDING_GIT_AUTHORIZATION"
+    "productionDeployment": "DEPLOYED_AND_SCHEDULED",
+    "initialDeployCommit": "18d1b077363ee6b3d102b5a4ed646134098f9c70",
+    "dashboard": "https://huashangshangmao.top/search-analytics",
+    "scheduledTask": {
+      "name": "ONZO Ozon Search Analytics",
+      "state": "Ready",
+      "firstRunAt": "2026-11-09T14:24:03+08:00",
+      "firstRunId": "2026-11-09T06-24-05-227Z",
+      "lastTaskResult": 0,
+      "nextRunAt": "2026-11-10T13:47:00+08:00",
+      "directVerificationRunId": "2026-11-09T06-29-08-976Z"
+    }
   },
   "requiredToResume": {
-    "production": "经用户明确授权后只提交本任务文件并走现有deploy-watch，随后验证PostgreSQL、正式页面及每日任务",
+    "production": "已完成PostgreSQL、正式页面、首次每日任务和直接复跑验收；后续依赖本机Chrome登录态与前台标签页，失败按告警恢复",
     "optionalCloudRoute": "Premium Pro subscription enabling the official search-queries API; separate purchase authorization required"
   },
   "notDone": [
-    "Production PostgreSQL, public dashboard and the daily Windows task are not enabled",
-    "No 7-day sample was claimed as collected on the server",
+    "No 7-day sample was claimed as collected by a cloud browser",
+    "Only the first native 7-day coverage exists; four non-overlapping weeks are required for the derived 28-day view",
     "No 28-day data was fabricated"
   ]
 }

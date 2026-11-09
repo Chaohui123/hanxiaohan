@@ -77,11 +77,11 @@
 - **Direct 只读自动报表**：Windows 任务 `ONZO Direct Daily Report` 每日 11:20（本地）运行 `scripts/run-direct-report.ps1`，用本机既有 ONZO Ads Manager 令牌只读 Reports，输出 `temp/direct-reports/latest.json`（滚动30天、最近7天/前7天、逐日数据）；令牌不传服务器、不打印。`weekly-model-prompt.py` 默认自动携带该文件及 SHA-256；当前 UTC 日单列，完整周窗口截至昨天，0 转化时实际 CPA 不可计算，Direct 与 Ozon 原生广告分开。失败写 `last-error.json` 并保留旧报告，周复盘将超过 36 小时的报表标为陈旧，不伪造 0；本机/会话离线不得伪称采集或复盘完成。marketplace 设置不通过 API 修改。
 - **经营风险独立过闸**：`GEN-BELT-35X1126-01` 的历史亏损不得只当字段异常，也不能借竞品整改擅自改价；2026-10-27 已按用户授权完成 P0 止亏调价，见下节。`PROMO_AUTO_DECISION=false` 保持不变。Direct 仅 `715426752` 已按授权启动，未产生效果证据前不得扩大投放。
 
-## Ozon 搜索查询本机降级（2026-11-09 本地实证；生产部署待授权）
+## Ozon 搜索查询本机降级（2026-11-09 生产实证）
 
-- **采集边界**：官方免费搜索查询 API 与导出受会员限制；云端标准 Chromium 访问 Seller 实测 403。MPSTATS 官方 API 只作外部市场热度/竞争补充，不能替代 Seller 原生转化指标。用户允许降级为本机真实 Chrome 只读提取，主 Agent 通过正常翻页捕获 `POST /api/site/searchteam/Stats/queries/search/v2` 的当次会话上下文；不导出 Cookie/敏感请求头，不绕过验证码、MFA、风控或会员限制。Seller 标签页需激活后加载，当前页以 `data-selected/disabled` 识别，未加载不得写成 0。
+- **采集边界**：官方免费搜索查询 API 与导出受会员限制；云端标准 Chromium 访问 Seller 实测 403。MPSTATS 官方 API 只作外部市场热度/竞争补充，不能替代 Seller 原生转化指标。本机真实 Chrome 通过正常翻页捕获 `POST /api/site/searchteam/Stats/queries/search/v2` 的当次会话上下文；不导出 Cookie/敏感请求头，不绕过验证码、MFA、风控或会员限制。Seller 标签页需激活后加载，当前页以 `data-selected/disabled` 识别，未加载不得写成 0。采集依赖本机 Chrome 登录态，不声称云端无人值守。
 - **真实数据与口径**：原生 7 天完整批次 `2026-11-09T04-10-23-926Z` 为 199 页、9,942 条，SHA-256 `ee29ab5653863691c0ffc93f1794d0bf0a3b761662923b17853b9cdceb8892e5`。这是市场查询，不是本店 SKU 漏斗；动态 28/7 保持 `NULL`，原始 `avgCountItems` 不作语义猜测。滚动 7 天不能直接相加，28 天只用四个不重叠周窗口；独立买家不去重相加，未确认指标不盲算。接口未返回自然日边界/时区，不冒充官方 28 天或季节性。
-- **实现与未决**：采集器、完整批次 ingest、PostgreSQL/SQLite 快照、只读 API、React `/search-analytics`、CSV/XLSX 和 Windows 任务脚本已完成本地及真实数据隔离验收；全项目 80 个测试文件 774 项通过，构建通过，Lint 0 errors。生产 PostgreSQL、正式域名和每日 13:47 本机任务**尚未启用**，不得伪称已上线或无人值守。下一步只经用户明确授权后提交本任务文件并推送走 deploy-watch；独立密钥仅置于权限 600 的 `data/secrets/search-analytics.env`，不读写现有 `.env.production`，不传模型。操作与排障见 `docs/operations-manual.md` 第九节。本地实证已通过正式门禁入库 `pb_ozon_search_query_local_fallback_20261109`，远端与本机检索均第一；条目保留生产未部署边界。
+- **生产与定时任务**：提交 `955c6b3b`、`18d1b077` 已推送并部署，正式 HTTPS ingest 将 199 页、9,942 条写入 PostgreSQL，逐行 JSON、原始回执和 SHA-256 全部一致，重复导入幂等。正式页面为 `https://huashangshangmao.top/search-analytics`，已用真实登录态验收首屏、筛选、趋势、28 天提示及导出。Windows 任务 `ONZO Ozon Search Analytics` 每日 13:47 运行，2026-11-09 14:24 首次实跑返回 0，批次 `2026-11-09T06-24-05-227Z` 已入库；直接复跑 `2026-11-09T06-29-08-976Z` 也成功。下一次调度回读为 2026-11-10 13:47，不能把首次成功当成永久无人值守。独立密钥仅置于权限 600 的 `data/secrets/search-analytics.env`，不读写现有 `.env.production`，不传模型。全项目 80 个测试文件 774 项通过，构建通过，Lint 0 errors。操作与排障见 `docs/operations-manual.md` 第九节，知识条目 `pb_ozon_search_query_local_fallback_20261109` 已入库并命中第一。`PROMO_AUTO_DECISION=false`、商品价格库存及广告未因此改变。
 
 ## 在售品止亏调价与生产回读（2026-10-27 实证）
 

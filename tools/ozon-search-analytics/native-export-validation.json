@@ -26,7 +26,7 @@
   },
   "conclusion": {
     "freeNativeExportValidated": false,
-    "nextRequiredDecision": "本机降级无需强制开通会员；Premium Pro+官方API仍是云端无人值守备选，订阅和付款须另行授权。生产部署及定时任务状态以current-pipeline最新回读为准。",
+    "nextRequiredDecision": "本机采集与生产分析已部署并完成首次定时任务验收；后续登录失效按告警恢复。Premium Pro+官方API仍是可选云端路线，订阅和付款须另行授权，不自动切换。",
     "cloudBrowserScraperStillBlocked": true
   },
   "localFallback": {
@@ -42,7 +42,23 @@
     "calendarEnd": null,
     "timezone": null,
     "dependsOn": "本机Chrome登录态及前台激活标签页",
-    "productionDeploymentOrScheduleClaimed": false
+    "productionDeploymentOrScheduleClaimed": true,
+    "productionIngest": {
+      "status": "succeeded",
+      "database": "PostgreSQL",
+      "rowCount": 9942,
+      "rawPages": 199,
+      "idempotentReplay": true,
+      "dashboard": "https://huashangshangmao.top/search-analytics",
+      "validation": "temp/ops-exec/search-production-validation-20261109.json"
+    },
+    "scheduledCollection": {
+      "taskName": "ONZO Ozon Search Analytics",
+      "firstRunId": "2026-11-09T06-24-05-227Z",
+      "lastTaskResult": 0,
+      "nextRunAt": "2026-11-10T13:47:00+08:00",
+      "directVerificationRunId": "2026-11-09T06-29-08-976Z"
+    }
   },
   "screenshots": [
     "temp/ozon-search-query-export-page.png",

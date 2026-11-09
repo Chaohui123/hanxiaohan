@@ -113,7 +113,7 @@ curl -sS http://localhost:3000/ready
 
 ### 3.2 Caddy 与 502
 
-Caddy 配置文件是单文件 bind mount。服务器执行会替换文件 inode 的 Git 操作后，容器可能仍引用旧 inode，需执行：
+Caddy 配置文件是单文件 bind mount，当前 Compose 实际挂载 `docker/caddy/Caddyfile`（`deploy/Caddyfile` 仅为补充模板）。服务器执行会替换文件 inode 的 Git 操作后，容器可能仍引用旧 inode，需执行：
 
 ```bash
 docker restart onzo-caddy
@@ -390,3 +390,15 @@ pnpm exec vitest run apps/api-services/tests/search-analytics.test.ts apps/api-s
 ```
 
 以上是本机采集和隔离 API/页面验收，不等于生产 PostgreSQL、正式域名或 Windows 定时任务已经上线；这些状态以 `docs/current-pipeline.md` 第九节最新回读为准。
+
+
+### 9.6 生产部署与定时任务验收（2026-11-09）
+
+- 经用户明确授权，提交 `955c6b3b`、`18d1b077` 已推送到 `origin/main` 并由 deploy-watch 部署。新 API 启动 smoke 和 `/ready` 全部通过，`PROMO_AUTO_DECISION=false` 未改。
+- 正式入口为 `https://huashangshangmao.top/search-analytics`。生产实际挂载 `docker/caddy/Caddyfile`，其现有 SPA 回退已支持 React 页面；`deploy/Caddyfile` 仅是补充模板。原 nip.io 地址不是当前证书域名，不能用它替代当前实际域名。
+- 正式 HTTPS ingest 将 199 页、9,942 条写入 PostgreSQL，重复导入 `idempotent=true`。逐页原始响应哈希、每行 `metrics_json` 与 `raw_row_sha256` 全部一致，动态 28/7 为 NULL。生产 API 的首页、末页、趋势、运行健康、CSV/XLSX 均已回读通过，证据 `temp/ops-exec/search-production-validation-20261109.json`。
+- 正式 React 页面已用现有登录态验收，显示 199/199 页、9,942 条和原始首行；自建 28 天页明确显示当前 7/28 覆盖和缺周原因。截图 `temp/ozon-search-production-20261109.png`。
+- Windows 任务 `ONZO Ozon Search Analytics` 已注册为每日 13:47（当前用户交互会话）。首次实跑于 2026-11-09 14:24 启动，`LastTaskResult=0`，发布 `2026-11-09T06-24-05-227Z`，下一次回读为 2026-11-10 13:47。直接复跑 `2026-11-09T06-29-08-976Z` 也成功，最新成功证据 `data/search-analytics/last-success.json` 和 `temp/ops-exec/search-windows-task-first-run-20261109.json`。
+- `run-local.ps1` 已修正 Node 中文输出的 UTF-8 读取与日志写入；旧 UTF-16 日志已转换为 UTF-8，历史乱码不重造。任务日志为 `data/search-analytics/scheduled.log`。
+- 独立密钥仅存在于本机用户环境和服务器权限 600 的 `data/secrets/search-analytics.env`，未读取或改写原 `.env.production`，未进入 Git、日志或前端。部署前数据库备份为 `/home/ubuntu/onzo/scripts/data/backups/onzo-pre-deploy-20261109-084448.sql.gz`，回滚镜像标签为 `onzo-api-services:rollback-search-analytics-20261109` 和 `onzo-web-dashboard:rollback-search-analytics-20261109`。
+- 以上是首次部署、首次调度与直接复跑证据，不承诺连续多日无人值守。采集仍依赖本机 Chrome 登录态和前台标签页；登录失效、风控或页面结构变化必须停止告警，不自动改通道。28 天仍需四个不重叠周窗口，当前不伪造完整 28 天或季节性。
