@@ -286,7 +286,7 @@ async function loadTokens() {
     const res = await fetch("/api/stats/llm").then(r => r.json());
     const d = res.data || {};
     document.getElementById("tokenCards").innerHTML =
-      '<div class="card"><div class="label">今日消耗</div><div class="value">' + (d.todayTokens || 0).toLocaleString() + '</div><div class="sub">预估费用 \$' + (d.todayCost || 0).toFixed(3) + '</div></div>' +
+      '<div class="card"><div class="label">今日消耗</div><div class="value">' + (d.todayTokens || 0).toLocaleString() + '</div><div class="sub">预估费用 $' + (d.todayCost || 0).toFixed(3) + '</div></div>' +
       '<div class="card"><div class="label">本月累计</div><div class="value">' + (d.monthTokens || 0).toLocaleString() + '</div><div class="sub">限额 ' + (d.dailyLimit || 0).toLocaleString() + '/天</div></div>';
   } catch {
     document.getElementById("tokenCards").innerHTML = '<div class="card"><div class="label">Token 统计</div><div class="value" style="color:var(--muted)">N/A</div></div>';

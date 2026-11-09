@@ -360,26 +360,20 @@ export class OzonClient {
    * (1688 hotlink protection means URL imports are expected to fail often).
    */
   async importImageByUrl(imageUrl: string): Promise<OzonImageUploadResult> {
-    try {
-      const response = await this.doRequest<{ result: OzonUploadApi }>(
-        "POST",
-        "/v1/product/pictures/import",
-        {
-          url: imageUrl,
-          primary: true,
-        }
-      );
+    const response = await this.doRequest<{ result: OzonUploadApi }>(
+      "POST",
+      "/v1/product/pictures/import",
+      {
+        url: imageUrl,
+        primary: true,
+      }
+    );
 
-      return {
-        id: String(response.result.id),
-        fileName: response.result.file_name ?? "product.jpg",
-        url: response.result.url ?? "",
-      };
-    } catch (err) {
-      // Don't let image import failures trip the circuit breaker —
-      // 1688 images are frequently hotlink-protected, this is expected
-      throw err;
-    }
+    return {
+      id: String(response.result.id),
+      fileName: response.result.file_name ?? "product.jpg",
+      url: response.result.url ?? "",
+    };
   }
 
   /**

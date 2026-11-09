@@ -97,17 +97,21 @@ services:
     restart: always
     env_file:
       - .env.production
+      - path: ./data/secrets/search-analytics.env
+        required: false
     environment:
       - NODE_ENV=production
       - PORT=3000
       - REDIS_URL=redis://:${REDIS_PASSWORD}@redis:6379
       - OZON_PERF_CLIENT_ID=${OZON_PERF_CLIENT_ID:-}
       - OZON_PERF_CLIENT_SECRET=${OZON_PERF_CLIENT_SECRET:-}
+      - COMPETITOR_COMPARABILITY_FILE=/app/competitor-scans/competitor-comparability.json
     volumes:
       - app_uploads:/app/uploads
       - app_dead_letter:/app/dead-letter
       - app_logs:/app/logs
       - app_data:/app/data
+      - ./data/competitor-scans:/app/competitor-scans:ro
       # Dev mode: mount local dist to skip Docker rebuild (uncomment for dev)
       # - ./apps/api-services/dist:/app/apps/api-services/dist
       # - ./packages:/app/packages

@@ -37,7 +37,7 @@ export function analyzeReturnRisk(params: {
   const reasons: string[] = [];
   const recommendations: string[] = [];
 
-  let baseReturnRate = HIGH_RETURN_CATEGORIES[category] ?? HIGH_RETURN_CATEGORIES.default;
+  const baseReturnRate = HIGH_RETURN_CATEGORIES[category] ?? HIGH_RETURN_CATEGORIES.default;
   let riskLevel: ReturnRiskResult["riskLevel"] = "LOW";
   let riskScore = 0;
 

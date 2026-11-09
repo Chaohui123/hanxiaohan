@@ -94,10 +94,11 @@ function handleMessage(pluginId: string, msg: Record<string, unknown>) {
         startedAt: msg.startedAt as string,
       });
       break;
-    case "ping":
+    case "ping": {
       const s = sessions.get(pluginId);
       if (s) s.lastPing = Date.now();
       break;
+    }
   }
 }
 

@@ -199,7 +199,7 @@ export class Notifier {
   /** Check if notification should be rate-limited */
   private checkRateLimit(eventKey: string): boolean {
     const now = Date.now();
-    let entry = rateLimitMap.get(eventKey);
+    const entry = rateLimitMap.get(eventKey);
 
     if (!entry || now - entry.windowStart > RATE_LIMIT_WINDOW_MS) {
       rateLimitMap.set(eventKey, { count: 1, windowStart: now, lastSent: now });

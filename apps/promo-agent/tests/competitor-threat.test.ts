@@ -139,3 +139,13 @@ describe("threatWeightedAverage — 阈值过滤 + 威胁分加权", () => {
     expect(avg).toBeGreaterThan(950);
   });
 });
+
+describe("competitor measurements — unknown is not a measured zero", () => {
+  it("未知评分不进入低评分档，未知评论不增加威胁分", () => {
+    expect(ratingThreatScore(null)).toBe(0);
+    expect(ratingThreatScore(0)).toBe(5);
+    expect(salesThreatScore(null)).toBe(0);
+    expect(salesThreatScore(0)).toBe(0);
+    expect(competitorThreatScore({ price: 1000, rating: null, salesCount: null }, 1000)).toBe(50);
+  });
+});

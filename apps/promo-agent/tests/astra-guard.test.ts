@@ -286,7 +286,7 @@ describe("astra-guard — 条款3 g_BE 盈亏平衡", () => {
         makeCtx({ greenOffers: new Set([p.offerId]) }),
       );
       expect(out).toHaveLength(1);
-      expect(out[0].suggestedPrice).toBe(949);
+      expect(out[0].suggestedPrice).toBe(950);
       expect(out[0].reason).toContain("临界值");
     } finally {
       if (previous === undefined) delete process.env.PROMO_CPS_RATE_OVERRIDES;
@@ -334,18 +334,18 @@ describe("astra-guard — 条款3 g_BE 盈亏平衡", () => {
 
 describe("astra-guard — 条款5 净利率止损", () => {
   it("修正价净利率 <20%（含退货5%）→ 提到 20% 水位", () => {
-    const action = dropAction({ suggestedPrice: 1700, currentPrice: 1800 });
+    const action = dropAction({ suggestedPrice: 1700, currentPrice: 1850 });
     const fixedCostRub = 525.577235627;
     const out = applyAstraGuard(
       [action],
-      [baseProduct({ currentPrice: 1800, competitorAvg: 1800, costRub: 350, fixedCostRub, floorPrice: 500 })],
+      [baseProduct({ currentPrice: 1850, competitorAvg: 1850, costRub: 350, fixedCostRub, floorPrice: 500 })],
       makeCtx({ greenOffers: new Set(["P1"]) }),
     );
     expect(out).toHaveLength(1);
-    expect(out[0].suggestedPrice).toBe(1772);
+    expect(out[0].suggestedPrice).toBe(1834);
     expect(out[0].reason).toContain("净利率止损");
     const config = unitEconomicsConfigFromEnv();
-    expect(unitProfitRub(1772, fixedCostRub, config) / 1772).toBeGreaterThanOrEqual(0.20);
+    expect(unitProfitRub(1834, fixedCostRub, config) / 1834).toBeGreaterThanOrEqual(0.20);
   });
 
   it("净利率 20% 水位 ≥ 现价 → 禁止扩大优惠，剔除", () => {

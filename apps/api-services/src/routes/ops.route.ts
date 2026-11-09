@@ -178,7 +178,7 @@ export function createOpsRouter(): Router {
       if (existsSync(dlDir)) {
         diag.deadLetter = { count: readdirSync(dlDir).length, dir: dlDir };
       }
-    } catch {}
+    } catch { /* Dead-letter diagnostics are best-effort. */ }
 
     // 6. Process info
     diag.process = {

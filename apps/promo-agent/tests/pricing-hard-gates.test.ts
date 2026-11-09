@@ -15,7 +15,12 @@ vi.mock("../src/api-client.js", () => ({
     orders: mocks.orders,
     products: mocks.products,
   },
-  competitorApi: { getPrices: mocks.getPrices },
+  competitorApi: {
+    getPrices: async (...args: unknown[]) => {
+      const data = await mocks.getPrices(...args);
+      return { ...data, prices: (data.prices || []).map((item: Record<string, unknown>) => ({ priceRegular: item.price, priceType: "regular", ...item })) };
+    },
+  },
 }));
 
 const config: ApiConfig = { apiBase: "http://localhost:3000", apiKey: "test" };
@@ -155,6 +160,19 @@ describe("24h 精准竞品硬闸门", () => {
     const actions = planActions(await scoreAllProducts(config));
     expect(actions).toHaveLength(1);
     expect(actions[0].suggestedPrice!).toBeLessThan(actions[0].currentPrice);
+  });
+
+  it("legacy_unknown与缺常规价的新鲜精准记录不得进入定价比较", async () => {
+    mocks.getPrices.mockResolvedValue({ prices: [
+      { price: 900, priceRegular: null, priceType: "legacy_unknown", rating: 4.8, salesCount: 100, competitorUrl: "https://ozon.ru/legacy", capturedAt: new Date().toISOString() },
+      { price: 1000, priceRegular: null, priceType: "regular", rating: 4.8, salesCount: 100, competitorUrl: "https://ozon.ru/missing-regular", capturedAt: new Date().toISOString() },
+    ] });
+    const { scoreAllProducts, planActions } = await import("../src/decision-engine.js");
+    const scored = await scoreAllProducts(config);
+    expect(scored[0].hasFreshPreciseCompetitor).toBe(false);
+    expect(scored[0].pricingCompetitorAvg).toBeNull();
+    const actions = planActions(scored);
+    expect(actions.every((action) => action.priceReason !== "competitor_drop" && action.priceReason !== "competitor_raise")).toBe(true);
   });
 
   it("基于竞品优势的涨价也要求新鲜精准快照", async () => {

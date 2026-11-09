@@ -34,7 +34,7 @@ export function truncateContext(
   const systemMsg = messages.find((m) => m.role === "system");
   const others = messages.filter((m) => m.role !== "system");
 
-  let total = countMessageTokens(messages);
+  const total = countMessageTokens(messages);
   if (total <= maxTokens) return messages;
 
   // Remove oldest non-system messages until under limit

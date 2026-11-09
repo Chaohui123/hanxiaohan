@@ -65,7 +65,7 @@ export const competitorApi = {
   savePrices: (c: ApiConfig, offerId: string, prices: Array<{ price: number; rating: number; salesCount: number; capturedAt: string }>) =>
     api<Record<string, unknown>>(c, "POST", `/api/promo/competitor-prices/${offerId}`, { prices }),
   getPrices: (c: ApiConfig, offerId: string, days?: number) =>
-    api<{ prices: Array<{ price: number; rating: number; salesCount: number; capturedAt: string; competitorUrl: string }> }>(
+    api<{ prices: Array<{ price: number; displayPrice: number; priceRegular: number | null; priceType: string; rating: number | null; salesCount: number | null; capturedAt: string; competitorUrl: string }> }>(
       c, "GET", `/api/promo/competitor-prices/${offerId}?days=${days || 7}`,
     ),
   getCompetitorLinks: (c: ApiConfig, offerId?: string) =>

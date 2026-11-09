@@ -222,7 +222,7 @@ interface WebhookMetrics {
   lastReceivedAt: string | null;
 }
 
-let webhookMetrics: WebhookMetrics = {
+const webhookMetrics: WebhookMetrics = {
   totalReceived: 0,
   totalProcessed: 0,
   totalFailed: 0,

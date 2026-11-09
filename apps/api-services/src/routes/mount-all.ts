@@ -194,6 +194,9 @@ export async function mountAllRoutes(app: express.Express, deps: RouteDeps): Pro
   const { createMarketRouter } = await import("./market.route.js");
   mountApi("", createMarketRouter());
 
+  const { createSearchAnalyticsRouter } = await import("./search-analytics.route.js");
+  mountApi("", createSearchAnalyticsRouter());
+
   // ---- Direct listing (AI translate + Ozon API) ----
   const { createDirectListRouter } = await import("./direct-list.route.js");
   mountApi("", createDirectListRouter());

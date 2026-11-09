@@ -109,14 +109,14 @@ export class RedisCache {
 
   async del(key: string): Promise<void> {
     const client = await getClient();
-    if (client) { try { await client.del(key); return; } catch {} }
+    if (client) { try { await client.del(key); return; } catch { /* fall through */ } }
     memoryStore.delete(key);
   }
 
   async mget(keys: string[]): Promise<(string | null)[]> {
     const client = await getClient();
     if (client) {
-      try { return await client.mget(keys); } catch {}
+      try { return await client.mget(keys); } catch { /* fall through */ }
     }
     return keys.map((k) => {
       const e = memoryStore.get(k);
@@ -135,7 +135,7 @@ export class RedisCache {
         }
         await multi.exec();
         return;
-      } catch {}
+      } catch { /* fall through */ }
     }
     for (const e of entries) {
       memoryStore.set(e.key, { value: e.value, expiresAt: Date.now() + (e.ttl || 300) * 1000 });
@@ -145,7 +145,7 @@ export class RedisCache {
   async incr(key: string): Promise<number> {
     const client = await getClient();
     if (client) {
-      try { return await client.incr(key); } catch {}
+      try { return await client.incr(key); } catch { /* fall through */ }
     }
     const entry = memoryStore.get(key);
     const val = entry ? parseInt(entry.value) + 1 : 1;
@@ -157,7 +157,7 @@ export class RedisCache {
   async incrBy(key: string, amount: number): Promise<number> {
     const client = await getClient();
     if (client) {
-      try { return await client.incrby(key, amount); } catch {}
+      try { return await client.incrby(key, amount); } catch { /* fall through */ }
     }
     const entry = memoryStore.get(key);
     const val = (entry ? parseInt(entry.value) : 0) + amount;
@@ -167,7 +167,7 @@ export class RedisCache {
 
   async expire(key: string, ttlSeconds: number): Promise<void> {
     const client = await getClient();
-    if (client) { try { await client.expire(key, ttlSeconds); return; } catch {} }
+    if (client) { try { await client.expire(key, ttlSeconds); return; } catch { /* fall through */ } }
     const entry = memoryStore.get(key);
     if (entry) entry.expiresAt = Date.now() + ttlSeconds * 1000;
   }
@@ -276,7 +276,7 @@ export class RedisCache {
   async listPush(key: string, value: string): Promise<void> {
     const client = await getClient();
     if (client) {
-      try { await client.rpush(key, value); return; } catch {}
+      try { await client.rpush(key, value); return; } catch { /* fall through */ }
     }
     // Memory fallback: simple array
     const arr = JSON.parse(memoryStore.get(key)?.value || "[]") as string[];
@@ -287,7 +287,7 @@ export class RedisCache {
   async listPop(key: string): Promise<string | null> {
     const client = await getClient();
     if (client) {
-      try { return await client.lpop(key); } catch {}
+      try { return await client.lpop(key); } catch { /* fall through */ }
     }
     const entry = memoryStore.get(key);
     if (!entry) return null;
@@ -300,7 +300,7 @@ export class RedisCache {
   async listLength(key: string): Promise<number> {
     const client = await getClient();
     if (client) {
-      try { return await client.llen(key); } catch {}
+      try { return await client.llen(key); } catch { /* fall through */ }
     }
     const entry = memoryStore.get(key);
     return entry ? JSON.parse(entry.value).length : 0;
@@ -311,7 +311,7 @@ export class RedisCache {
   async zadd(key: string, score: number, member: string): Promise<void> {
     const client = await getClient();
     if (client) {
-      try { await client.zadd(key, score, member); return; } catch {}
+      try { await client.zadd(key, score, member); return; } catch { /* fall through */ }
     }
     // Memory fallback: store as sorted array
     const entry = memoryStore.get(key);
@@ -332,7 +332,7 @@ export class RedisCache {
           pairs.push({ member: results[i]!, score: parseFloat(results[i + 1]!) || 0 });
         }
         return pairs;
-      } catch {}
+      } catch { /* fall through */ }
     }
     const entry = memoryStore.get(key);
     if (!entry) return [];
@@ -345,7 +345,7 @@ export class RedisCache {
   async zcard(key: string): Promise<number> {
     const client = await getClient();
     if (client) {
-      try { return await client.zcard(key); } catch {}
+      try { return await client.zcard(key); } catch { /* fall through */ }
     }
     const entry = memoryStore.get(key);
     return entry ? JSON.parse(entry.value).length : 0;

@@ -2,6 +2,7 @@ import type { FeishuBot } from "@onzo/feishu-bot";
 import type { ApiConfig } from "./api-client.js";
 import { promoApi, competitorApi } from "./api-client.js";
 import { threatWeightedAverage } from "./competitor-threat.js";
+import { hasFreshRegularPrice, hasVerifiedRegularPrice, latestByCompetitorUrl } from "./competitor-history.js";
 import { logger } from "@onzo/logger";
 import { crossValidate, type CrossValidationResult } from "./cross-validator.js";
 import { generateCopy, applyCopy } from "./copywriter.js";
@@ -391,7 +392,7 @@ export async function scoreAllProducts(config: ApiConfig): Promise<ProductScore[
     const stock = Number(item.stock ?? item.quantity ?? 0);
     const weightG = Number(item.weight || 0) * 1000;
     const economicsConfig = unitEconomicsConfigFromEnv(offerId);
-    const economics = calculateUnitEconomics({ priceRub: currentPrice, costCny: cost, weightG, exchangeRate: rate, offerId, config: economicsConfig });
+    const economics = calculateUnitEconomics({ priceRub: currentPrice, costCny: cost, weightG, exchangeRate: rate, offerId, config: economicsConfig, acquiringCny: Number(item.acquiringCny ?? NaN) });
     const pricingBlockers = [...economics.pricingBlockers];
     if (!(stock > 0)) pricingBlockers.push("OUT_OF_STOCK");
     if (!ordersAvailable) pricingBlockers.push("ORDERS_UNAVAILABLE");
@@ -404,16 +405,14 @@ export async function scoreAllProducts(config: ApiConfig): Promise<ProductScore[
     try {
       const priceData = await competitorApi.getPrices(config, offerId, 3);
       const all = priceData.prices || [];
-      const precise = all.filter((p) => p.competitorUrl);
+      const linked = all.filter((p) => p.competitorUrl);
+      const precise = linked.filter((p) => hasVerifiedRegularPrice(p));
       const preciseTimes = precise.map((p) => new Date(p.capturedAt).getTime()).filter(Number.isFinite);
       if (preciseTimes.length > 0) latestPreciseCapturedAt = new Date(Math.max(...preciseTimes)).toISOString();
-      const displayCandidates = precise.length > 0 ? precise : all;
+      const displayCandidates = precise.length > 0 ? precise : linked.length === 0 ? all : [];
       const displayWeighted = threatWeightedAverage(displayCandidates, currentPrice);
       if (displayWeighted > 0) competitorAvg = displayWeighted;
-      const freshPrecise = precise.filter((p) => {
-        const time = new Date(p.capturedAt).getTime();
-        return Number.isFinite(time) && now - time >= 0 && now - time <= DAY_MS;
-      });
+      const freshPrecise = latestByCompetitorUrl(precise).filter((p) => hasFreshRegularPrice(p, now, DAY_MS));
       const pricingWeighted = threatWeightedAverage(freshPrecise, currentPrice);
       if (pricingWeighted > 0) {
         pricingCompetitorAvg = pricingWeighted;

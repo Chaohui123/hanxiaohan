@@ -1,0 +1,53 @@
+{
+  "capturedAt": "2026-11-08T20:20:00Z",
+  "result": "NATIVE_EXPORT_PAYWALLED",
+  "page": "https://seller.ozon.ru/app/analytics/what-to-sell/search-queries",
+  "nativeSevenDayPage": {
+    "accessibleInUserChrome": true,
+    "period": "7天",
+    "metricsVisible": true,
+    "rowCountPerPage": 50,
+    "pagination": "第1–199页，共9943个查询"
+  },
+  "downloadAttempt": {
+    "buttonText": "下载",
+    "selector": "button[data-onboarding-target=Download]",
+    "fileCreated": false,
+    "result": "subscription modal shown",
+    "displayedPlans": [
+      { "name": "Premium Pro", "displayedPrice": "49 990 ₽/月" },
+      { "name": "Premium Plus", "displayedPrice": "34 990 ₽/月" }
+    ],
+    "purchaseConfirmed": false
+  },
+  "scheduledDelivery": {
+    "freeEntryVerified": false,
+    "note": "未发现当前账号可免费使用的原生导出或自动投递入口；不推断其他套餐或其他报表的能力"
+  },
+  "conclusion": {
+    "freeNativeExportValidated": false,
+    "nextRequiredDecision": "本机降级无需强制开通会员；Premium Pro+官方API仍是云端无人值守备选，订阅和付款须另行授权。生产部署及定时任务状态以current-pipeline最新回读为准。",
+    "cloudBrowserScraperStillBlocked": true
+  },
+  "localFallback": {
+    "status": "LOCAL_READ_ONLY_UI_FALLBACK_VALIDATED",
+    "verifiedAt": "2026-11-09T04:11:52Z",
+    "endpoint": "/api/site/searchteam/Stats/queries/search/v2",
+    "runId": "2026-11-09T04-10-23-926Z",
+    "pageCount": 199,
+    "rowCount": 9942,
+    "contentSha256": "ee29ab5653863691c0ffc93f1794d0bf0a3b761662923b17853b9cdceb8892e5",
+    "period": "days_7",
+    "calendarStart": null,
+    "calendarEnd": null,
+    "timezone": null,
+    "dependsOn": "本机Chrome登录态及前台激活标签页",
+    "productionDeploymentOrScheduleClaimed": false
+  },
+  "screenshots": [
+    "temp/ozon-search-query-export-page.png",
+    "temp/ozon-search-query-after-download.png",
+    "temp/ozon-search-query-paywall-current.png"
+  ],
+  "productionChanges": false
+}

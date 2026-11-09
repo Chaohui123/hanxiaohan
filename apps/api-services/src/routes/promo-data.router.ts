@@ -11,6 +11,7 @@ import {
   type OperationsDays,
 } from "../services/operations-board.js";
 import { getCached, getCachedOrStale, invalidateCache } from "../cache/promo-cache.js";
+import { filterCurrentComparablePrices, loadCompetitorComparability } from "../services/competitor-comparability.js";
 import {
   queryCompetitorPrices, insertCompetitorPrices,
   queryCompetitorLinks, insertCompetitorLink, insertCompetitorSnapshots,
@@ -63,11 +64,15 @@ export function createPromoDataRouter(): Router {
     } catch (err) { res.status(500).json({ error: (err as Error).message }); }
   });
 
-  // POST /api/promo/competitor-snapshots — 本机 WebBridge 抓取回传（批量）
+  // POST /api/promo/competitor-snapshots — 远程竞品采集回传（批量）
   router.post("/promo/competitor-snapshots", async (req, res) => {
     try {
-      const { offerId, snapshots } = req.body as { offerId?: string; snapshots?: Array<{ competitorUrl: string; price: number; rating?: number; salesCount?: number; capturedAt?: string }> };
+      const { offerId, snapshots } = req.body as { offerId?: string; snapshots?: Array<{ competitorUrl: string; price: number; priceRegular: number; priceType: string; rating?: number; salesCount?: number; capturedAt?: string }> };
       if (!offerId || !Array.isArray(snapshots) || snapshots.length === 0) { res.status(400).json({ error: "offerId and non-empty snapshots array required" }); return; }
+      if (snapshots.some((item) => !Number.isFinite(item.priceRegular) || item.priceRegular <= 0 || item.priceType !== "regular")) {
+        res.status(400).json({ error: "priceRegular>0 and priceType=regular are required for precise snapshots" });
+        return;
+      }
       const inserted = await insertCompetitorSnapshots(offerId, snapshots);
       await insertAuditLog({ actionType: "competitor_snapshots_save", offerId, details: { count: inserted } });
       res.json({ success: true, inserted });
@@ -90,7 +95,10 @@ export function createPromoDataRouter(): Router {
     try {
       const days = parseInt(String(req.query.days || "7"), 10);
       const prices = await queryCompetitorPrices(req.params.offerId, days);
-      res.json({ prices });
+      if (req.query.includeHistory === "true") { res.json({ prices }); return; }
+      const filePath = process.env.COMPETITOR_COMPARABILITY_FILE || `${process.cwd()}/competitor-scans/competitor-comparability.json`;
+      const config = await loadCompetitorComparability(filePath);
+      res.json({ prices: filterCurrentComparablePrices(prices, config, req.params.offerId) });
     } catch (err) { res.status(500).json({ error: (err as Error).message }); }
   });
 

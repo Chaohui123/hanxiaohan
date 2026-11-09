@@ -235,7 +235,7 @@ export class ManualProcurementService {
       const { getExchangeRate } = await import("./exchange-rate.js");
       const rr = await getExchangeRate();
       rate = rr.rate;
-    } catch {}
+    } catch { /* Keep the fallback exchange rate. */ }
 
     const purchaseCostRub = totalPurchaseCny * rate;
     const totalCostRub = purchaseCostRub + estimatedLogisticsRub;

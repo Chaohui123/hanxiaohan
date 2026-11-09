@@ -328,12 +328,10 @@ export async function executeAutoSelect(keyword: string): Promise<typeof AutoSel
 
 // ---- Manual publish entry (bypass auto-select, used by frontend picker) ----
 export async function manualPublish(url: string, storeId: string = "store_1"): Promise<string> {
-  try {
-    const r = await fetch(`${process.env.API_BASE_URL || "http://localhost:3000"}/api/process`, {
-      method: "POST", headers: { "X-API-Key": process.env.API_KEY || "", "Content-Type": "application/json" },
-      body: JSON.stringify({ url, storeId }), signal: AbortSignal.timeout(30_000),
-    });
-    const d = await r.json() as { data?: { taskId?: string } };
-    return d.data?.taskId || "ok";
-  } catch (e) { throw e; }
+  const r = await fetch(`${process.env.API_BASE_URL || "http://localhost:3000"}/api/process`, {
+    method: "POST", headers: { "X-API-Key": process.env.API_KEY || "", "Content-Type": "application/json" },
+    body: JSON.stringify({ url, storeId }), signal: AbortSignal.timeout(30_000),
+  });
+  const d = await r.json() as { data?: { taskId?: string } };
+  return d.data?.taskId || "ok";
 }

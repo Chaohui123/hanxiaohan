@@ -34,7 +34,7 @@ function findOccurrences(lowerText: string, word: string, boundary?: boolean): n
   if (!boundary) {
     const positions: number[] = [];
     let searchFrom = 0;
-    while (true) {
+    for (;;) {
       const idx = lowerText.indexOf(lowerWord, searchFrom);
       if (idx === -1) break;
       positions.push(idx);

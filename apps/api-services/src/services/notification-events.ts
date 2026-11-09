@@ -313,6 +313,14 @@ export const NOTIFICATION_EVENTS: NotificationEvent[] = [
     force: false,
     rateLimit: 50,
   },
+  {
+    key: "SEARCH_ANALYTICS_FAILED",
+    level: "error",
+    label: "搜索查询采集失败",
+    template: "搜索查询采集失败: {{errorCode}}，运行 {{runId}}。请检查本机Chrome登录态和前台标签页；旧数据保留。",
+    force: false,
+    rateLimit: 5,
+  },
 ];
 
 // ---- Event Emitter ----

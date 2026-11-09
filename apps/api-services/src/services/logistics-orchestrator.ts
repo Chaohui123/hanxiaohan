@@ -195,7 +195,7 @@ export class LogisticsOrchestrator {
              WHERE posting_number = ?`,
             [shipmentResult.trackingNumber, input.postingNumber]
           );
-        } catch {}
+        } catch { /* Tracking-number backfill is best-effort. */ }
 
         // 8. Notify
         await emitEvent(EVENT_KEYS.ORDER_SHIPPED, {

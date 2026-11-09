@@ -5,6 +5,7 @@
 import pg from "pg";
 import { logger } from "@onzo/logger";
 import { initSchema } from "./schema.js";
+import { SEARCH_ANALYTICS_DDL } from "./search-analytics-schema.js";
 
 // ---- DbAdapter Interface ----
 export interface DbAdapter {
@@ -101,6 +102,7 @@ export async function getDb(): Promise<DbAdapter | null> {
 
 function initSqliteSchema(db: unknown): void {
   const d = db as { exec: (sql: string) => void };
+  d.exec(SEARCH_ANALYTICS_DDL.replace(/\bNOW\(\)/g, "datetime('now')"));
   d.exec(`
     CREATE TABLE IF NOT EXISTS ozon_webhook_log (
       id TEXT PRIMARY KEY,
@@ -127,8 +129,10 @@ function initSqliteSchema(db: unknown): void {
     );
     CREATE TABLE IF NOT EXISTS promo_competitor_prices (
       id INTEGER PRIMARY KEY AUTOINCREMENT, offer_id TEXT NOT NULL,
-      price REAL NOT NULL, rating REAL DEFAULT 0,
-      sales_count INTEGER DEFAULT 0, captured_at TEXT DEFAULT (datetime('now'))
+      competitor_url TEXT DEFAULT '',
+      price REAL NOT NULL, price_regular REAL,
+      price_type TEXT NOT NULL DEFAULT 'legacy_unknown',
+      rating REAL DEFAULT 0, sales_count INTEGER DEFAULT 0, captured_at TEXT DEFAULT (datetime('now'))
     );
     CREATE INDEX IF NOT EXISTS idx_comp_prices_offer ON promo_competitor_prices(offer_id, captured_at);
     CREATE TABLE IF NOT EXISTS promo_events (
@@ -292,6 +296,17 @@ function initSqliteSchema(db: unknown): void {
     CREATE INDEX IF NOT EXISTS idx_sku_mapping_offer ON sku_1688_mapping(ozon_offer_id, ozon_sku);
     CREATE INDEX IF NOT EXISTS idx_sku_mapping_1688 ON sku_1688_mapping(offer_1688_id);
   `);
+  const competitorColumns = (db as { prepare: (sql: string) => { all: () => Array<{ name: string }> } })
+    .prepare("PRAGMA table_info(promo_competitor_prices)").all();
+  const existing = new Set(competitorColumns.map((column) => column.name));
+  const migrations = [
+    ["competitor_url", "TEXT DEFAULT ''"],
+    ["price_regular", "REAL"],
+    ["price_type", "TEXT NOT NULL DEFAULT 'legacy_unknown'"],
+  ] as const;
+  for (const [name, definition] of migrations) {
+    if (!existing.has(name)) d.exec(`ALTER TABLE promo_competitor_prices ADD COLUMN ${name} ${definition}`);
+  }
 }
 
 // ---- PG Adapter ----

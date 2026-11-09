@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from "vitest";
+import { describe, it, expect, vi, beforeEach, afterEach } from "vitest";
 
 // Mock global fetch for RAG queries (patrol now queries RAG on error)
 global.fetch = vi.fn().mockResolvedValue({ ok: false }) as unknown as typeof fetch;
@@ -36,7 +36,13 @@ const mockConfig = { apiBase: "http://test", apiKey: "key", chatId: "chat1" };
 describe("Patrol", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-01-01T12:00:00Z"));
     resetPatrolState();
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
   });
 
   it("系统正常时不应发送告警", async () => {

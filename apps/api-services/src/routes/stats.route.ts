@@ -88,10 +88,10 @@ export function createStatsRouter(): Router {
           const { readdirSync } = await import("node:fs");
           for (const f of readdirSync(deadDir)) {
             if (!f.endsWith(".meta.json")) {
-              try { totalSizeBytes += statSync(join(deadDir, f)).size; } catch {}
+              try { totalSizeBytes += statSync(join(deadDir, f)).size; } catch { /* Storage statistics are best-effort. */ }
             }
           }
-        } catch {}
+        } catch { /* Storage statistics are best-effort. */ }
       }
 
       res.json({

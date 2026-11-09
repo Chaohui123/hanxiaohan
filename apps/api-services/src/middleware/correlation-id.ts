@@ -5,11 +5,9 @@
 import type { Request, Response, NextFunction } from "express";
 import crypto from "node:crypto";
 
-declare global {
-  namespace Express {
-    interface Request {
-      correlationId: string;
-    }
+declare module "express-serve-static-core" {
+  interface Request {
+    correlationId: string;
   }
 }
 

@@ -35,11 +35,14 @@ export async function deleteWatchItem(offerId: string): Promise<void> {
 
 // ---- Competitor Prices ----
 
-export async function queryCompetitorPrices(offerId: string, days: number): Promise<Array<{ price: number; rating: number; salesCount: number; capturedAt: string | null; competitorUrl: string }>> {
+export async function queryCompetitorPrices(offerId: string, days: number): Promise<Array<{ price: number; displayPrice: number; priceRegular: number | null; priceType: string; rating: number | null; salesCount: number | null; capturedAt: string | null; competitorUrl: string }>> {
   const d = await db();
   const cutoff = new Date(Date.now() - days * 86400000).toISOString();
   return d.all(
-    "SELECT price, rating, sales_count AS salesCount, captured_at AS capturedAt, competitor_url AS competitorUrl FROM promo_competitor_prices WHERE offer_id = ? AND captured_at >= ? ORDER BY captured_at DESC",
+    `SELECT COALESCE(price_regular, price) AS price, price AS "displayPrice",
+            price_regular AS "priceRegular", COALESCE(price_type, 'legacy_unknown') AS "priceType",
+            rating, sales_count AS "salesCount", captured_at AS "capturedAt", competitor_url AS "competitorUrl"
+     FROM promo_competitor_prices WHERE offer_id = ? AND captured_at >= ? ORDER BY captured_at DESC`,
     [offerId, cutoff],
   );
 }
@@ -53,7 +56,7 @@ export async function insertCompetitorPrices(
   for (const p of prices) {
     await d.run(
       "INSERT INTO promo_competitor_prices (offer_id, price, rating, sales_count, captured_at) VALUES (?, ?, ?, ?, ?)",
-      [offerId, p.price, p.rating || 0, p.salesCount || 0, p.capturedAt || new Date().toISOString()],
+      [offerId, p.price, p.rating ?? null, p.salesCount ?? null, p.capturedAt || new Date().toISOString()],
     );
     count++;
   }
@@ -94,18 +97,24 @@ export async function insertCompetitorLink(offerId: string, competitorUrl: strin
 /** 批量写入精准竞品快照（每条绑定具体 competitor_url） */
 export async function insertCompetitorSnapshots(
   offerId: string,
-  snapshots: Array<{ competitorUrl: string; price: number; rating?: number; salesCount?: number; capturedAt?: string }>,
+  snapshots: Array<{ competitorUrl: string; price: number; priceRegular: number; priceType: string; rating?: number; salesCount?: number; capturedAt?: string }>,
 ): Promise<number> {
   const d = await db();
-  let count = 0;
-  for (const s of snapshots) {
-    await d.run(
-      "INSERT INTO promo_competitor_prices (offer_id, competitor_url, price, rating, sales_count, captured_at) VALUES (?, ?, ?, ?, ?, ?)",
-      [offerId, s.competitorUrl, s.price, s.rating || 0, s.salesCount || 0, s.capturedAt || new Date().toISOString()],
-    );
-    count++;
-  }
-  return count;
+  const insert = async (target: DbAdapter): Promise<number> => {
+    let count = 0;
+    for (const s of snapshots) {
+      if (!Number.isFinite(s.priceRegular) || s.priceRegular <= 0 || s.priceType !== "regular") {
+        throw new Error("Precise competitor snapshots require a verified regular price");
+      }
+      await target.run(
+        "INSERT INTO promo_competitor_prices (offer_id, competitor_url, price, price_regular, price_type, rating, sales_count, captured_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+        [offerId, s.competitorUrl, s.price, s.priceRegular, s.priceType, s.rating ?? null, s.salesCount ?? null, s.capturedAt || new Date().toISOString()],
+      );
+      count++;
+    }
+    return count;
+  };
+  return d.tx ? d.tx(insert) : insert(d);
 }
 
 // ---- Events ----

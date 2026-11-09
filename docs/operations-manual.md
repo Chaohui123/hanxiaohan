@@ -323,3 +323,70 @@ tail -n 100 /home/ubuntu/deploy-watch.log
 | `GET /api/db/backups` | 备份清单与保留天数 |
 | `GET /api/stats/llm` | Token 使用与限额排障 |
 | `GET /api/stores/fx` | 汇率新鲜度与可靠性 |
+
+
+---
+
+## 九、Ozon 搜索查询采集与 7/28 天分析（2026-11-09 本机降级实证）
+
+### 9.1 当前边界
+
+- 免费官方 `/v1/search-queries/top`、`/v1/search-queries/text` 实测要求 Premium Pro；原生“下载”弹出订阅窗口，未获得 XLSX/CSV 或免费定时投递。不得擅自开通会员。
+- 服务器及已验证 Google Cloud 区域的标准 Chromium 访问 Seller 页面均返回 403。MPSTATS 官方 API 是外部市场热度和竞争补充，不具备 Seller 原生加购转化、独立买家及订单转化等完整字段，不能替代本报表。
+- 用户已允许降级为本机 Chrome 只读提取。真实接口为 `POST /api/site/searchteam/Stats/queries/search/v2`，通过正常翻页取得当次会话请求头；不导出 Cookie、CSRF 或敏感请求头，不绕过验证码、MFA、风控或会员限制。该私有接口没有官方 SLA，字段或权限变化时必须停止并重新验收。
+- Seller 页面需激活标签页才加载。采集器通过 `data-selected="true"` 与 `disabled` 判断当前页，点击另一页取得真实请求，不能把后台未加载或筛选空态当成真实零数据。
+- 搜索查询是 Ozon **市场分析**，不是本店 SKU 曝光、订单或独立买家漏斗。`ord` 映射“下单独立买家”，`itemsViews` 映射“展示商品数量”，`uniqSellers` 映射“竞争对手”；接口原始 `avgCountItems` 未在当前页面展示，不作语义猜测。
+
+### 9.2 采集、发布与原始证据
+
+```bash
+# 本机 Chrome 登录有效、WebBridge 已连接时执行；先验证单页
+node tools/ozon-search-analytics/src/local-collector.mjs --max-pages=1 --output=data/search-analytics
+
+# 完整批次：只有全部页面、总数、去重与哈希一致才生成 COLLECTED 清单
+node tools/ozon-search-analytics/src/local-collector.mjs --output=data/search-analytics
+
+# 再次验证完整文件，不触发上传
+node tools/ozon-search-analytics/src/publish-run.mjs <run-directory> --verify-only
+
+# 环境变量由受控用户环境提供；不得打印真实密钥
+node tools/ozon-search-analytics/src/publish-run.mjs <run-directory>
+```
+
+本地原始文件位于 `data/search-analytics/runs/<runId>/`，包含逐页脱敏请求、原始 JSON、服务端时间、SHA-256 与 manifest。服务端 ingest 再次校验完整批次，将原始文件保存到 `/app/data/search-analytics/raw/<runId>/`，数据库保存其索引和哈希。生产密钥仅放在权限 600 的 `data/secrets/search-analytics.env`，Compose 以可选 `env_file` 加载；不读写现有 `.env.production`，不把密钥提交到仓库或传给其他模型。
+
+接口为 `POST /api/search-analytics/ingest`，使用 gzip 和独立 `X-Search-Ingest-Key`。普通 dashboard 查询仍走原认证；独立 ingest 路径不使用 Seller API 主密钥代替。失败尝试可以单独登记，不能发布半成品或覆盖最近成功批次。
+
+### 9.3 查询、趋势、导出与派生窗口
+
+- `GET /api/search-analytics/queries?window=7|28&query=&page=&pageSize=&sort=&direction=`
+- `GET /api/search-analytics/queries/trend?query=<原始查询词>&days=90`
+- `GET /api/search-analytics/runs`、`GET /api/search-analytics/metrics`
+- `GET /api/search-analytics/export?window=7|28&format=csv|xlsx&query=`
+- 前端 `/search-analytics` 提供原生 7 天、积累中的 28 天、历史趋势、采集健康和 CSV/XLSX 下载。
+
+每日滚动 7 天重叠 6 天，不能直接相加。28 天只使用四个不重叠的原生 `days_7` 快照；锚点来自各页服务端时间，接口未返回自然日边界或时区，因此派生结果不能冒充官方自然日 28 天。首周只有 7/28 覆盖，缺周时停止派生，不把缺席查询补 0。独立买家不去重求和；均价、竞争、份额和未确认分子分母的转化率不盲目平均。动态 28/7 保持 `NULL`，年度趋势当前为空数组；28 天本身不能证明季节性。
+
+### 9.4 Windows 每日任务与故障处理
+
+任务脚本为 `tools/ozon-search-analytics/run-local.ps1`，注册脚本为 `register-local-task.ps1`。预定每天 **13:47（本机本地时间）** 执行，使用当前用户交互会话、单实例锁和一小时超时。只有生产 API、独立密钥和本机 Chrome 登录态均验收后才可注册并启动：
+
+```powershell
+powershell -NoProfile -ExecutionPolicy Bypass -File tools/ozon-search-analytics/register-local-task.ps1
+Start-ScheduledTask -TaskName "ONZO Ozon Search Analytics"
+Get-ScheduledTaskInfo -TaskName "ONZO Ozon Search Analytics"
+```
+
+用户环境必须提供 `SEARCH_ANALYTICS_API_URL` 和 `SEARCH_ANALYTICS_INGEST_KEY`。登录失效、扩展断开、403、验证码、窗口或店铺不一致、漏页、重复页、哈希不符均停止并非零退出；旧成功数据保留，`last-attempt` 与 `last-success` 分开，服务端发出 `SEARCH_ANALYTICS_FAILED` 告警。不能把脚本启动或 HTTP 200 当作整批成功，也不承诺本机无人值守云端采集。
+
+### 9.5 已完成的隔离验收
+
+真实批次 `2026-11-09T04-10-23-926Z` 共 199 页、9,942 条，内容 SHA-256 为 `ee29ab5653863691c0ffc93f1794d0bf0a3b761662923b17853b9cdceb8892e5`。完整 ingest、末页逐条回读、关键词筛选、原生趋势、CSV/XLSX、幂等导入、原始回执索引及 React 页面已通过。证据在该运行目录的 `local-api-validation.json` 与 `ui-validation.json`（运行数据目录已 ignored）。
+
+```bash
+node --import tsx tools/ozon-search-analytics/test/smoke-search.mjs <complete-run-directory>
+node --test tools/ozon-search-analytics/test/local-collector.test.mjs
+pnpm exec vitest run apps/api-services/tests/search-analytics.test.ts apps/api-services/tests/search-analytics-init.test.ts
+```
+
+以上是本机采集和隔离 API/页面验收，不等于生产 PostgreSQL、正式域名或 Windows 定时任务已经上线；这些状态以 `docs/current-pipeline.md` 第九节最新回读为准。

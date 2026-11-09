@@ -114,7 +114,7 @@ export async function extendLock(scope: string, token: string, ttlSeconds: numbe
 
 /** Release any lock by scope + token, ignoring errors. */
 export async function unlock(scope: string, token: string): Promise<void> {
-  try { await releaseLock(scope, token); } catch {}
+  try { await releaseLock(scope, token); } catch { /* Unlock is best-effort. */ }
 }
 
 // ---- Internal ----

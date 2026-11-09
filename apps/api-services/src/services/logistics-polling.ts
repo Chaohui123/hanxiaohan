@@ -32,7 +32,7 @@ export interface ParcelInfo {
   estimatedDelivery?: string;
 }
 
-let forwarderConfig: FreightForwarderConfig = {
+const forwarderConfig: FreightForwarderConfig = {
   apiUrl: process.env.FREIGHT_FORWARDER_API_URL || "",
   apiKey: process.env.FREIGHT_FORWARDER_API_KEY || "",
   enabled: !!(process.env.FREIGHT_FORWARDER_API_URL && process.env.FREIGHT_FORWARDER_API_KEY),

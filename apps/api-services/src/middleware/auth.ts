@@ -38,6 +38,8 @@ const PUBLIC_PATHS = [
   "/images",
   "/api/auth/login",
   "/api/1688/message/callback",
+  "/api/search-analytics/ingest",
+  "/api/v1/search-analytics/ingest",
   "/api/webhook/ozon",
   "/api/v1/webhook/ozon",
   "/ozon/webhook",

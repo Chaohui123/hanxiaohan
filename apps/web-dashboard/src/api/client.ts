@@ -11,7 +11,7 @@ export const api = axios.create({
 // ---- Request interceptor: inject API key from localStorage or env var ----
 api.interceptors.request.use((config) => {
   let apiKey = "";
-  try { apiKey = localStorage.getItem(AUTH_KEY) || ""; } catch {}
+  try { apiKey = localStorage.getItem(AUTH_KEY) || ""; } catch { /* localStorage may be unavailable. */ }
 
   // Fallback to build-time env var for dev convenience
   if (!apiKey) {
@@ -36,7 +36,7 @@ api.interceptors.response.use(
 
     // 401 — clear stored key and redirect to login
     if (err.response?.status === 401) {
-      try { localStorage.removeItem(AUTH_KEY); } catch {}
+      try { localStorage.removeItem(AUTH_KEY); } catch { /* localStorage may be unavailable. */ }
       if (window.location.pathname !== "/login") {
         window.location.href = "/login?reason=auth_required&message=" + encodeURIComponent(msg);
       }

@@ -31,6 +31,8 @@ export const promoCompetitorPrices = sqliteTable("promo_competitor_prices", {
   id: integer("id").primaryKey({ autoIncrement: true }),
   offerId: text("offer_id").notNull(),
   price: real("price").notNull(),
+  priceRegular: real("price_regular"),
+  priceType: text("price_type").notNull().default("legacy_unknown"),
   rating: real("rating").default(0),
   salesCount: integer("sales_count").default(0),
   capturedAt: text("captured_at"),

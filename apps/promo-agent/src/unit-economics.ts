@@ -15,6 +15,7 @@ export interface UnitEconomicsConfig {
   electronicServiceRate: number;
   electronicServiceMinRub: number;
   electronicServiceMaxRub: number;
+  acquiringRate: number;
   internationalTransportRate: number;
   returnRate: number;
   packagingCny: number;
@@ -28,6 +29,7 @@ export interface UnitEconomicsInput {
   weightG: number;
   exchangeRate: number;
   offerId?: string;
+  acquiringCny?: number;
   config?: UnitEconomicsConfig;
 }
 
@@ -56,6 +58,7 @@ const DEFAULT_CONFIG: UnitEconomicsConfig = {
   electronicServiceRate: 0.02,
   electronicServiceMinRub: 15,
   electronicServiceMaxRub: 200,
+  acquiringRate: 0.01,
   internationalTransportRate: 0.0033,
   returnRate: 0.05,
   packagingCny: 5,
@@ -89,13 +92,39 @@ function cpsRateFromEnv(offerId?: string): number {
   }
 }
 
-export function unitEconomicsConfigFromEnv(offerId?: string): UnitEconomicsConfig {
+function commissionRateFromEnv(offerId?: string, channel = "FBS"): number {
+  const normalizedChannel = channel.toUpperCase();
+  const fallback = envNumber(`PROMO_COMMISSION_RATE_${normalizedChannel}`, envNumber("PROMO_COMMISSION_RATE", DEFAULT_CONFIG.commissionRate));
+  const raw = process.env.PROMO_COMMISSION_RATE_OVERRIDES;
+  if (!offerId || !raw?.trim()) return fallback;
+  try {
+    const parsed = JSON.parse(raw) as unknown;
+    if (!parsed || typeof parsed !== "object" || Array.isArray(parsed)) throw new Error("expected an offerId-to-rate object");
+    const entry = (parsed as Record<string, unknown>)[offerId];
+    if (entry === undefined) return fallback;
+    const value = typeof entry === "object" && entry !== null && !Array.isArray(entry)
+      ? (entry as Record<string, unknown>)[normalizedChannel]
+      : entry;
+    if (value === undefined) return fallback;
+    if (typeof value !== "number" || !Number.isFinite(value) || value < 0 || value > 1) {
+      logger.warn({ offerId, channel: normalizedChannel }, "Invalid commission override rate — using channel fallback");
+      return fallback;
+    }
+    return value;
+  } catch (err) {
+    logger.warn({ offerId, err: (err as Error).message }, "Invalid PROMO_COMMISSION_RATE_OVERRIDES — using channel fallback");
+    return fallback;
+  }
+}
+
+export function unitEconomicsConfigFromEnv(offerId?: string, channel = "FBS"): UnitEconomicsConfig {
   return {
-    commissionRate: envNumber("PROMO_COMMISSION_RATE", DEFAULT_CONFIG.commissionRate),
+    commissionRate: commissionRateFromEnv(offerId, channel),
     cpsRate: cpsRateFromEnv(offerId),
     electronicServiceRate: envNumber("PROMO_ELECTRONIC_SERVICE_RATE", DEFAULT_CONFIG.electronicServiceRate),
     electronicServiceMinRub: envNumber("PROMO_ELECTRONIC_SERVICE_MIN_RUB", DEFAULT_CONFIG.electronicServiceMinRub),
     electronicServiceMaxRub: envNumber("PROMO_ELECTRONIC_SERVICE_MAX_RUB", DEFAULT_CONFIG.electronicServiceMaxRub),
+    acquiringRate: envNumber("PROMO_ACQUIRING_RATE", DEFAULT_CONFIG.acquiringRate),
     internationalTransportRate: envNumber("PROMO_INTERNATIONAL_TRANSPORT_RATE", DEFAULT_CONFIG.internationalTransportRate),
     returnRate: envNumber("PROMO_RETURN_RATE", DEFAULT_CONFIG.returnRate),
     packagingCny: envNumber("PROMO_PACKAGING_CNY", DEFAULT_CONFIG.packagingCny),
@@ -126,7 +155,7 @@ export function electronicServiceRub(priceRub: number, config: UnitEconomicsConf
 }
 
 function baseVariableRate(config: UnitEconomicsConfig): number {
-  return config.commissionRate + config.cpsRate + config.internationalTransportRate + config.returnRate;
+  return config.commissionRate + config.cpsRate + config.acquiringRate + config.internationalTransportRate + config.returnRate;
 }
 
 export function variableFeesRub(priceRub: number, config: UnitEconomicsConfig): number {
@@ -156,6 +185,7 @@ export function oglFixedCostRub(priceRub: number, context: OglPricingContext): n
 
 function solveOglPrice(targetProfitRub: number, targetMarginRate: number, context: OglPricingContext, config: UnitEconomicsConfig): number {
   const candidates: number[] = [];
+  let smallTierBoundary = Number.POSITIVE_INFINITY;
   const tiers = context.weightG <= 500 ? ["XS", "Small"] : context.weightG <= 2000 ? ["Small"] : [];
   for (const tier of tiers) {
     const logisticsCny = tier === "XS"
@@ -167,9 +197,10 @@ function solveOglPrice(targetProfitRub: number, targetMarginRate: number, contex
       ? candidate > 0 && candidate <= 1500
       : candidate > 1500 && candidate <= 7000;
     if (Number.isFinite(candidate) && inTier) candidates.push(candidate);
+    if (tier === "Small" && Number.isFinite(candidate) && candidate <= 1500) smallTierBoundary = 1500.01;
   }
   // 每档最多一个解；直接枚举两档，无迭代/死循环。异常多解取高价安全侧。
-  return candidates.length > 0 ? Math.max(...candidates) : Number.POSITIVE_INFINITY;
+  return candidates.length > 0 ? Math.max(...candidates) : smallTierBoundary;
 }
 
 export function priceForUnitProfit(
@@ -217,7 +248,11 @@ export function calculateUnitEconomics(input: UnitEconomicsInput): UnitEconomics
   const floorPrice = priceForTargetMargin(ogl.baseFixedCostRub, config.targetNetMarginRate, config, ogl);
   const astraMinPrice = priceForTargetMargin(ogl.baseFixedCostRub, config.astraNetMarginRate, config, ogl);
   if (!Number.isFinite(floorPrice) || !Number.isFinite(astraMinPrice)) pricingBlockers.push("OGL_UNSUPPORTED");
-  const fees = variableFeesRub(input.priceRub, config);
+  const rateFees = variableFeesRub(input.priceRub, config);
+  const actualAcquiringRub = typeof input.acquiringCny === "number" && Number.isFinite(input.acquiringCny) && input.acquiringCny >= 0
+    ? input.acquiringCny * validRate
+    : null;
+  const fees = rateFees + (actualAcquiringRub === null ? 0 : actualAcquiringRub - input.priceRub * config.acquiringRate);
   const profit = input.priceRub - fees - fixedCostRub;
   return {
     costRub, packagingRub, logisticsRub, fixedCostRub,

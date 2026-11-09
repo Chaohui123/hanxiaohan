@@ -222,9 +222,14 @@ export async function initSchema(db: DbAdapter): Promise<void> {
     CREATE TABLE IF NOT EXISTS promo_competitor_prices (
       id SERIAL PRIMARY KEY, offer_id TEXT NOT NULL,
       competitor_url TEXT DEFAULT '',
-      price REAL NOT NULL, rating REAL DEFAULT 0,
-      sales_count INTEGER DEFAULT 0, captured_at TIMESTAMP DEFAULT NOW()
+      price DOUBLE PRECISION NOT NULL, price_regular DOUBLE PRECISION,
+      price_type TEXT NOT NULL DEFAULT 'legacy_unknown',
+      rating REAL DEFAULT 0, sales_count INTEGER DEFAULT 0, captured_at TIMESTAMP DEFAULT NOW()
     );
+    ALTER TABLE promo_competitor_prices ADD COLUMN IF NOT EXISTS price_regular DOUBLE PRECISION;
+    ALTER TABLE promo_competitor_prices ADD COLUMN IF NOT EXISTS price_type TEXT NOT NULL DEFAULT 'legacy_unknown';
+    ALTER TABLE promo_competitor_prices ALTER COLUMN price TYPE DOUBLE PRECISION;
+    ALTER TABLE promo_competitor_prices ALTER COLUMN price_regular TYPE DOUBLE PRECISION;
     CREATE INDEX IF NOT EXISTS idx_comp_prices_offer ON promo_competitor_prices(offer_id, captured_at);
 
     -- Promo Agent: curated competitor links per our offer (选品调研产物，上架时录入)
@@ -433,6 +438,8 @@ export async function initSchema(db: DbAdapter): Promise<void> {
     CREATE INDEX IF NOT EXISTS idx_sku_mapping_1688 ON sku_1688_mapping(offer_1688_id);
 
   `);
+  const { SEARCH_ANALYTICS_DDL } = await import("./search-analytics-schema.js");
+  await db.exec(SEARCH_ANALYTICS_DDL);
 
   // Create IVFFlat indexes for RAG tables (PG only, silently skip if insufficient data)
   if (getAdapterType() === "pg") {

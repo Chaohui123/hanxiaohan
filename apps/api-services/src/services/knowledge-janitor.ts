@@ -5,7 +5,8 @@
 //   1. 过期清理：按 scenario TTL（learning 180 天、market 90 天、ops 永久等）
 //   2. 低质清理：无来源标注的短内容、明显占位/测试条目
 //   3. 语义重复合并：相似度 >0.95 的条目对保留较优（长 + 新）一条
-//   4. 飞书维护报告
+//   4. 明确取代关系清理（替代条目存在才删除）
+//   5. 飞书维护报告
 // ============================================================
 
 import { getDb } from "../db/connection.js";
@@ -18,13 +19,29 @@ export interface JanitorReport {
   expired: number;
   lowQuality: number;
   duplicates: number;
+  superseded: number;
   remaining: number;
 }
 
+export const PLAYBOOK_SUPERSESSIONS = [
+  { id: "pb_opus_doc_consistency_followup_20261103", replacementId: "pb_followup_reliability_deployed_20261103" },
+  { id: "pb_opus_expanded_routes_code_doc_audit_20261103", replacementId: "pb_followup_reliability_deployed_20261103" },
+] as const;
+
 export async function runKnowledgeJanitor(): Promise<JanitorReport> {
-  const report: JanitorReport = { expired: 0, lowQuality: 0, duplicates: 0, remaining: 0 };
+  const report: JanitorReport = { expired: 0, lowQuality: 0, duplicates: 0, superseded: 0, remaining: 0 };
   const db = await getDb().catch(() => null);
   if (!db) return report;
+
+  for (const item of PLAYBOOK_SUPERSESSIONS) {
+    const replacement = await db.all("SELECT id FROM rag_operations_playbook WHERE id = $1", [item.replacementId]);
+    if (replacement.length === 0) {
+      logger.error({ id: item.id, replacementId: item.replacementId }, "Janitor: supersession replacement missing; old entry retained");
+      continue;
+    }
+    const result = await db.run("DELETE FROM rag_operations_playbook WHERE id = $1", [item.id]);
+    report.superseded += result.changes;
+  }
 
   // ---- 1. 过期清理（按 scenario TTL，参数化 cutoff 两侧兼容） ----
   for (const [scenario, ttlDays] of Object.entries(SCENARIO_TTL_DAYS)) {
@@ -86,11 +103,12 @@ export async function runKnowledgeJanitor(): Promise<JanitorReport> {
   const [countRow] = await db.all<{ cnt: number }>("SELECT COUNT(*) AS cnt FROM rag_operations_playbook");
   report.remaining = Number(countRow?.cnt) || 0;
 
-  if (report.expired > 0 || report.lowQuality > 0 || report.duplicates > 0) {
+  if (report.expired > 0 || report.lowQuality > 0 || report.duplicates > 0 || report.superseded > 0) {
     await emitEvent("KNOWLEDGE_JANITOR", {
       expired: String(report.expired),
       lowQuality: String(report.lowQuality),
       duplicates: String(report.duplicates),
+      superseded: String(report.superseded),
       remaining: String(report.remaining),
     }).catch(() => {});
   }

@@ -7,8 +7,8 @@
 
 export interface CompetitorQuote {
   price: number;
-  rating: number;
-  salesCount: number;
+  rating: number | null;
+  salesCount: number | null;
 }
 
 /** 威胁分纳入阈值：低于该分不进入 competitorAvg */
@@ -25,16 +25,18 @@ export function priceRelevanceScore(competitorPrice: number, ourPrice: number): 
   return 50 * (1 - deviation / PRICE_BAND);
 }
 
-/** 销量威胁 0-30：≥100→30；10-99→20；1-9→10；0→0 */
-export function salesThreatScore(salesCount: number): number {
+/** 销量/评论威胁 0-30：未知不加分，真实 0 与未知在输入中分开保留 */
+export function salesThreatScore(salesCount: number | null): number {
+  if (salesCount === null || !Number.isFinite(salesCount)) return 0;
   if (salesCount >= 100) return 30;
   if (salesCount >= 10) return 20;
   if (salesCount >= 1) return 10;
   return 0;
 }
 
-/** 评分威胁 0-20：≥4.5→20；4.0-4.49→12；<4.0→5 */
-export function ratingThreatScore(rating: number): number {
+/** 评分威胁 0-20：未知不等于低分，不给低评分档的 5 分 */
+export function ratingThreatScore(rating: number | null): number {
+  if (rating === null || !Number.isFinite(rating)) return 0;
   if (rating >= 4.5) return 20;
   if (rating >= 4.0) return 12;
   return 5;

@@ -46,7 +46,7 @@ export interface SyncMetrics {
   successRate: number;
 }
 
-let syncMetrics: SyncMetrics = {
+const syncMetrics: SyncMetrics = {
   lastSyncTimestamp: null,
   lastSyncDurationMs: 0,
   totalSyncs: 0,
@@ -92,7 +92,7 @@ export async function syncOrders(
     let cursor = "";
     let localCount = 0;
 
-    while (true) {
+    for (;;) {
       const page = await listFn({
         status: options?.status,
         since,

@@ -54,7 +54,7 @@ function saveCookies(ctx: any): void {
     ctx.cookies().then((cookies: unknown) => {
       writeFileSync(COOKIES_FILE, JSON.stringify(cookies, null, 2));
     }).catch(() => {});
-  } catch {}
+  } catch { /* Best-effort browser operation; ignore failures. */ }
 }
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -196,10 +196,10 @@ export async function playwrightPurchase(params: {
     return { success: false, step: "error", errorCode: "BROWSER_ERROR", errorMsg: msg };
   } finally {
     if (context) {
-      try { await context.close(); } catch {}
+      try { await context.close(); } catch { /* Best-effort browser operation; ignore failures. */ }
     }
     if (browser) {
-      try { await browser.close(); } catch {}
+      try { await browser.close(); } catch { /* Best-effort browser operation; ignore failures. */ }
     }
   }
 }

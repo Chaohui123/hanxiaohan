@@ -1,0 +1,24 @@
+{
+  "evaluatedAt": "2026-11-09T03:42:20Z",
+  "candidate": "MPSTATS Analytics API - Ozon",
+  "officialDocumentation": "https://mpstats.io/integrations/analytics-oz/",
+  "status": "MARKET_SUPPLEMENT_NOT_SELLER_SEARCH_REPLACEMENT",
+  "verifiedCapabilities": [
+    "关键词按日期的frequency历史序列",
+    "商品关键词及排名、销量、销售额、库存、价格和类目竞争等外部分析字段",
+    "商品接口支持d1/d2日期参数及分页；具体权限、历史深度和额度仍需账号实测"
+  ],
+  "requiredSellerFieldsNotDocumented": [
+    "加购量及加购转化率",
+    "独立买家",
+    "订单转化率及按查询归因的订单金额",
+    "无操作、类似结果、无结果查询及其份额",
+    "Ozon Seller原生动态7和动态28字段"
+  ],
+  "officialSearchResponseExample": [
+    {"date": "2026-02-16", "frequency": 70406}
+  ],
+  "decision": "不注册、不试用、不付费；可作为外部市场热度和季节趋势的独立补充，但不替代Seller原生搜索查询指标。按用户授权转入本机Chrome只读采集。",
+  "cloudBrowserStatus": "已实测现有服务器和Google Cloud标准Chromium均403，未因本机降级而宣称云端可行",
+  "productionChanges": false
+}

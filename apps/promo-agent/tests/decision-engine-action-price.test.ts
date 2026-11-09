@@ -33,7 +33,7 @@ function baseItem(extra: Record<string, unknown> = {}) {
 }
 
 function comp(price: number, rating: number, salesCount: number, competitorUrl = "") {
-  return { price, rating, salesCount, competitorUrl, capturedAt: "2026-10-05T00:00:00Z" };
+  return { price, priceRegular: price, priceType: "regular", rating, salesCount, competitorUrl, capturedAt: "2026-10-05T00:00:00Z" };
 }
 
 beforeEach(() => {
@@ -51,10 +51,10 @@ describe("scoreAllProducts — 促销实付价口径", () => {
 
     expect(scored).toHaveLength(1);
     expect(scored[0].currentPrice).toBe(800); // 不是 price 1000
-    // 全费用口径：固定成本=采购360+OGL 94.08+打包60，variable=48.33%×800+电子服务16
+    // 全费用口径：固定成本=采购360+OGL 94.08+打包60，variable含49.33%费率与电子服务
     expect(scored[0].fixedCostRub).toBe(514.08);
-    expect(scored[0].unitProfitRub).toBe(-116.72);
-    expect(scored[0].marginPercent).toBeCloseTo(-14.6, 1);
+    expect(scored[0].unitProfitRub).toBe(-124.72);
+    expect(scored[0].marginPercent).toBeCloseTo(-15.6, 1);
     // 无竞品数据 → fallback 自己价格（促销价口径）
     expect(scored[0].competitorAvg).toBe(800);
     expect(scored[0].reason).toContain("（含促销价口径）");
@@ -66,7 +66,7 @@ describe("scoreAllProducts — 促销实付价口径", () => {
     const { scoreAllProducts } = await import("../src/decision-engine.js");
     const scored = await scoreAllProducts(config);
     expect(scored[0].currentPrice).toBe(1000);
-    expect(scored[0].unitProfitRub).toBe(-17.38);
+    expect(scored[0].unitProfitRub).toBe(-27.38);
   });
 
   it("actionPriceRub 为 0 或缺失时回退 price，reason 不标注", async () => {

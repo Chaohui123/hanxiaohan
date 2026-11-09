@@ -1,11 +1,9 @@
 import { getDb } from "../db/connection.js";
 import type { Request, Response, NextFunction } from "express";
 
-declare global {
-  namespace Express {
-    interface Request {
-      db: NonNullable<Awaited<ReturnType<typeof getDb>>>;
-    }
+declare module "express-serve-static-core" {
+  interface Request {
+    db: NonNullable<Awaited<ReturnType<typeof getDb>>>;
   }
 }
 

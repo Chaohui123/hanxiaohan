@@ -3,6 +3,7 @@ import type { ApiConfig } from "./api-client.js";
 import { promoApi, competitorApi } from "./api-client.js";
 import { logger } from "@onzo/logger";
 import { competitorCheckCounter } from "./metrics.js";
+import { hasFreshRegularPrice, hasVerifiedRegularPrice, latestByCompetitorUrl, selectPreviousCompetitorPrices, sharedPriceAverage } from "./competitor-history.js";
 import { queryRag, writeRag, extractRagContent } from "@onzo/embedding";
 
 // ---- 类型 ----
@@ -16,8 +17,9 @@ export interface CompetitorSnapshot {
   offerId: string;
   name: string;
   price: number;
-  rating: number;
-  salesCount: number;
+  pricesByUrl?: ReadonlyMap<string, number>;
+  rating: number | null;
+  salesCount: number | null;
 }
 
 export interface CompetitorAlert {
@@ -165,28 +167,27 @@ async function searchAndSave(
   entry: WatchEntry,
 ): Promise<CompetitorSnapshot | null> {
   // 1. 精准模式：该商品有竞品链接留档（promo_competitor_links）→
-  //    使用本机 WebBridge 抓回的链接快照（competitor_url 非空）。
-  //    快照由本机 temp/competitor-scan.py 定期写入；有链接但暂无新鲜快照时
-  //    不按名搜索凑合（模糊搜索的聚合数据会污染精准均价）。
+  //    使用远程服务器/第三方抓回的链接快照（competitor_url 非空）。
+  //    远程采集每日一次；有链接但暂无新鲜快照时不按名搜索凑合。
   const linksData = await competitorApi.getCompetitorLinks(apiConfig, entry.offerId).catch(() => null);
   const trackedLinks = linksData?.items || [];
   if (trackedLinks.length > 0) {
     const data = await competitorApi.getPrices(apiConfig, entry.offerId, 1).catch(() => null);
-    const FRESH_MS = 12 * 3600_000;
-    const fresh = (data?.prices || []).filter((p) =>
-      p.competitorUrl && p.capturedAt && Date.now() - new Date(p.capturedAt).getTime() < FRESH_MS,
-    );
+    const fresh = latestByCompetitorUrl(data?.prices || []).filter((p) => hasFreshRegularPrice(p));
     if (fresh.length === 0) {
       logger.info({ offerId: entry.offerId, links: trackedLinks.length },
-        "Tracked competitor links but no fresh snapshot — waiting for local scan");
+        "Tracked competitor links but no fresh snapshot — waiting for remote scan");
       return null;
     }
+    const allRatingsMeasured = fresh.every((p) => p.rating !== null && Number.isFinite(p.rating));
+    const allReviewsMeasured = fresh.every((p) => p.salesCount !== null && Number.isFinite(p.salesCount));
     return {
       offerId: entry.offerId,
       name: entry.name,
       price: fresh.reduce((s, p) => s + p.price, 0) / fresh.length,
-      rating: fresh.reduce((s, p) => s + p.rating, 0) / fresh.length,
-      salesCount: fresh.reduce((s, p) => s + p.salesCount, 0),
+      pricesByUrl: new Map(fresh.map((p) => [p.competitorUrl, p.price])),
+      rating: allRatingsMeasured ? fresh.reduce((s, p) => s + (p.rating ?? 0), 0) / fresh.length : null,
+      salesCount: allReviewsMeasured ? fresh.reduce((s, p) => s + (p.salesCount ?? 0), 0) : null,
     };
   }
 
@@ -233,13 +234,20 @@ async function checkPriceDrop(
 ): Promise<CompetitorAlert | null> {
   // 获取上一次价格记录
   let prevAvg = 0;
+  let currentAvg = current.price;
   try {
     const data = await competitorApi.getPrices(apiConfig, entry.offerId, 14);
-    const prices = data.prices || [];
+    const prices = (data.prices || []).filter((p) => hasVerifiedRegularPrice(p));
     if (prices.length >= 2) {
-      // 取倒数第二次的价格平均值
-      const prevPrices = prices.slice(-12, -6); // 上一个检查周期的价格
-      if (prevPrices.length > 0) {
+      const currentCapturedAt = prices.find((p) => p.competitorUrl && p.capturedAt)?.capturedAt;
+      if (!currentCapturedAt) return null;
+      const prevPrices = selectPreviousCompetitorPrices(prices, currentCapturedAt);
+      if (current.pricesByUrl) {
+        const averages = sharedPriceAverage(current.pricesByUrl, prevPrices);
+        if (!averages) return null;
+        prevAvg = averages.previous;
+        currentAvg = averages.current;
+      } else if (prevPrices.length > 0) {
         prevAvg = prevPrices.reduce((s, p) => s + p.price, 0) / prevPrices.length;
       }
     }
@@ -250,7 +258,7 @@ async function checkPriceDrop(
 
   if (prevAvg <= 0) return null;
 
-  const dropPercent = ((prevAvg - current.price) / prevAvg) * 100;
+  const dropPercent = ((prevAvg - currentAvg) / prevAvg) * 100;
 
   if (dropPercent >= 10) {
     const myPrice = myPriceMap.get(entry.offerId) || 0;
@@ -258,7 +266,7 @@ async function checkPriceDrop(
       offerId: entry.offerId,
       name: entry.name,
       myPrice,
-      competitorAvg: current.price,
+      competitorAvg: currentAvg,
       dropPercent: Math.round(dropPercent * 10) / 10,
     };
   }

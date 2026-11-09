@@ -20,7 +20,7 @@ export function auditMiddleware(req: Request, res: Response, next: NextFunction)
         userAgent: req.headers["user-agent"],
         correlationId: (req as Request & { correlationId?: string }).correlationId,
       }, "API audit");
-      return (originalEnd as Function).apply(res, args);
+      return Reflect.apply(originalEnd, res, args);
     };
   }
   next();

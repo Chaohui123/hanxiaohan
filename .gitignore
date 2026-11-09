@@ -31,6 +31,8 @@ packages/ozon-order/tests/sync.integration.test.ts
 data/backups/
 data/onzo.db*
 data/astra-guard-state.json
+data/search-analytics/
+data/secrets/
 
 # Temporary build/deploy scripts (may contain secrets)
 *.tar.gz

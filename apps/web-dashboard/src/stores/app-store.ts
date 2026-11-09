@@ -36,17 +36,17 @@ export const useAppStore = create<AppState>((set) => ({
   toggleSidebar: () => set((s) => ({ sidebarCollapsed: !s.sidebarCollapsed })),
   darkMode: getSavedDarkMode(),
   setDarkMode: (v) => {
-    try { localStorage.setItem("onzo-dark-mode", v ? "1" : "0"); } catch {}
+    try { localStorage.setItem("onzo-dark-mode", v ? "1" : "0"); } catch { /* Keep in-memory state when localStorage is unavailable. */ }
     set({ darkMode: v });
   },
   apiKey: getSavedApiKey(),
   isAuthenticated: getSavedAuthState(),
   setApiKey: (key) => {
-    try { localStorage.setItem("onzo-api-key", key); } catch {}
+    try { localStorage.setItem("onzo-api-key", key); } catch { /* Keep in-memory state when localStorage is unavailable. */ }
     set({ apiKey: key, isAuthenticated: true });
   },
   logout: () => {
-    try { localStorage.removeItem("onzo-api-key"); } catch {}
+    try { localStorage.removeItem("onzo-api-key"); } catch { /* Keep in-memory state when localStorage is unavailable. */ }
     set({ apiKey: "", isAuthenticated: false });
   },
 }));

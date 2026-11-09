@@ -5,7 +5,7 @@
 // for standalone/SQLite mode. When adding tables, add them here first.
 // ============================================================
 
-import { pgTable, text, integer, real, serial, timestamp, bigint } from "drizzle-orm/pg-core";
+import { pgTable, text, integer, real, serial, timestamp, bigint, doublePrecision } from "drizzle-orm/pg-core";
 
 // ---- Task Queue ----
 export const taskQueue = pgTable("task_queue", {
@@ -198,7 +198,9 @@ export const promoWatchList = pgTable("promo_watch_list", {
 export const promoCompetitorPrices = pgTable("promo_competitor_prices", {
   id: serial("id").primaryKey(),
   offerId: text("offer_id").notNull(),
-  price: real("price").notNull(),
+  price: doublePrecision("price").notNull(),
+  priceRegular: doublePrecision("price_regular"),
+  priceType: text("price_type").notNull().default("legacy_unknown"),
   rating: real("rating").default(0),
   salesCount: integer("sales_count").default(0),
   capturedAt: timestamp("captured_at").defaultNow(),

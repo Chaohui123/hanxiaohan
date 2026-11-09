@@ -2,7 +2,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { logger } from "@onzo/logger";
 import {
   calculateUnitEconomics, effectivePriceRub, oglFixedCostRub, oglLogisticsCny,
-  priceForTargetMargin, priceForUnitProfit, unitEconomicsConfigFromEnv, unitProfitRub,
+  priceForTargetMargin, priceForUnitProfit, unitEconomicsConfigFromEnv, unitProfitRub, variableFeesRub,
 } from "../src/unit-economics.js";
 
 describe("CPS 默认与 offerId 覆盖", () => {
@@ -45,7 +45,7 @@ describe("CPS 默认与 offerId 覆盖", () => {
     const fixed = oglFixedCostRub(result.floorPrice, { baseFixedCostRub: 420, weightG: 200, exchangeRate: 12 })!;
     expect(result.floorPrice).toBeGreaterThan(1500);
     expect(unitProfitRub(result.floorPrice, fixed, config) / result.floorPrice).toBeCloseTo(0.10, 10);
-    expect(result.variableFeesRub).toBeCloseTo(1500 * (0.20 + 0.35 + 0.0033 + 0.05) + 30, 8);
+    expect(result.variableFeesRub).toBeCloseTo(1500 * (0.20 + 0.35 + 0.01 + 0.0033 + 0.05) + 30, 8);
   });
 });
 
@@ -74,9 +74,9 @@ describe("统一单元经济", () => {
     expect(result.logisticsRub).toBeCloseTo(94.08, 8);
     expect(result.packagingRub).toBe(60);
     expect(result.fixedCostRub).toBeCloseTo(514.08, 8);
-    expect(result.variableFeesRub).toBeCloseTo(754.95, 8);
-    expect(result.unitProfitRub).toBeCloseTo(230.97, 8);
-    expect(result.marginPercent).toBeCloseTo(15.398, 8);
+    expect(result.variableFeesRub).toBeCloseTo(769.95, 8);
+    expect(result.unitProfitRub).toBeCloseTo(215.97, 8);
+    expect(result.marginPercent).toBeCloseTo(14.398, 8);
     const ogl = { baseFixedCostRub: result.costRub + result.packagingRub, weightG: 200, exchangeRate: 12 };
     const floorFixed = oglFixedCostRub(result.floorPrice, ogl)!;
     const astraFixed = oglFixedCostRub(result.astraMinPrice, ogl)!;
@@ -108,6 +108,20 @@ describe("统一单元经济", () => {
     expect(effectivePriceRub(0, 800)).toBe(800);
   });
 
+  it("Small 目标解低于档位下限时取满足目标的最低合法价", () => {
+    const noCps = { ...config, cpsRate: 0 };
+    const result = calculateUnitEconomics({ priceRub: 1590, costCny: 18.08, weightG: 650, exchangeRate: 12.08, config: noCps });
+    expect(result.pricingBlockers).not.toContain("OGL_UNSUPPORTED");
+    expect(result.floorPrice).toBe(1500.01);
+    expect(result.astraMinPrice).toBe(1500.01);
+    const ogl = { baseFixedCostRub: result.costRub + result.packagingRub, weightG: 650, exchangeRate: 12.08 };
+    const fixed = oglFixedCostRub(result.astraMinPrice, ogl)!;
+    expect(unitProfitRub(result.astraMinPrice, fixed, noCps) / result.astraMinPrice).toBeGreaterThan(0.20);
+    const solved = priceForUnitProfit(100, ogl.baseFixedCostRub, noCps, ogl);
+    expect(solved).toBe(1500.01);
+    expect(unitProfitRub(solved, oglFixedCostRub(solved, ogl)!, noCps)).toBeGreaterThan(100);
+  });
+
   it("缺重量显式阻断且所有输出保持有限值", () => {
     const result = calculateUnitEconomics({ priceRub: 1000, costCny: 30, weightG: 0, exchangeRate: 12, config });
     expect(result.pricingBlockers).toContain("MISSING_WEIGHT");
@@ -115,5 +129,38 @@ describe("统一单元经济", () => {
     for (const value of [result.fixedCostRub, result.logisticsRub, result.unitProfitRub, result.floorPrice]) {
       expect(Number.isFinite(value)).toBe(true);
     }
+  });
+});
+
+describe("收单与实际渠道费率", () => {
+  afterEach(() => {
+    vi.unstubAllEnvs();
+    vi.restoreAllMocks();
+  });
+
+  it("默认计1%收单，且支持实际CNY金额替换比例估算", () => {
+    const config = { ...unitEconomicsConfigFromEnv(), cpsRate: 0 };
+    expect(variableFeesRub(931.7, config) - variableFeesRub(931.7, { ...config, acquiringRate: 0 })).toBeCloseTo(9.317, 8);
+    const result = calculateUnitEconomics({ priceRub: 931.7, costCny: 32, weightG: 300, exchangeRate: 12.1, acquiringCny: 0.77, config });
+    expect(result.unitProfitRub).toBeCloseTo(95.29838999999993, 8);
+    expect(result.marginPercent).toBeCloseTo(10.228441558441551, 8);
+  });
+
+  it("佣金按SKU和FBS/FBO/RFBS渠道覆盖，CPS可读真实0", () => {
+    vi.stubEnv("PROMO_COMMISSION_RATE_OVERRIDES", JSON.stringify({ "MAR-YAM-61N-01": { FBS: 0.15, FBO: 0.17, RFBS: 0.12 } }));
+    vi.stubEnv("PROMO_CPS_RATE", "0");
+    expect(unitEconomicsConfigFromEnv("MAR-YAM-61N-01", "FBS").commissionRate).toBe(0.15);
+    expect(unitEconomicsConfigFromEnv("MAR-YAM-61N-01", "FBO").commissionRate).toBe(0.17);
+    expect(unitEconomicsConfigFromEnv("MAR-YAM-61N-01", "RFBS").commissionRate).toBe(0.12);
+    expect(unitEconomicsConfigFromEnv("OTHER", "FBS").commissionRate).toBe(0.20);
+    expect(unitEconomicsConfigFromEnv("MAR-YAM-61N-01", "FBS").cpsRate).toBe(0);
+  });
+
+  it("非法佣金覆盖不抛错并回退渠道费率", () => {
+    const warn = vi.spyOn(logger, "warn").mockImplementation(() => {});
+    vi.stubEnv("PROMO_COMMISSION_RATE_FBS", "0.15");
+    vi.stubEnv("PROMO_COMMISSION_RATE_OVERRIDES", "{bad json");
+    expect(unitEconomicsConfigFromEnv("MAR-YAM-61N-01", "FBS").commissionRate).toBe(0.15);
+    expect(warn).toHaveBeenCalled();
   });
 });

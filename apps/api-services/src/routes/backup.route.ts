@@ -131,7 +131,7 @@ export async function fallbackExport(outputPath: string): Promise<void> {
 
     const { Readable } = await import("node:stream");
     const database = db;
-    async function* exportRows() {
+    const exportRows = async function* () {
       for (const table of FALLBACK_TABLES) {
         const rows = await database.all(`SELECT * FROM ${table}`).catch((err: Error) => {
           throw new Error(`[Backup] Failed to export table ${table}: ${err.message}`);
@@ -141,7 +141,7 @@ export async function fallbackExport(outputPath: string): Promise<void> {
           yield JSON.stringify({ __table: table, ...row }) + "\n";
         }
       }
-    }
+    };
 
     await pipeline(Readable.from(exportRows()), createGzip(), createWriteStream(outputPath));
   } catch (err) {
