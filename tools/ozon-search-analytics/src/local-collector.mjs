@@ -148,9 +148,20 @@ function instrumentationSource() {
   })()`;
 }
 
+export function isClosedSessionError(error) {
+  return /unknown session|session.*(?:not found|closed)|no tab with given id|tab was closed/i.test(error?.message || "");
+}
+
+async function closeOwnedTabs(endpoint, session) {
+  try { await webbridge(endpoint, session, "close_session", {}); }
+  catch (error) {
+    if (!isClosedSessionError(error)) throw error;
+  }
+}
+
 async function preparePage(endpoint, session) {
-  try { await webbridge(endpoint, session, "find_tab", { url: "seller.ozon.ru" }); }
-  catch { await webbridge(endpoint, session, "navigate", { url: SELLER_URL, newTab: true, group_title: "搜索查询本机采集" }); }
+  await closeOwnedTabs(endpoint, session);
+  await webbridge(endpoint, session, "navigate", { url: SELLER_URL, newTab: true, group_title: "搜索查询本机采集" });
   await activate(endpoint, session);
   const current = await evaluate(endpoint, session, "location.href");
   if (current !== SELLER_URL) await webbridge(endpoint, session, "navigate", { url: SELLER_URL });
@@ -171,15 +182,20 @@ async function preparePage(endpoint, session) {
   const installed = await evaluate(endpoint, session, instrumentationSource());
   if (!installed) throw new Error("Could not install the readonly request observer");
   await activate(endpoint, session);
-  const clicked = await evaluate(endpoint, session, `(() => {
-    const current = Number(document.querySelector('button[data-selected="true"]')?.textContent || '1');
-    const targetNumber = current === 1 ? '2' : '1';
-    const button = [...document.querySelectorAll('button')].find(element => element.offsetParent && !element.disabled && (element.innerText || '').trim() === targetNumber);
-    if (!button) return false;
-    button.click();
-    return true;
+  const target = await evaluate(endpoint, session, `(() => {
+    const selected = document.querySelector('button[data-selected="true"]');
+    const current = Number((selected?.textContent || '').trim());
+    if (!Number.isInteger(current)) return null;
+    const buttons = [...document.querySelectorAll('button')].filter(element => element.offsetParent && !element.disabled && /^\\d+$/.test((element.textContent || '').trim()));
+    const button = buttons.find(element => Number(element.textContent.trim()) === current + 1) || buttons.find(element => Number(element.textContent.trim()) === current - 1);
+    if (!button) return null;
+    const page = Number(button.textContent.trim());
+    button.setAttribute('data-onzo-search-page', String(page));
+    button.scrollIntoView({ block: 'center', inline: 'center' });
+    return { current, page, selector: 'button[data-onzo-search-page="' + page + '"]' };
   })()`);
-  if (!clicked) throw new Error("Could not trigger a native page transition to establish request context");
+  if (!target) throw new Error("Could not find an enabled adjacent pagination button for native request context");
+  await webbridge(endpoint, session, "mouse_click", { selector: target.selector, focus_emulation: true });
   const template = await evaluate(endpoint, session, `(async () => {
     const deadline = Date.now() + 30000;
     while (Date.now() < deadline) {
@@ -230,6 +246,7 @@ export async function collect(options) {
   const pages = [];
   const fields = new Set();
   let pending = { runId, collectorVersion: COLLECTOR_VERSION, startedAt, status: "RUNNING", complete: false, sourceDependency: "LOCAL_CHROME_ACTIVE_TAB_AND_LOGIN", pageCount: 0 };
+  let completed = false;
   await atomicJson(pendingFile, pending);
   try {
     const context = await preparePage(endpoint, options.session);
@@ -274,10 +291,13 @@ export async function collect(options) {
     };
     await atomicJson(path.join(directory, "manifest.json"), manifest);
     await rm(pendingFile, { force: true });
+    completed = true;
     return { directory, manifest };
   } catch (error) {
     await atomicJson(pendingFile, { ...pending, finishedAt: new Date().toISOString(), status: "FAILED", error: error.message, errorCode: error.code || "COLLECTION_FAILED" });
     throw error;
+  } finally {
+    if (completed) await closeOwnedTabs(endpoint, options.session).catch(error => console.warn(`任务标签页清理失败：${error.message}`));
   }
 }
 

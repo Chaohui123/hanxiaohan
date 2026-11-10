@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseArgs, normalizePage, validateBatch } from "../src/local-collector.mjs";
+import { parseArgs, normalizePage, validateBatch, isClosedSessionError } from "../src/local-collector.mjs";
 
 function envelope(query = "телефон", offset = "0", total = "1") {
   const request = { text: "", limit: "50", offset, sort_by: "count", sort_dir: "desc", period: "days_7" };
@@ -35,4 +35,11 @@ test("collector accepts only bounded local options", () => {
   assert.deepEqual(parseArgs(["--max-pages=1"]).maxPages, 1);
   assert.throws(() => parseArgs(["--max-pages=-1"]));
   assert.throws(() => parseArgs(["--session=bad session"]));
+});
+
+test("collector recognizes only closed task tabs as recoverable", () => {
+  assert.equal(isClosedSessionError(new Error("No tab with given id 203942741.")), true);
+  assert.equal(isClosedSessionError(new Error('session "ozon-search" tab was closed')), true);
+  assert.equal(isClosedSessionError(new Error("extension_not_connected")), false);
+  assert.equal(isClosedSessionError(new Error("Seller login required")), false);
 });

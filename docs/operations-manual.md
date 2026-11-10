@@ -405,3 +405,13 @@ pnpm exec vitest run apps/api-services/tests/search-analytics.test.ts apps/api-s
 
 
 补充验收：提交 `16547752` 已同步到生产，`/ready` 通过。知识条目 `pb_ozon_search_query_local_fallback_20261109` 已按同 ID 更新为生产与定时任务实证，`persisted=true`，远端和本机正常检索命中第一；回执 `temp/ops-exec/ozon-search-query-knowledge-production-result-20261109.log`，替换前备份在服务端 `knowledge-before-ozon-search-query-production-20261109.json`。定时 `knowledge-janitor` 清理的是低质条目，当前生产实证已回读确认保留。
+
+
+### 9.7 失效标签页恢复与 UTF-8 日志（2026-11-10 实证）
+
+- 2026-11-10 13:47 定时任务 `ONZO Ozon Search Analytics` 首次次日执行失败，错误为 `extension_error: No tab with given id 203942741`。失败运行 `2026-11-10T05-47-04-748Z` 已上报，旧成功数据未覆盖，不能把该错误当作真实零查询。
+- 原因是上次任务页已关闭而会话仍引用旧 ID。`local-collector.mjs` 每轮先 `close_session` 清理本采集器自己创建的任务页，再新建并激活 Seller 页面，不再复用旧 ID。借用用户页面不由 `close_session` 关闭，不能为了修复而清理用户其他标签页。
+- 原生请求上下文通过当前 `data-selected/disabled` 页码、另一可用页按钮和真实指针翻页取得；不猜接口参数，不绕过会员、验证码或风控。成功后清理任务页；失败时保留本次任务页供核查，下一轮仍先清理旧会话。
+- 日志由 `run-local.mjs` 使用 Node 直接追加 UTF-8；PowerShell 只负责启动和传递退出码。若旧日志含混合编码或 NUL 字节，先重命名为带时间戳的 `.legacy` 文件保留原始证据，再建立新 UTF-8 日志，不重造历史文本。可用 `node tools/ozon-search-analytics/src/run-local.mjs --log-self-test` 单独检查日志，不产生业务批次。
+- 修复后通过真实 Windows 定时任务完整执行并发布 `2026-11-10T15-02-05-470Z`：199 页、9,945 条，`LastTaskResult=0`，下一次回读为 **2026-11-11 13:47**。生产 PostgreSQL、原始回执、逐行哈希、API、趋势与 CSV/XLSX 全部通过；正式页面不再显示“最近一次采集失败：extension_error”。
+- 工具测试 6 项通过，PowerShell 语法检查通过。证据：`temp/ops-exec/search-tab-recovery-task-20261110.json`、`temp/ops-exec/search-tab-recovery-production-validation-20261110.json`、`data/search-analytics/last-success.json`、`data/search-analytics/scheduled.log`。商品价格、库存、广告及 `PROMO_AUTO_DECISION=false` 未因此改变。

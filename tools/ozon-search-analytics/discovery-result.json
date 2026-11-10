@@ -52,8 +52,15 @@
       "firstRunAt": "2026-11-09T14:24:03+08:00",
       "firstRunId": "2026-11-09T06-24-05-227Z",
       "lastTaskResult": 0,
-      "nextRunAt": "2026-11-10T13:47:00+08:00",
-      "directVerificationRunId": "2026-11-09T06-29-08-976Z"
+      "nextRunAt": "2026-11-11T13:47:00+08:00",
+      "directVerificationRunId": "2026-11-09T06-29-08-976Z",
+      "recoveryRunId": "2026-11-10T15-02-05-470Z",
+      "recoveryRunRows": 9945,
+      "failureRunId": "2026-11-10T05-47-04-748Z",
+      "failureCode": "extension_error",
+      "failureResolved": true,
+      "uiFailureWarning": false,
+      "productionValidation": "temp/ops-exec/search-tab-recovery-production-validation-20261110.json"
     }
   },
   "requiredToResume": {

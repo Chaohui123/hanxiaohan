@@ -56,8 +56,11 @@
       "taskName": "ONZO Ozon Search Analytics",
       "firstRunId": "2026-11-09T06-24-05-227Z",
       "lastTaskResult": 0,
-      "nextRunAt": "2026-11-10T13:47:00+08:00",
-      "directVerificationRunId": "2026-11-09T06-29-08-976Z"
+      "nextRunAt": "2026-11-11T13:47:00+08:00",
+      "directVerificationRunId": "2026-11-09T06-29-08-976Z",
+      "recoveryRunId": "2026-11-10T15-02-05-470Z",
+      "recoveryRowCount": 9945,
+      "failureWarningResolved": true
     }
   },
   "screenshots": [

@@ -1,13 +1,43 @@
+import { appendFileSync, readFileSync, renameSync } from "node:fs";
 import { mkdir, open, readFile, rm, writeFile } from "node:fs/promises";
 import path from "node:path";
+import { format } from "node:util";
 import { gzipSync } from "node:zlib";
 import { collect, parseArgs } from "./local-collector.mjs";
 import { publishBatch } from "./publish-run.mjs";
 
 const output = path.resolve("data/search-analytics");
 const lockPath = path.join(output, "collector.lock");
+const logPath = path.join(output, "scheduled.log");
 let handle;
 await mkdir(output, { recursive: true });
+
+function ensureUtf8Log() {
+  let bytes;
+  try { bytes = readFileSync(logPath); }
+  catch (error) { if (error.code === "ENOENT") return null; throw error; }
+  let valid = true;
+  try { new TextDecoder("utf-8", { fatal: true }).decode(bytes); } catch { valid = false; }
+  if (valid && bytes.includes(0)) valid = false;
+  if (valid) return null;
+  const legacy = `${logPath}.${new Date().toISOString().replace(/[:.]/g, "-")}.legacy`;
+  renameSync(logPath, legacy);
+  return legacy;
+}
+
+const legacyLog = ensureUtf8Log();
+for (const method of ["log", "warn", "error"]) {
+  const original = console[method].bind(console);
+  console[method] = (...args) => {
+    appendFileSync(logPath, `${format(...args)}\n`, "utf8");
+    original(...args);
+  };
+}
+if (legacyLog) console.log(`旧日志已保留：${legacyLog}`);
+if (process.argv.includes("--log-self-test")) {
+  console.log("UTF-8 日志自检：中文正常");
+  process.exit(0);
+}
 
 async function lock() {
   try {

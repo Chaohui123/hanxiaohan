@@ -24,17 +24,11 @@ try {
     & "$env:USERPROFILE\.kimi-webbridge\bin\kimi-webbridge.exe" start | Out-Null
     Start-Sleep -Seconds 3
   }
-  [Console]::OutputEncoding = [System.Text.UTF8Encoding]::new($false)
-  $OutputEncoding = [Console]::OutputEncoding
   $node = (Get-Command node).Source
-  & $node "tools\ozon-search-analytics\src\run-local.mjs" 2>&1 | ForEach-Object {
-    $line = $_.ToString()
-    $line | Out-File -FilePath "data\search-analytics\scheduled.log" -Append -Encoding utf8
-    Write-Host $line
-  }
+  & $node "tools\ozon-search-analytics\src\run-local.mjs"
   exit $LASTEXITCODE
 } catch {
-  $_.Exception.Message | Tee-Object -FilePath "data\search-analytics\scheduled.log" -Append
+  $_.Exception.Message | Out-File -FilePath "data\search-analytics\scheduled.log" -Append -Encoding utf8
   exit 1
 } finally {
   if ($acquired) { $mutex.ReleaseMutex() }
