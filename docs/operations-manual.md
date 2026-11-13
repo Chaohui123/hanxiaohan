@@ -555,7 +555,7 @@ python scripts/gemini-carbon-continue.py --prompt <prompt.txt> --resume-state <c
 - `account-dione-3300`（`dn2pvzztpuqdyephhjlx`）已回读为 **Active / Paid version**，关联 1 个云。现有 `cloud-584001555qqcom` / `default` 文件夹（`b1g7kg5sf3nob759onuo`）可用，Cloud Shell 中官方 `yc 1.41.0` 已实跑，不需要重建云、文件夹或 Billing。
 - 服务账号 `onzo-yandex-api`（`ajenm8nu2hhln4p9op2c`）仅有 `ai.speechkit-tts.user`、`ai.speechkit-stt.user`、`ai.translate.user`、`ai.vision.user`、`search-api.webSearch.user` 五项角色，未授予管理员或资源编辑权限。
 - 本机服务账号 JSON 位于 `data/secrets/yandex-cloud/service_account_key.json`，该目录已忽略提交，文件权限已收紧；不得读取到聊天、打印日志、写入代码或发送给模型。ONZO 服务器部署时，秘密文件应通过受控秘密交付流程放到 `/home/ubuntu/onzo/data/secrets/yandex-cloud/service_account_key.json` 并设权限 600；`app_data` 卷会映射为容器内 `/app/data/secrets/yandex-cloud/service_account_key.json`。**本次尚未执行秘密上传、Git 提交或 ONZO 生产部署。**
-- 共享包为 `packages/yandex-cloud`，使用服务账号 JWT PS256 换取并缓存 IAM token。环境变量：`YANDEX_CLOUD_FOLDER_ID`、`YANDEX_CLOUD_SA_KEY_FILE`、`YANDEX_CLOUD_PROXY_URL`。本机脚本显式使用 `127.0.0.1:10808`，不改变系统代理；服务器按实际网络配置，不强制使用本机代理地址。
+- 共享包为 `packages/yandex-cloud`，使用服务账号 JWT PS256 换取并缓存 IAM token。环境变量：`YANDEX_CLOUD_FOLDER_ID`、`YANDEX_CLOUD_SA_KEY_FILE`、`YANDEX_CLOUD_PROXY_URL`。本机脚本显式使用 `127.0.0.1:10808`，不改变系统代理；生产服务器直连 Yandex IAM 实测超时，Compose 已固定 `YANDEX_CLOUD_PROXY_URL=http://172.28.0.1:10809`（可用环境变量覆盖），使用既有出口，不改系统代理。
 - 受控凭据配置入口为 `POST /api/yandex-cloud/credential`，沿用现有 dashboard/API 鉴权。请求必须是当前 `onzo-yandex-api` 的授权 JSON 且包含 `confirmProductionUpload=true`；服务端校验服务账号和字段后，以 600 权限原子写入，响应不回显私钥，不创建明文备份。浏览器文件选择可直接把下载的授权 JSON 提交到该接口，避免经过聊天、Git、命令历史或普通文本日志。后续轮换也走此入口；错误账号在上游写入前拒绝。
 
 ### 11.2 SpeechKit 配音与真实验收
