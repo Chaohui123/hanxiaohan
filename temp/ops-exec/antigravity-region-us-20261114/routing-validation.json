@@ -1,0 +1,90 @@
+{
+  "status": "PASS",
+  "verifiedAt": "2026-11-14T03:52:00+08:00",
+  "antigravityCli": "1.5.8",
+  "proxyEnable": 0,
+  "explicitProxy": "127.0.0.1:10808",
+  "regionChange": "User confirmed United States association is active; availability is proved only by real CLI receipts",
+  "hydrogen": {
+    "status": "SUCCESS",
+    "requestedModel": "gemini-4-hydrogen-high",
+    "actualModel": "gemini-4-hydrogen-high",
+    "permissionMode": "request-review",
+    "sandbox": true,
+    "directSmoke": {
+      "response": "HYDROGEN_ANTIGRAVITY_OK",
+      "conversationId": "9dce6c0c-f9bc-4f3a-acdf-4ef67f642015",
+      "totalTokens": 17246,
+      "numTurns": 1
+    },
+    "wrapperText": {
+      "response": "HYDROGEN_WRAPPER_OK",
+      "totalTokens": 17213,
+      "toolsUsed": []
+    },
+    "wrapperVision": {
+      "response": "WORD=HYDROGEN; CIRCLE=黄色; BACKGROUND=深蓝色",
+      "totalTokens": 22084,
+      "toolsUsed": ["read_file"],
+      "imageSha256": "6d6e9ae56963267d6f2a0f9c907f3dd238c5bc38a36397fdbbd5503aff518d77",
+      "actualThinkingLevel": null
+    },
+    "currentEntry": "scripts/gemini-hydrogen.py uses Antigravity Pro, not AI Studio API Key"
+  },
+  "opus": {
+    "status": "SUCCESS",
+    "requestedModel": "claude-opus-5-5-high",
+    "actualModel": "claude-opus-5-5-high",
+    "permissionMode": "request-review",
+    "sandbox": true,
+    "directSmoke": {
+      "response": "OPUS_ANTIGRAVITY_OK",
+      "conversationId": "44616427-6a26-4461-80a7-cb40b1c93545",
+      "totalTokens": 17962,
+      "numTurns": 1
+    },
+    "restoredRoles": ["复杂代码审计", "竞品证据复核", "周复盘经营分析", "分镜与经济交叉复核"],
+    "weeklyReview": {
+      "runId": "weekly-2026-11-13T19-44-55-598Z",
+      "modelRoute": {"schemaVersion": 1, "position": 2, "seat": "Opus", "requestedModel": "claude-opus-5-5-high"},
+      "conversationId": "c383f4c4-6280-4cea-a2c0-fde8e449ba5c",
+      "totalTokens": 89575,
+      "toolsUsed": [],
+      "lastTaskResult": 0,
+      "reportStatus": "COMPLETED_WITH_DECLARED_GAPS",
+      "reportSha256": "921ccad0c2ffd697a95355f200bc6fa63e268c549b34de87884d4c734ecbb15a",
+      "nextScheduledRun": "2026-11-16 14:41 local",
+      "allOtherSeats": "Astra, Argon and Kimi SUCCESS",
+      "note": "经营数据过期和竞品失败仍如实标为缺口，不是当前经营健康证明"
+    }
+  },
+  "carbon": {
+    "defaultReplacement": false,
+    "independentFallbackRetained": true,
+    "historicalEvidenceRenamed": false,
+    "historicalResumeWorks": true
+  },
+  "tests": {
+    "projectFiles": 84,
+    "projectTests": 809,
+    "weeklyReviewCoreTests": 19,
+    "antigravityConfigTests": 5,
+    "build": "PASS",
+    "lintErrors": 0,
+    "lintWarningsExisting": 215
+  },
+  "productionChanges": false,
+  "ozonProductsPricesStocksChanged": false,
+  "directChanged": false,
+  "promoAutoDecision": false,
+  "gitCommitOrPushPerformed": false,
+  "evidence": [
+    "temp/ops-exec/antigravity-region-us-20261114/hydrogen-smoke.jsonl",
+    "temp/ops-exec/antigravity-region-us-20261114/opus-smoke.jsonl",
+    "temp/ops-exec/antigravity-region-us-20261114/wrapper-text-result.json",
+    "temp/ops-exec/antigravity-region-us-20261114/wrapper-vision-result.json",
+    "data/weekly-reviews/runs/weekly-2026-11-13T19-44-55-598Z/model-route.json",
+    "data/weekly-reviews/runs/weekly-2026-11-13T19-44-55-598Z/opus.json",
+    "data/weekly-reviews/runs/weekly-2026-11-13T19-44-55-598Z/report.json"
+  ]
+}

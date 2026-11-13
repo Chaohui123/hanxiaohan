@@ -1,0 +1,1 @@
+只输出 HYDROGEN_WRAPPER_OK，不要调用工具，不要解释。

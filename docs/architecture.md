@@ -100,10 +100,10 @@ api-services ───── PostgreSQL + pgvector
 |---|---|
 | Kimi 主 Agent | 浏览器/生产 API、SOP 执行、知识维护、终审与生产回读 |
 | Astra | 高价值经济测算和重大决策攻坚 |
-| Gemini 4 Hydrogen | 日常代码、桌面任务分析、文案辅助与视觉理解；经 `scripts/gemini-hydrogen.py` 留痕 |
+| Antigravity Gemini 4 Hydrogen High | 日常代码、桌面任务分析、文案辅助与视觉理解；经 `scripts/gemini-hydrogen.py` 留痕，视觉输入必须有 `read_file` 或 `view_file` 回执 |
 | Luna | 批量文案精修 |
 | Gemini Argon / Omni / Nano | Argon 负责高风险多模态交叉复核，Omni/Nano 负责图像、视频生成；Yandex SpeechKit v3 `marina+friendly` 是当前默认配音通道 |
-| Gemini 4 Carbon | 接替 Opus 的复杂代码审计、竞品证据、经营分析、分镜与经济交叉复核；经 `scripts/gemini-carbon-review.py` 留痕；Opus 当前因地区限制停用 |
+| Antigravity Opus 5.5 High | 复杂代码审计、竞品证据、经营分析、分镜与经济交叉复核；经 `scripts/antigravity-run.mjs` 留痕，2026-11-14 经真实回执恢复；Carbon 仅作独立备选 |
 
 除 Kimi 主 Agent 外，模型与子代理不得直接写 Ozon 商品、价格或库存。任何模型输出都要由 Kimi 核验证据、合规、成本与质量。
 

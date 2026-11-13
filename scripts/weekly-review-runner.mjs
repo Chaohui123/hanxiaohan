@@ -145,6 +145,38 @@ export async function carbonAdapter(promptPath, directory, execute = runProcess)
   };
 }
 
+export async function opusAdapter(promptPath, directory, execute = runProcess) {
+  const output = path.join(directory, "opus.json");
+  let result;
+  try {
+    result = await execute("node", ["scripts/antigravity-run.mjs", "--prompt-file", promptPath, "--output", output, "--model", "claude-opus-5-5-high", "--effort", "high", "--sandbox"], { timeoutMs: 15 * 60_000, allowNonzero: true });
+  } catch (error) {
+    throw Object.assign(new Error(`Opus execution failed: ${error.message}`), { code: "OPUS_EXECUTION_FAILED" });
+  }
+  let evidence;
+  try {
+    evidence = await readJson(output);
+  } catch (error) {
+    const missing = error.code === "ENOENT";
+    throw Object.assign(new Error(missing ? "Opus raw output was not saved" : `Opus evidence is invalid: ${error.message}`), { code: missing ? "OPUS_RAW_OUTPUT_MISSING" : "OPUS_EVIDENCE_INVALID" });
+  }
+  if (result.code !== 0 || evidence?.validationError) {
+    throw Object.assign(new Error(evidence?.validationError || `Opus process exited ${result.code}`), { code: "OPUS_EXECUTION_FAILED" });
+  }
+  const response = evidence.result || {};
+  if (typeof response.response !== "string" || !response.response.trim()) {
+    throw Object.assign(new Error("Opus returned no review text"), { code: "OPUS_EMPTY_OUTPUT" });
+  }
+  return {
+    seat: "Opus", requestedModel: evidence.model, actualModel: evidence.actualModel,
+    actualEffort: evidence.effort, requestedEffort: evidence.effort,
+    permissionMode: evidence.init?.permission_mode,
+    conversationId: response.conversation_id,
+    status: "SUCCESS", review: response.response.trim(), usage: response.usage, output,
+    toolsUsed: evidence.toolsUsed || [], productionChanges: false,
+  };
+}
+
 async function argonAdapter(promptPath, directory) {
   const output = path.join(directory, "argon.json");
   const result = await runProcess("python", ["scripts/weekly-argon.py", "--prompt-file", promptPath, "--output", output], { timeoutMs: 10 * 60_000, allowNonzero: true });
@@ -245,10 +277,10 @@ async function loadResumedContext(directory) {
   let carbonRoute = false;
   try {
     const route = await readJson(path.join(directory, "model-route.json"));
-    if (route?.schemaVersion !== 1 || route?.position !== 2 || route?.seat !== "Carbon" || route?.requestedModel !== "gemini-4-carbon") {
-      throw new Error("Unsupported weekly review model route");
-    }
-    carbonRoute = true;
+    if (route?.schemaVersion !== 1 || route?.position !== 2) throw new Error("Unsupported weekly review model route");
+    if (route.seat === "Carbon" && route.requestedModel === "gemini-4-carbon") carbonRoute = true;
+    else if (route.seat === "Opus" && route.requestedModel === "claude-opus-5-5-high") carbonRoute = false;
+    else throw new Error("Unsupported weekly review model route");
   } catch (error) {
     if (error.code === "ENOENT") carbonRoute = false;
     else throw Object.assign(new Error(`Resume model route is invalid: ${error.message}`), { code: "RESUME_EVIDENCE_INCOMPLETE" });
@@ -372,7 +404,7 @@ export async function runWeeklyReview(options = {}) {
   try {
     if (!options.resume) {
       await store.writeJsonArtifact("model-route.json", {
-        schemaVersion: 1, position: 2, seat: "Carbon", requestedModel: "gemini-4-carbon",
+        schemaVersion: 1, position: 2, seat: "Opus", requestedModel: "claude-opus-5-5-high",
       });
     }
     const resumed = options.resume ? await loadResumedContext(store.directory) : null;
@@ -396,13 +428,13 @@ export async function runWeeklyReview(options = {}) {
     if (resumed) {
       models = resumed.models;
     } else {
-      const adapters = options.adapters || { astra: astraAdapter, carbon: carbonAdapter, argon: argonAdapter };
+      const adapters = options.adapters || { astra: astraAdapter, opus: opusAdapter, argon: argonAdapter };
       const settled = await Promise.allSettled([
         adapters.astra(prompt, store.directory),
-        adapters.carbon(promptPath, store.directory),
+        adapters.opus(promptPath, store.directory),
         adapters.argon(promptPath, store.directory),
       ]);
-      const seats = ["Astra", "Carbon", "Gemini"];
+      const seats = ["Astra", "Opus", "Gemini"];
       models = settled.map((item, index) => item.status === "fulfilled" ? item.value : { seat: seats[index], ...modelFailure(item.reason), productionChanges: false });
       for (const model of models) {
         if (model.output) model.outputSha256 = await sha256File(model.output);

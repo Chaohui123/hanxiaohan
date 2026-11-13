@@ -1,0 +1,506 @@
+{
+  "schemaVersion": 1,
+  "collectedAt": "2026-11-09T03:28:10.765Z",
+  "operationsPeriod": {
+    "days": 7,
+    "dateFrom": "2026-11-03",
+    "dateTo": "2026-11-09"
+  },
+  "operationsTotals": {
+    "views": 1306,
+    "carts": 15,
+    "orderedUnits": 0,
+    "cancellations": 0,
+    "deliveredUnits": 0,
+    "orderedRevenueRub": 0,
+    "cartRatePct": 1.15,
+    "orderRatePct": 0,
+    "stock": 565
+  },
+  "sourceStatus": {
+    "analytics": "ok",
+    "products": "ok",
+    "price": "ok",
+    "stock": "ok",
+    "cost": "ok"
+  },
+  "items": [
+    {
+      "offerId": "MAR-YAM-61N-01",
+      "sku": 5328928186,
+      "name": "Ремкомплект карбюратора 25-30 л.с. (2Т), аналог 61N-W0093-00",
+      "views": 35,
+      "carts": 0,
+      "orderedUnits": 0,
+      "cancellations": 0,
+      "deliveredUnits": 0,
+      "orderedRevenueRub": 0,
+      "cartRatePct": 0,
+      "orderRatePct": 0,
+      "currentPriceRub": 944.02,
+      "minPriceRub": 944.02,
+      "stock": 25,
+      "costCny": 32,
+      "group": "ORDER_VALIDATION"
+    },
+    {
+      "offerId": "MAR-YAM-61N-CABLE-01",
+      "sku": 5902773711,
+      "name": "Трос газа для лодочного мотора 25-30 л.с. (2Т), аналог 61N-26311-00",
+      "views": 24,
+      "carts": 0,
+      "orderedUnits": 0,
+      "cancellations": 0,
+      "deliveredUnits": 0,
+      "orderedRevenueRub": 0,
+      "cartRatePct": 0,
+      "orderRatePct": 0,
+      "currentPriceRub": 1103.15,
+      "minPriceRub": 691.71,
+      "stock": 25,
+      "costCny": 15,
+      "group": "ORDER_VALIDATION"
+    },
+    {
+      "offerId": "CN-AUTO-GRILLE-COVER-01",
+      "sku": 5903494562,
+      "name": "Утеплитель радиатора 100х70 см, зимний чехол для решётки автомобиля",
+      "views": 590,
+      "carts": 12,
+      "orderedUnits": 0,
+      "cancellations": 0,
+      "deliveredUnits": 0,
+      "orderedRevenueRub": 0,
+      "cartRatePct": 2.03,
+      "orderRatePct": 0,
+      "currentPriceRub": 760.12,
+      "minPriceRub": 760.12,
+      "stock": 25,
+      "costCny": 10.9,
+      "group": "WINTER_PRIORITY"
+    },
+    {
+      "offerId": "GEN-BELT-35X1126-01",
+      "sku": 5900647591,
+      "name": "Ремень вариатора 35x1126 для снегохода Тайга 550 и Viking 540",
+      "views": 70,
+      "carts": 0,
+      "orderedUnits": 0,
+      "cancellations": 0,
+      "deliveredUnits": 0,
+      "orderedRevenueRub": 0,
+      "cartRatePct": 0,
+      "orderRatePct": 0,
+      "currentPriceRub": 3492.38,
+      "minPriceRub": 3175.34,
+      "stock": 50,
+      "costCny": 120,
+      "group": "WINTER_PRIORITY"
+    },
+    {
+      "offerId": "MOT-MIK-VM34-KIT-01",
+      "sku": 5931782921,
+      "name": "Ремкомплект карбюратора VM30/32/34 снегохода Буран, Тайга",
+      "views": 71,
+      "carts": 0,
+      "orderedUnits": 0,
+      "cancellations": 0,
+      "deliveredUnits": 0,
+      "orderedRevenueRub": 0,
+      "cartRatePct": 0,
+      "orderRatePct": 0,
+      "currentPriceRub": 768.46,
+      "minPriceRub": 546.8,
+      "stock": 25,
+      "costCny": 16,
+      "group": "WINTER_PRIORITY"
+    },
+    {
+      "offerId": "CN-AUTO-GLP-12V-01",
+      "sku": 6124969752,
+      "name": "Свеча накала 12 В Si3N4, 88 98 Вт; подходит для автономных отопителей 2000/3000/5000 Вт",
+      "views": 12,
+      "carts": 0,
+      "orderedUnits": 0,
+      "cancellations": 0,
+      "deliveredUnits": 0,
+      "orderedRevenueRub": 0,
+      "cartRatePct": 0,
+      "orderRatePct": 0,
+      "currentPriceRub": 1660.49,
+      "minPriceRub": 946.35,
+      "stock": 25,
+      "costCny": 38,
+      "group": "COLD_START"
+    },
+    {
+      "offerId": "CN-AUTO-GLP-24V-01",
+      "sku": 6124969230,
+      "name": "Свеча накала 24 В Si3N4, 63 72 Вт, 4.2 мм; подходит для Webasto Air Top 2000 24V",
+      "views": 19,
+      "carts": 0,
+      "orderedUnits": 0,
+      "cancellations": 0,
+      "deliveredUnits": 0,
+      "orderedRevenueRub": 0,
+      "cartRatePct": 0,
+      "orderRatePct": 0,
+      "currentPriceRub": 1667.36,
+      "minPriceRub": 1141.9,
+      "stock": 25,
+      "costCny": 48,
+      "group": "COLD_START"
+    },
+    {
+      "offerId": "CN-CHERY-T7P-TPMS2-01",
+      "sku": 6280868369,
+      "name": "Комплект датчиков давления TPMS, 2 шт., OE 802000121AA, 433 МГц",
+      "views": 0,
+      "carts": 0,
+      "orderedUnits": 0,
+      "cancellations": 0,
+      "deliveredUnits": 0,
+      "orderedRevenueRub": 0,
+      "cartRatePct": 0,
+      "orderRatePct": 0,
+      "currentPriceRub": 1777.7,
+      "minPriceRub": 1777.7,
+      "stock": 5,
+      "costCny": 48,
+      "group": "COLD_START"
+    },
+    {
+      "offerId": "CN-HAV-JOLION-TPMS4-01",
+      "sku": 6270905707,
+      "name": "Комплект датчиков давления TPMS, 4 шт., OE 3641100AKR02A, 433 МГц",
+      "views": 2,
+      "carts": 0,
+      "orderedUnits": 0,
+      "cancellations": 0,
+      "deliveredUnits": 0,
+      "orderedRevenueRub": 0,
+      "cartRatePct": 0,
+      "orderRatePct": 0,
+      "currentPriceRub": 2684.94,
+      "minPriceRub": 2684.94,
+      "stock": 5,
+      "costCny": 92,
+      "group": "COLD_START"
+    },
+    {
+      "offerId": "GEN-CARB-188F-02",
+      "sku": 5896742019,
+      "name": "Карбюратор двухтопливный газ-бензин для генератора 5-8 кВт 188F 190F",
+      "views": 22,
+      "carts": 0,
+      "orderedUnits": 0,
+      "cancellations": 0,
+      "deliveredUnits": 0,
+      "orderedRevenueRub": 0,
+      "cartRatePct": 0,
+      "orderRatePct": 0,
+      "currentPriceRub": 1995.56,
+      "minPriceRub": 1178.68,
+      "stock": 50,
+      "costCny": 40,
+      "group": "COLD_START"
+    },
+    {
+      "offerId": "MAR-PUMP-61N-01",
+      "sku": 5716836659,
+      "name": "Ремкомплект помпы с корпусом 25-30 л.с. 2Т / F20 F25 4Т, аналог 61N-W0078-11",
+      "views": 25,
+      "carts": 0,
+      "orderedUnits": 0,
+      "cancellations": 0,
+      "deliveredUnits": 0,
+      "orderedRevenueRub": 0,
+      "cartRatePct": 0,
+      "orderRatePct": 0,
+      "currentPriceRub": 2588.45,
+      "minPriceRub": 1022.24,
+      "stock": 50,
+      "costCny": 32,
+      "group": "COLD_START"
+    },
+    {
+      "offerId": "MAR-YAM-66T-CABLE-01",
+      "sku": 5903371524,
+      "name": "Трос газа для лодочного мотора 40 л.с. (2Т), аналог 66T-26311",
+      "views": 12,
+      "carts": 0,
+      "orderedUnits": 0,
+      "cancellations": 0,
+      "deliveredUnits": 0,
+      "orderedRevenueRub": 0,
+      "cartRatePct": 0,
+      "orderRatePct": 0,
+      "currentPriceRub": 1496.82,
+      "minPriceRub": 691.71,
+      "stock": 25,
+      "costCny": 15,
+      "group": "COLD_START"
+    },
+    {
+      "offerId": "MAR-YAM-6E7-01",
+      "sku": 5302493207,
+      "name": "Втулка ступицы гребного винта 9.9-20 л.с. 2Т, аналог 6E7-45987-01, 6E7-45987-00",
+      "views": 10,
+      "carts": 0,
+      "orderedUnits": 0,
+      "cancellations": 0,
+      "deliveredUnits": 0,
+      "orderedRevenueRub": 0,
+      "cartRatePct": 0,
+      "orderRatePct": 0,
+      "currentPriceRub": 1551.01,
+      "minPriceRub": 847.29,
+      "stock": 25,
+      "costCny": 28,
+      "group": "COLD_START"
+    },
+    {
+      "offerId": "MAR-YAM-F20-CARB-01",
+      "sku": 5666079754,
+      "name": "Ремкомплект карбюратора 20-25 л.с. (4Т), аналог 65W-W0093-00, 6BL-W0093-00",
+      "views": 15,
+      "carts": 0,
+      "orderedUnits": 0,
+      "cancellations": 0,
+      "deliveredUnits": 0,
+      "orderedRevenueRub": 0,
+      "cartRatePct": 0,
+      "orderRatePct": 0,
+      "currentPriceRub": 1941.37,
+      "minPriceRub": 670.62,
+      "stock": 55,
+      "costCny": 25,
+      "group": "COLD_START"
+    },
+    {
+      "offerId": "ZERK-T8P-L",
+      "sku": 6088035125,
+      "name": "Элемент зеркальный левый с подогревом для Chery Tiggo 8 Pro / 7 Pro / 4 Pro 2020-2025",
+      "views": 7,
+      "carts": 0,
+      "orderedUnits": 0,
+      "cancellations": 0,
+      "deliveredUnits": 0,
+      "orderedRevenueRub": 0,
+      "cartRatePct": 0,
+      "orderRatePct": 0,
+      "currentPriceRub": 2255.35,
+      "minPriceRub": 788.69,
+      "stock": 25,
+      "costCny": 25,
+      "group": "COLD_START"
+    },
+    {
+      "offerId": "ZERK-T8P-R",
+      "sku": 6089945168,
+      "name": "Элемент зеркальный правый с подогревом для Chery Tiggo 8 Pro / 7 Pro / 4 Pro 2020-2025",
+      "views": 10,
+      "carts": 0,
+      "orderedUnits": 0,
+      "cancellations": 0,
+      "deliveredUnits": 0,
+      "orderedRevenueRub": 0,
+      "cartRatePct": 0,
+      "orderRatePct": 0,
+      "currentPriceRub": 2255.35,
+      "minPriceRub": 788.69,
+      "stock": 25,
+      "costCny": 25,
+      "group": "COLD_START"
+    },
+    {
+      "offerId": "GEN-BELT-33X14-01",
+      "sku": 5900476661,
+      "name": "Ремень вариатора 33x14-1120 для снегохода Буран, Рысь и мотобуксировщика",
+      "views": 57,
+      "carts": 1,
+      "orderedUnits": 0,
+      "cancellations": 0,
+      "deliveredUnits": 0,
+      "orderedRevenueRub": 0,
+      "cartRatePct": 1.75,
+      "orderRatePct": 0,
+      "currentPriceRub": 1968.47,
+      "minPriceRub": 1121.18,
+      "stock": 50,
+      "costCny": 42,
+      "group": "WATCH"
+    },
+    {
+      "offerId": "MOT-168F-CLUTCH-01",
+      "sku": 5932304766,
+      "name": "Диски сцепления мотобуксировщика 168F 170F, центробежное",
+      "views": 165,
+      "carts": 1,
+      "orderedUnits": 0,
+      "cancellations": 0,
+      "deliveredUnits": 0,
+      "orderedRevenueRub": 0,
+      "cartRatePct": 0.61,
+      "orderRatePct": 0,
+      "currentPriceRub": 880.64,
+      "minPriceRub": 617.05,
+      "stock": 25,
+      "costCny": 16,
+      "group": "WATCH"
+    },
+    {
+      "offerId": "MOT-CARB-PZ30-01",
+      "sku": 5845866689,
+      "name": "Карбюратор PZ30 с ускорительным насосом для мотоцикла 200-250сс и мотобуксировщика",
+      "views": 160,
+      "carts": 1,
+      "orderedUnits": 0,
+      "cancellations": 0,
+      "deliveredUnits": 0,
+      "orderedRevenueRub": 0,
+      "cartRatePct": 0.63,
+      "orderRatePct": 0,
+      "currentPriceRub": 1630.58,
+      "minPriceRub": 984.23,
+      "stock": 25,
+      "costCny": 35,
+      "group": "WATCH"
+    }
+  ],
+  "revenueDefinition": "orderedRevenueRub is order-based revenue, not settled receipts or net profit",
+  "localOrders": {
+    "period": {
+      "from": "2026-11-02",
+      "to": "2026-11-08"
+    },
+    "orders": 0,
+    "revenue": 0,
+    "byDay": [],
+    "top5": [],
+    "bottom5": [],
+    "note": "Local non-cancelled orders; this period differs from the operations board by one day"
+  },
+  "ozonAds": {
+    "period": {
+      "from": "2026-11-03",
+      "to": "2026-11-09"
+    },
+    "data": {
+      "spendRub": 0,
+      "shows": 0,
+      "clicks": 0,
+      "adOrders": 0,
+      "adRevenueRub": 0
+    },
+    "unavailableMeansNotZero": true
+  },
+  "competitorCoverage": {
+    "activeOffers": 19,
+    "coveredOffers": 19,
+    "totalLinks": 60,
+    "missingOfferIds": [],
+    "items": [
+      {
+        "offerId": "MAR-YAM-61N-01",
+        "linkCount": 4,
+        "lastCapturedAt": "2026-11-09T03:20:28.711Z"
+      },
+      {
+        "offerId": "MAR-YAM-61N-CABLE-01",
+        "linkCount": 3,
+        "lastCapturedAt": "2026-11-02T03:19:58.868Z"
+      },
+      {
+        "offerId": "CN-AUTO-GRILLE-COVER-01",
+        "linkCount": 3,
+        "lastCapturedAt": "2026-11-09T03:18:05.826Z"
+      },
+      {
+        "offerId": "GEN-BELT-35X1126-01",
+        "linkCount": 3,
+        "lastCapturedAt": "2026-11-09T03:19:23.968Z"
+      },
+      {
+        "offerId": "MOT-MIK-VM34-KIT-01",
+        "linkCount": 3,
+        "lastCapturedAt": "2026-11-09T03:22:30.079Z"
+      },
+      {
+        "offerId": "CN-AUTO-GLP-12V-01",
+        "linkCount": 3,
+        "lastCapturedAt": "2026-11-09T03:17:32.530Z"
+      },
+      {
+        "offerId": "CN-AUTO-GLP-24V-01",
+        "linkCount": 3,
+        "lastCapturedAt": "2026-11-09T03:17:49.034Z"
+      },
+      {
+        "offerId": "CN-CHERY-T7P-TPMS2-01",
+        "linkCount": 2,
+        "lastCapturedAt": null
+      },
+      {
+        "offerId": "CN-HAV-JOLION-TPMS4-01",
+        "linkCount": 2,
+        "lastCapturedAt": "2026-11-09T03:18:55.344Z"
+      },
+      {
+        "offerId": "GEN-CARB-188F-02",
+        "linkCount": 3,
+        "lastCapturedAt": "2026-11-09T03:19:42.613Z"
+      },
+      {
+        "offerId": "MAR-PUMP-61N-01",
+        "linkCount": 3,
+        "lastCapturedAt": "2026-11-09T03:20:04.816Z"
+      },
+      {
+        "offerId": "MAR-YAM-66T-CABLE-01",
+        "linkCount": 2,
+        "lastCapturedAt": "2026-11-02T03:20:10.189Z"
+      },
+      {
+        "offerId": "MAR-YAM-6E7-01",
+        "linkCount": 7,
+        "lastCapturedAt": "2026-11-09T03:21:37.622Z"
+      },
+      {
+        "offerId": "MAR-YAM-F20-CARB-01",
+        "linkCount": 3,
+        "lastCapturedAt": "2026-11-09T03:21:50.269Z"
+      },
+      {
+        "offerId": "ZERK-T8P-L",
+        "linkCount": 3,
+        "lastCapturedAt": "2026-11-09T03:22:53.641Z"
+      },
+      {
+        "offerId": "ZERK-T8P-R",
+        "linkCount": 3,
+        "lastCapturedAt": "2026-11-09T03:23:05.088Z"
+      },
+      {
+        "offerId": "GEN-BELT-33X14-01",
+        "linkCount": 3,
+        "lastCapturedAt": "2026-11-09T03:19:13.920Z"
+      },
+      {
+        "offerId": "MOT-168F-CLUTCH-01",
+        "linkCount": 2,
+        "lastCapturedAt": "2026-11-02T03:21:18.732Z"
+      },
+      {
+        "offerId": "MOT-CARB-PZ30-01",
+        "linkCount": 2,
+        "lastCapturedAt": "2026-11-09T03:22:17.909Z"
+      }
+    ]
+  },
+  "recentPricingAudit": {
+    "count": 10,
+    "nonzeroOldPrices": 0,
+    "note": "Audit records alone do not prove an Ozon price change; zero-old-price records are not valid before/after evidence"
+  }
+}

@@ -1,0 +1,28 @@
+{
+  "source": "Google Antigravity CLI",
+  "requestedModel": "gemini-4-hydrogen-high",
+  "actualModel": "gemini-4-hydrogen-high",
+  "requestedThinkingLevel": "HIGH",
+  "actualThinkingLevel": null,
+  "createdAt": "2026-11-13T19:40:02.048919+00:00",
+  "promptFile": "D:\\Onzo\\temp\\ops-exec\\antigravity-region-us-20261114\\wrapper-text-prompt.txt",
+  "antigravityPromptFile": "D:\\Onzo\\temp\\ops-exec\\antigravity-region-us-20261114\\wrapper-text-result.prompt.txt",
+  "promptSha256": "7a972c5f5efdee8138e286d4f583b577fe1655de1f3e07a8c40f127b7cefe1fe",
+  "productionChanges": false,
+  "sandbox": true,
+  "permissionMode": "request-review",
+  "status": "SUCCESS",
+  "rawContent": "HYDROGEN_WRAPPER_OK\n",
+  "usage": {
+    "input_tokens": 17149,
+    "output_tokens": 64,
+    "thinking_tokens": 53,
+    "cache_read_tokens": 0,
+    "total_tokens": 17213
+  },
+  "finishReason": "STOP",
+  "toolsUsed": [],
+  "images": [],
+  "conversationId": "c29f297b-3c1c-46ad-97da-faf7d8a625ab",
+  "stderr": null
+}

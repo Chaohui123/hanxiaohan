@@ -612,3 +612,12 @@ node scripts/yandex-wordstat.mjs --phrase "ремень вариатора сн�
 2. 公网 `/api/yandex-cloud/wordstat/top` 返回真实关键词；Marina 生产音频为 5.67 秒、22050Hz/mono/16-bit，已下载通过完整解码，SHA-256 与 `production-validation-result.json` 一致。
 3. `/translate`、`/stt`、`/ocr` 均真实返回200；缺少敏感信息确认的 OCR 在上游调用前返回400。直连 Yandex IAM 曾超时，Compose 代理固化后已恢复，不能把首次网络失败写成业务通过。
 4. `PROMO_AUTO_DECISION=false` 保持不变，Ozon 商品价格库存与 Direct 未因此改变。后续密钥轮换沿用 `/api/yandex-cloud/credential`，新凭据必须再次执行真实 Wordstat 与 Marina 验收，不能仅替换文件就宣称可用。
+
+
+### 11.6 Antigravity Opus 恢复与 Hydrogen Pro 切换（2026-11-14）
+
+- 改区生效后，必须先以真实 `agy --input-format stream-json --output-format stream-json --effort high --sandbox --model <模型>` 回执验证，不能只看 `agy models` 或账号地区页。当前 Hydrogen 与 Opus 均返回实际模型一致、`permission_mode=request-review`、`SUCCESS` 和有效 usage。
+- Hydrogen 统一入口仍为 `python scripts/gemini-hydrogen.py --prompt-file <文件> --output <JSON> [--image <图片> ...]`，但后端已改为 **Antigravity Pro** 的 `gemini-4-hydrogen-high`，不再读取 AI Studio API Key。保存原提示词、图片SHA-256、实际模型、正文、usage、权限和工具调用。官方 headless stream-json 只接受文本块，视觉输入通过只读 `read_file` 或 `view_file` 完成；没有实际读取证据不得把文本推断当成视觉理解。
+- Opus 统一入口恢复 `node scripts/antigravity-run.mjs --prompt-file <文件> --output <JSON> --model claude-opus-5-5-high --effort high --sandbox`。执行器只允许 Opus/Hydrogen High，拒绝其他模型、effort 和 `--dangerously-skip-permissions`，并新增正文与有效用量校验。
+- 周复盘第二席恢复 `opusAdapter` 与 `opus.json`，新运行 `model-route.json` 为 `seat=Opus`。恢复目录兼容两种标记：历史 `seat=Carbon` 继续读取 `carbon.json`，新 Opus 路由读取 `opus.json`，互不改名。Astra/Opus/Argon 成功后由 Kimi 整合最多3项行动，报告中的过期数据和模型失败仍明确标缺口。
+- 正式任务 `weekly-2026-11-13T19-44-55-598Z` 已实跑：`LastTaskResult=0`，Astra/Opus/Argon/Kimi全部SUCCESS，Opus实际用量89,575 tokens，下一次仍11-16 14:41，没有重复任务。综合证据 `temp/ops-exec/antigravity-region-us-20261114/routing-validation.json`。旧地区失败和 Carbon 接替记录只作历史，不能覆盖本次恢复结论。全项目84文件809项测试、周复盘专项19项、配置5项及build通过，Lint 0 errors/215既有warnings；未改Ozon商品、价格、库存、Direct或评价，`PROMO_AUTO_DECISION=false`不变。

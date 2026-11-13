@@ -1,0 +1,410 @@
+{
+  "schemaVersion": 1,
+  "source": "ONZO Ads Manager / Yandex Direct JSON v5 Reports",
+  "readOnly": true,
+  "settingsChanges": false,
+  "collectedAt": "2026-11-12T03:20:06.406Z",
+  "startedAt": "2026-11-12T03:20:03.748Z",
+  "runId": "2026-11-12T03-20-03-748Z",
+  "campaignId": "715426752",
+  "campaignIds": [
+    "715426752",
+    "716088179"
+  ],
+  "primaryCampaignId": "715426752",
+  "legacySummaryScope": "currentDay、last7Days、previous7Days、rolling30Days仅对应primaryCampaignId；所有campaign分别看byCampaign",
+  "period": {
+    "from": "2026-10-14",
+    "to": "2026-11-12"
+  },
+  "currentDayPartial": true,
+  "currentDayNote": "The current UTC day is partial and reported separately; complete-week comparisons end yesterday",
+  "comparisonWindowsExcludeCurrentDay": true,
+  "currentDay": {
+    "from": "2026-11-12",
+    "to": "2026-11-12",
+    "daysWithActivity": 0,
+    "campaignIds": [],
+    "impressions": 0,
+    "clicks": 0,
+    "ctrPercent": null,
+    "costUsd": 0,
+    "avgCpcUsd": null,
+    "conversions": 0,
+    "actualCpaUsd": null,
+    "actualCpaNote": "No conversions, so actual CPA is undefined; report dashes or zeros are not free acquisition"
+  },
+  "last7Days": {
+    "from": "2026-11-05",
+    "to": "2026-11-11",
+    "daysWithActivity": 7,
+    "campaignIds": [
+      "715426752"
+    ],
+    "impressions": 3840,
+    "clicks": 195,
+    "ctrPercent": 5.08,
+    "costUsd": 5.67,
+    "avgCpcUsd": 0.03,
+    "conversions": 0,
+    "actualCpaUsd": null,
+    "actualCpaNote": "No conversions, so actual CPA is undefined; report dashes or zeros are not free acquisition"
+  },
+  "previous7Days": {
+    "from": "2026-10-29",
+    "to": "2026-11-04",
+    "daysWithActivity": 6,
+    "campaignIds": [
+      "715426752"
+    ],
+    "impressions": 4610,
+    "clicks": 225,
+    "ctrPercent": 4.88,
+    "costUsd": 12.59,
+    "avgCpcUsd": 0.06,
+    "conversions": 0,
+    "actualCpaUsd": null,
+    "actualCpaNote": "No conversions, so actual CPA is undefined; report dashes or zeros are not free acquisition"
+  },
+  "rolling30Days": {
+    "from": "2026-10-14",
+    "to": "2026-11-12",
+    "daysWithActivity": 13,
+    "campaignIds": [
+      "715426752"
+    ],
+    "impressions": 8450,
+    "clicks": 420,
+    "ctrPercent": 4.97,
+    "costUsd": 18.26,
+    "avgCpcUsd": 0.04,
+    "conversions": 0,
+    "actualCpaUsd": null,
+    "actualCpaNote": "No conversions, so actual CPA is undefined; report dashes or zeros are not free acquisition"
+  },
+  "byCampaign": [
+    {
+      "campaignId": "715426752",
+      "hasReportRows": true,
+      "reportRowCount": 13,
+      "currentDay": {
+        "from": "2026-11-12",
+        "to": "2026-11-12",
+        "daysWithActivity": 0,
+        "campaignIds": [],
+        "impressions": 0,
+        "clicks": 0,
+        "ctrPercent": null,
+        "costUsd": 0,
+        "avgCpcUsd": null,
+        "conversions": 0,
+        "actualCpaUsd": null,
+        "actualCpaNote": "No conversions, so actual CPA is undefined; report dashes or zeros are not free acquisition"
+      },
+      "last7Days": {
+        "from": "2026-11-05",
+        "to": "2026-11-11",
+        "daysWithActivity": 7,
+        "campaignIds": [
+          "715426752"
+        ],
+        "impressions": 3840,
+        "clicks": 195,
+        "ctrPercent": 5.08,
+        "costUsd": 5.67,
+        "avgCpcUsd": 0.03,
+        "conversions": 0,
+        "actualCpaUsd": null,
+        "actualCpaNote": "No conversions, so actual CPA is undefined; report dashes or zeros are not free acquisition"
+      },
+      "previous7Days": {
+        "from": "2026-10-29",
+        "to": "2026-11-04",
+        "daysWithActivity": 6,
+        "campaignIds": [
+          "715426752"
+        ],
+        "impressions": 4610,
+        "clicks": 225,
+        "ctrPercent": 4.88,
+        "costUsd": 12.59,
+        "avgCpcUsd": 0.06,
+        "conversions": 0,
+        "actualCpaUsd": null,
+        "actualCpaNote": "No conversions, so actual CPA is undefined; report dashes or zeros are not free acquisition"
+      },
+      "rolling30Days": {
+        "from": "2026-10-14",
+        "to": "2026-11-12",
+        "daysWithActivity": 13,
+        "campaignIds": [
+          "715426752"
+        ],
+        "impressions": 8450,
+        "clicks": 420,
+        "ctrPercent": 4.97,
+        "costUsd": 18.26,
+        "avgCpcUsd": 0.04,
+        "conversions": 0,
+        "actualCpaUsd": null,
+        "actualCpaNote": "No conversions, so actual CPA is undefined; report dashes or zeros are not free acquisition"
+      }
+    },
+    {
+      "campaignId": "716088179",
+      "hasReportRows": true,
+      "reportRowCount": 2,
+      "currentDay": {
+        "from": "2026-11-12",
+        "to": "2026-11-12",
+        "daysWithActivity": 1,
+        "campaignIds": [
+          "716088179"
+        ],
+        "impressions": 344,
+        "clicks": 5,
+        "ctrPercent": 1.45,
+        "costUsd": 0.12,
+        "avgCpcUsd": 0.02,
+        "conversions": 0,
+        "actualCpaUsd": null,
+        "actualCpaNote": "No conversions, so actual CPA is undefined; report dashes or zeros are not free acquisition"
+      },
+      "last7Days": {
+        "from": "2026-11-05",
+        "to": "2026-11-11",
+        "daysWithActivity": 1,
+        "campaignIds": [
+          "716088179"
+        ],
+        "impressions": 1017,
+        "clicks": 21,
+        "ctrPercent": 2.06,
+        "costUsd": 1.03,
+        "avgCpcUsd": 0.05,
+        "conversions": 0,
+        "actualCpaUsd": null,
+        "actualCpaNote": "No conversions, so actual CPA is undefined; report dashes or zeros are not free acquisition"
+      },
+      "previous7Days": {
+        "from": "2026-10-29",
+        "to": "2026-11-04",
+        "daysWithActivity": 0,
+        "campaignIds": [],
+        "impressions": 0,
+        "clicks": 0,
+        "ctrPercent": null,
+        "costUsd": 0,
+        "avgCpcUsd": null,
+        "conversions": 0,
+        "actualCpaUsd": null,
+        "actualCpaNote": "No conversions, so actual CPA is undefined; report dashes or zeros are not free acquisition"
+      },
+      "rolling30Days": {
+        "from": "2026-10-14",
+        "to": "2026-11-12",
+        "daysWithActivity": 2,
+        "campaignIds": [
+          "716088179"
+        ],
+        "impressions": 1361,
+        "clicks": 26,
+        "ctrPercent": 1.91,
+        "costUsd": 1.15,
+        "avgCpcUsd": 0.04,
+        "conversions": 0,
+        "actualCpaUsd": null,
+        "actualCpaNote": "No conversions, so actual CPA is undefined; report dashes or zeros are not free acquisition"
+      }
+    }
+  ],
+  "dailyRows": [
+    {
+      "date": "2026-10-30",
+      "campaignId": "715426752",
+      "campaignName": "电商平台销售，自24.10.26",
+      "impressions": 471,
+      "clicks": 14,
+      "ctrPercent": 2.97,
+      "avgCpcUsd": 0.1,
+      "costUsd": 1.47,
+      "conversions": 0,
+      "costPerConversionUsd": null
+    },
+    {
+      "date": "2026-10-31",
+      "campaignId": "715426752",
+      "campaignName": "电商平台销售，自24.10.26",
+      "impressions": 424,
+      "clicks": 23,
+      "ctrPercent": 5.42,
+      "avgCpcUsd": 0.12,
+      "costUsd": 2.72,
+      "conversions": 0,
+      "costPerConversionUsd": null
+    },
+    {
+      "date": "2026-11-01",
+      "campaignId": "715426752",
+      "campaignName": "电商平台销售，自24.10.26",
+      "impressions": 672,
+      "clicks": 36,
+      "ctrPercent": 5.36,
+      "avgCpcUsd": 0.07,
+      "costUsd": 2.5,
+      "conversions": 0,
+      "costPerConversionUsd": null
+    },
+    {
+      "date": "2026-11-02",
+      "campaignId": "715426752",
+      "campaignName": "电商平台销售，自24.10.26",
+      "impressions": 849,
+      "clicks": 53,
+      "ctrPercent": 6.24,
+      "avgCpcUsd": 0.05,
+      "costUsd": 2.59,
+      "conversions": 0,
+      "costPerConversionUsd": null
+    },
+    {
+      "date": "2026-11-03",
+      "campaignId": "715426752",
+      "campaignName": "电商平台销售，自24.10.26",
+      "impressions": 1227,
+      "clicks": 58,
+      "ctrPercent": 4.73,
+      "avgCpcUsd": 0.03,
+      "costUsd": 1.73,
+      "conversions": 0,
+      "costPerConversionUsd": null
+    },
+    {
+      "date": "2026-11-04",
+      "campaignId": "715426752",
+      "campaignName": "电商平台销售，自24.10.26",
+      "impressions": 967,
+      "clicks": 41,
+      "ctrPercent": 4.24,
+      "avgCpcUsd": 0.04,
+      "costUsd": 1.58,
+      "conversions": 0,
+      "costPerConversionUsd": null
+    },
+    {
+      "date": "2026-11-05",
+      "campaignId": "715426752",
+      "campaignName": "电商平台销售，自24.10.26",
+      "impressions": 1036,
+      "clicks": 65,
+      "ctrPercent": 6.27,
+      "avgCpcUsd": 0.04,
+      "costUsd": 2.78,
+      "conversions": 0,
+      "costPerConversionUsd": null
+    },
+    {
+      "date": "2026-11-06",
+      "campaignId": "715426752",
+      "campaignName": "电商平台销售，自24.10.26",
+      "impressions": 1060,
+      "clicks": 52,
+      "ctrPercent": 4.91,
+      "avgCpcUsd": 0.02,
+      "costUsd": 1.17,
+      "conversions": 0,
+      "costPerConversionUsd": null
+    },
+    {
+      "date": "2026-11-07",
+      "campaignId": "715426752",
+      "campaignName": "电商平台销售，自24.10.26",
+      "impressions": 841,
+      "clicks": 43,
+      "ctrPercent": 5.11,
+      "avgCpcUsd": 0.02,
+      "costUsd": 0.93,
+      "conversions": 0,
+      "costPerConversionUsd": null
+    },
+    {
+      "date": "2026-11-08",
+      "campaignId": "715426752",
+      "campaignName": "电商平台销售，自24.10.26",
+      "impressions": 377,
+      "clicks": 16,
+      "ctrPercent": 4.24,
+      "avgCpcUsd": 0.02,
+      "costUsd": 0.34,
+      "conversions": 0,
+      "costPerConversionUsd": null
+    },
+    {
+      "date": "2026-11-09",
+      "campaignId": "715426752",
+      "campaignName": "电商平台销售，自24.10.26",
+      "impressions": 274,
+      "clicks": 11,
+      "ctrPercent": 4.01,
+      "avgCpcUsd": 0.02,
+      "costUsd": 0.2,
+      "conversions": 0,
+      "costPerConversionUsd": null
+    },
+    {
+      "date": "2026-11-10",
+      "campaignId": "715426752",
+      "campaignName": "电商平台销售，自24.10.26",
+      "impressions": 203,
+      "clicks": 5,
+      "ctrPercent": 2.46,
+      "avgCpcUsd": 0.04,
+      "costUsd": 0.19,
+      "conversions": 0,
+      "costPerConversionUsd": null
+    },
+    {
+      "date": "2026-11-11",
+      "campaignId": "715426752",
+      "campaignName": "电商平台销售，自24.10.26",
+      "impressions": 49,
+      "clicks": 3,
+      "ctrPercent": 6.12,
+      "avgCpcUsd": 0.02,
+      "costUsd": 0.06,
+      "conversions": 0,
+      "costPerConversionUsd": null
+    },
+    {
+      "date": "2026-11-11",
+      "campaignId": "716088179",
+      "campaignName": "电商平台销售，自11.11.26",
+      "impressions": 1017,
+      "clicks": 21,
+      "ctrPercent": 2.06,
+      "avgCpcUsd": 0.05,
+      "costUsd": 1.03,
+      "conversions": 0,
+      "costPerConversionUsd": null
+    },
+    {
+      "date": "2026-11-12",
+      "campaignId": "716088179",
+      "campaignName": "电商平台销售，自11.11.26",
+      "impressions": 344,
+      "clicks": 5,
+      "ctrPercent": 1.45,
+      "avgCpcUsd": 0.02,
+      "costUsd": 0.12,
+      "conversions": 0,
+      "costPerConversionUsd": null
+    }
+  ],
+  "limitations": [
+    "Reports are read-only evidence; campaigns.get returning an empty marketplace campaign does not negate these report rows",
+    "No campaign, budget, CPA, product, stock or advertising-state method is called",
+    "Zero conversions make actual CPA undefined, not zero or the target CPA",
+    "Direct off-site metrics must not be mixed with Ozon-native advertising metrics",
+    "byCampaign按campaign分别计算；hasReportRows=false表示当前报表无行，不证明审核通过、已产生投放或未来仍为0"
+  ]
+}

@@ -5,7 +5,7 @@ import {
   WeeklyReviewStore, parseIntegrationResponse, sha256Text,
   validateCompetitorRun, validateSourceSnapshot,
 } from "../../../scripts/weekly-review-core.mjs";
-import { astraAdapter, carbonAdapter, persistKimiIntegration, runWeeklyReview } from "../../../scripts/weekly-review-runner.mjs";
+import { astraAdapter, carbonAdapter, opusAdapter, persistKimiIntegration, runWeeklyReview } from "../../../scripts/weekly-review-runner.mjs";
 
 let directory: string;
 beforeEach(async () => { directory = await mkdtemp(path.join("temp", "weekly-review-test-")); });
@@ -104,7 +104,7 @@ describe("runner orchestration without external model calls", () => {
       },
       adapters: {
         astra: async () => ({ seat: "Astra", status: "SUCCESS", actualModel: "fixture-astra", review: "A" }),
-        carbon: async () => ({ seat: "Carbon", status: "SUCCESS", requestedModel: "gemini-4-carbon", actualModel: "fixture-carbon", review: "C" }),
+        opus: async () => ({ seat: "Opus", status: "SUCCESS", requestedModel: "claude-opus-5-5-high", actualModel: "fixture-opus", review: "O" }),
         argon: async () => ({ seat: "Gemini", status: "SUCCESS", actualModel: "fixture-argon", review: "G" }),
       },
       integrator: async () => ({
@@ -115,12 +115,12 @@ describe("runner orchestration without external model calls", () => {
     });
     expect(result.report).toMatchObject({ status: "COMPLETED", productionChanges: false, nextWeekActions: [{ action: "核验" }] });
     expect(result.report.models).toHaveLength(4);
-    expect(result.report.models.map((model: { seat: string }) => model.seat)).toEqual(["Astra", "Carbon", "Gemini", "Kimi"]);
+    expect(result.report.models.map((model: { seat: string }) => model.seat)).toEqual(["Astra", "Opus", "Gemini", "Kimi"]);
     expect(await readFile(path.join(store.root, "latest-review.json"), "utf8")).toContain("真实结构测试");
     expect(result.report.evidence.promptSha256).toHaveLength(64);
     const routePath = path.join(store.directory, "model-route.json");
     expect(JSON.parse(await readFile(routePath, "utf8"))).toEqual({
-      schemaVersion: 1, position: 2, seat: "Carbon", requestedModel: "gemini-4-carbon",
+      schemaVersion: 1, position: 2, seat: "Opus", requestedModel: "claude-opus-5-5-high",
     });
     await expect(readFile(`${routePath}.${process.pid}.tmp`, "utf8")).rejects.toMatchObject({ code: "ENOENT" });
   });
@@ -139,7 +139,7 @@ describe("runner orchestration without external model calls", () => {
         return { source, competitor, lastRun, direct: null };
       },
       adapters: {
-        astra: async () => ({ status: "SUCCESS" }), carbon: async () => ({ status: "SUCCESS" }), argon: async () => ({ status: "SUCCESS" }),
+        astra: async () => ({ status: "SUCCESS" }), opus: async () => ({ status: "SUCCESS" }), argon: async () => ({ status: "SUCCESS" }),
       },
       integrator: async () => { throw new Error("final integration unavailable"); },
       notifier: async () => {},
@@ -173,6 +173,39 @@ describe("runner orchestration without external model calls", () => {
       exitCode: null, stdout: "", stderr: "", error: { code: "ENOENT", message: "spawnSync bash ENOENT" },
     });
     await expect(readFile(path.join(directory, "astra.txt"), "utf8")).rejects.toThrow();
+  });
+
+  it("runs the restored Opus reviewer and preserves model, permission, usage and tools", async () => {
+    const promptPath = path.join(directory, "prompt.txt");
+    const result = await opusAdapter(promptPath, directory, async (command: string, args: string[], options: Record<string, unknown>) => {
+      expect(command).toBe("node");
+      expect(args).toEqual(["scripts/antigravity-run.mjs", "--prompt-file", promptPath, "--output", path.join(directory, "opus.json"), "--model", "claude-opus-5-5-high", "--effort", "high", "--sandbox"]);
+      expect(options).toEqual({ timeoutMs: 900_000, allowNonzero: true });
+      await writeFile(path.join(directory, "opus.json"), JSON.stringify({
+        source: "Google Antigravity CLI", model: "claude-opus-5-5-high", actualModel: "claude-opus-5-5-high",
+        effort: "high", sandbox: true, init: { model: "claude-opus-5-5-high", permission_mode: "request-review" },
+        result: { conversation_id: "opus-fixture", status: "SUCCESS", response: "Opus周复盘正文", usage: { total_tokens: 30 } },
+        exitCode: 0, validationError: null, toolsUsed: ["read_file"],
+      }));
+      return { code: 0, stdout: "{}", stderr: "" };
+    });
+    expect(result).toMatchObject({
+      seat: "Opus", requestedModel: "claude-opus-5-5-high", actualModel: "claude-opus-5-5-high",
+      actualEffort: "high", permissionMode: "request-review", conversationId: "opus-fixture",
+      status: "SUCCESS", review: "Opus周复盘正文", usage: { total_tokens: 30 },
+      toolsUsed: ["read_file"], output: path.join(directory, "opus.json"), productionChanges: false,
+    });
+  });
+
+  it("rejects a failed Opus execution instead of publishing its evidence", async () => {
+    const promptPath = path.join(directory, "prompt.txt");
+    await expect(opusAdapter(promptPath, directory, async () => {
+      await writeFile(path.join(directory, "opus.json"), JSON.stringify({
+        model: "claude-opus-5-5-high", actualModel: null, effort: "high", exitCode: 1,
+        validationError: "Antigravity execution failed", result: { status: "ERROR", response: "" }, toolsUsed: [],
+      }));
+      return { code: 1, stdout: "{}", stderr: "" };
+    })).rejects.toMatchObject({ code: "OPUS_EXECUTION_FAILED" });
   });
 
   it("runs the Carbon text reviewer and preserves its model, effort and usage evidence", async () => {
@@ -290,7 +323,7 @@ describe("runner orchestration without external model calls", () => {
     const result = await runWeeklyReview({
       store, resume: runDirectory,
       fetchInputs: async () => { throw new Error("must not fetch new inputs"); },
-      adapters: { astra: adapter, carbon: adapter, argon: adapter },
+      adapters: { astra: adapter, opus: adapter, argon: adapter },
       integrator: async ({ prompt, models }: { prompt: string; models: Array<Record<string, unknown>> }) => {
         expect(prompt).toBe("冻结的周复盘提示词\n");
         expect(models).toHaveLength(3);

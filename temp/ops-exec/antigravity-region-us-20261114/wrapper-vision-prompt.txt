@@ -1,0 +1,1 @@
+只输出 WORD=...; CIRCLE=...; BACKGROUND=...，不要解释。

@@ -1,0 +1,36 @@
+{
+  "source": "Google Antigravity CLI",
+  "requestedModel": "gemini-4-hydrogen-high",
+  "actualModel": "gemini-4-hydrogen-high",
+  "requestedThinkingLevel": "HIGH",
+  "actualThinkingLevel": null,
+  "createdAt": "2026-11-13T19:40:26.345213+00:00",
+  "promptFile": "D:\\Onzo\\temp\\ops-exec\\antigravity-region-us-20261114\\wrapper-vision-prompt.txt",
+  "antigravityPromptFile": "D:\\Onzo\\temp\\ops-exec\\antigravity-region-us-20261114\\wrapper-vision-result.prompt.txt",
+  "promptSha256": "56d112513692e8b6a59701d753c23adcf60bae61af0052187f008012b659417d",
+  "productionChanges": false,
+  "sandbox": true,
+  "permissionMode": "request-review",
+  "status": "SUCCESS",
+  "rawContent": "WORD=HYDROGEN; CIRCLE=黄色; BACKGROUND=深蓝色\n",
+  "usage": {
+    "input_tokens": 20656,
+    "output_tokens": 1428,
+    "thinking_tokens": 1361,
+    "cache_read_tokens": 15190,
+    "total_tokens": 22084
+  },
+  "finishReason": "STOP",
+  "toolsUsed": [
+    "read_file"
+  ],
+  "images": [
+    {
+      "path": "D:\\Onzo\\temp\\ops-exec\\hydrogen-routing-20261113\\vision-input.png",
+      "sha256": "6d6e9ae56963267d6f2a0f9c907f3dd238c5bc38a36397fdbbd5503aff518d77",
+      "mime_type": "image/png"
+    }
+  ],
+  "conversationId": "2bcdc87e-cc51-4807-a7a6-0d5c29ae6464",
+  "stderr": null
+}

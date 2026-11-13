@@ -1,0 +1,292 @@
+{
+  "schemaVersion": 1,
+  "runId": "weekly-2026-11-13T19-44-55-598Z",
+  "reviewDate": "2026-11-13",
+  "startedAt": "2026-11-13T19:44:55.598Z",
+  "finishedAt": "2026-11-13T19:48:03.183Z",
+  "resumed": false,
+  "status": "COMPLETED_WITH_DECLARED_GAPS",
+  "readOnly": true,
+  "productionChanges": false,
+  "operationsPeriod": {
+    "days": 7,
+    "dateFrom": "2026-11-03",
+    "dateTo": "2026-11-09"
+  },
+  "inputValidation": {
+    "source": {
+      "collectedAt": "2026-11-09T03:28:10.765Z",
+      "period": {
+        "days": 7,
+        "dateFrom": "2026-11-03",
+        "dateTo": "2026-11-09"
+      },
+      "ageHours": 112.28,
+      "stale": true,
+      "usableAsCurrent": false,
+      "note": "陈旧数据只能标为历史参考，不能冒充本周最新经营快照"
+    },
+    "competitor": {
+      "usable": false,
+      "errors": [
+        "run_id_mismatch",
+        "fatal_last_run",
+        "stale_direct_snapshot",
+        "collection_failures"
+      ],
+      "runId": "2026-11-12T03-17-02-812Z",
+      "lastRunUsable": false,
+      "stale": true,
+      "source": "server-google-translate-proxy",
+      "collectedAt": "2026-11-13T03:22:42.385Z",
+      "completedAgeHours": 16.37,
+      "oldestDirectAgeHours": 40.46,
+      "directSnapshotCount": 29,
+      "failureCounts": {
+        "comparisonFetchFailed": 1,
+        "comparisonIdentityMismatch": 0,
+        "comparisonMissingRequired": 1,
+        "uploadFailures": 0
+      },
+      "pendingReconciliationCount": 0
+    }
+  },
+  "nextWeekActions": [
+    {
+      "priority": 1,
+      "action": "恢复店铺经营快照与Direct只读报表的新鲜度，作为所有后续决策的前置闸门；不据此直接改价、扩品或改广告。",
+      "owner": "数据/工程运维负责人；Kimi主Agent复核",
+      "deadline": "2026-11-20",
+      "completionCriteria": [
+        "新source.json满足ageHours<36、stale=false、usable=true，operationsPeriod为完整7日且dateTo在验收前24小时内；保留原始回执、采集时间、窗口与文件指纹。",
+        "新direct.json满足freshness.stale=false且ageHours<24；currentDay继续单列部分日，last7Days/previous7Days只含完整日，所有campaign分列展示。",
+        "商品明细与总计可复算：views=1306、carts=15、orderedUnits=0、orderedRevenueRub=0仅作为历史样本被替换说明，不冒充当前快照。",
+        "若任一 freshness/usable 仍为false，输出明确FAIL并阻断新增投放、调价与扩品决策；不得用历史数据冒充本周最新经营快照。"
+      ]
+    },
+    {
+      "priority": 2,
+      "action": "完成Direct治理与保温罩承接只读核查：查清716088179来源/授权/商品/状态，回读715426752五项约束，并验证保温罩从点击/浏览到加购/下单的承接与Ozon归因；不启动、不扩品、不加预算、不改CPA。",
+      "owner": "Kimi主Agent；运营分析人员整理证据",
+      "deadline": "2026-11-20",
+      "completionCriteria": [
+        "716088179形成书面结论：创建来源、推广商品、落地链接、预算/策略、当前状态、授权证据或“未授权已上报”的记录；若用户决定停用，由Kimi执行后回读状态，且下一份24小时内Reports显示该campaign当日花费为0。",
+        "715426752输出五项设置对照表：仅保温罩、俄罗斯、目标CPA $1.2、周预算$12、预算自动上浮关闭；逐项标“一致/不一致/未知”，不一致只上报不自行修正。",
+        "所有报表中0转化窗口的actualCpaUsd/costPerConversionUsd保持null语义；验收记录明确不得写成0或undefined，也不得解释为免费获客。",
+        "保温罩承接核查覆盖前台到手价与常规价、库存与仓配、运费/预计送达、评价数与评分、卡片状态/限制项、下单入口与Ozon站外转化归因；每条结论标注“事实/推断/未知”，需生产修改时仅由Kimi在授权范围内执行并回读。",
+        "利润门槛核验列出已知成本、物流、平台费、退货与广告成本，未知项标unknown；在利润、预算、广告法资料、Ozon集成四项全部有证据通过前，不得建议或执行启动/扩大投放。"
+      ]
+    },
+    {
+      "priority": 3,
+      "action": "修复服务器远程竞品采集的HTTP 429与死链问题，并治理0直接可比offer的映射状态；不恢复本机扫描，不连续重跑429通道。",
+      "owner": "竞品采集工程维护人；Kimi主Agent复核分类",
+      "deadline": "2026-11-20",
+      "completionCriteria": [
+        "至少一轮完整非dry-run采集满足fatalError=null；validation.usable=true、stale=false、oldestDirectAgeHours<=24，且正式latest与成功回执对应。",
+        "pendingReconciliation.count与reconciliationErrors分别列出并均为0；若不为0则本周报告标FAIL，不得假称全批健康。",
+        "明确列出不参与直接比价的offer清单：CN-CHERY-T7P-TPMS2-01、MAR-YAM-61N-CABLE-01、MAR-YAM-66T-CABLE-01、MOT-168F-CLUTCH-01，并说明其链接是market_reference还是pending_verification。",
+        "对连续失败的GEN-BELT-35X1126-01->4843317615与MOT-MIK-VM34-KIT-01->2769863364给出处置：备份后删除/降级/待复核，历史价格保留；HTTP 404计数降为0或说明保留原因。",
+        "核查CN-DASHCOVER-JOLION-01是否已归档/非在售；非在售则先备份再处理映射；评分/评论缺失保留null，不得填0，salesCount不得当销量。"
+      ]
+    }
+  ],
+  "summary": "现有证据只支持“恢复可信数据、核查保温罩加购不转化、核验Direct计划治理与竞品采集可用性”，不支持任何调价、扩品、加预算或启动投放结论。2026-11-03至11-09经营快照已过期112.28小时且usable=false，只能作历史参考：浏览1306、加购15、下单0件、orderedRevenueRub为0₽且不是实收或净利；本地订单窗口11-02至11-08也为0，但不得与看板合并。历史信号高度集中于保温罩CN-AUTO-GRILLE-COVER-01：590浏览、12加购、0下单，占浏览约45.2%、加购80%，且currentPriceRub=minPriceRub=760.12₽，无向下调价空间；不能认定12次加购等于12位独立买家，也不能证明原因一定是价格、物流或内容。Direct只读报表同样stale=true：715426752在11-05至11-11完整窗口点击195、花费$5.67、转化0，实际CPA为null不可计算，日消耗从11-05的$2.78衰减到11-11的$0.06；第二计划716088179自11-11起产生花费，归属、授权、推广商品与归因未知，构成治理风险。竞品校验usable=false：11-12批次已过期且只上传26条，11-13批次因HTTP 429上传0条；pendingReconciliation=0与reconciliationErrors=[]只能说明这两项当前为空，不能抵消批次失败、新鲜度超限和必填字段缺失。PROMO_AUTO_DECISION=false，自动调价保持关闭；评价活动负余额继续暂停，不充值、不恢复。",
+  "dataGaps": [
+    "2026-11-09T03:28:10.765Z之后的店铺真实浏览、加购、下单、取消、妥投、实收与利润未知；当前快照stale=true、usable=false，不能称当前近7天。",
+    "保温罩12次加购未下单的具体原因未知：到手价/运费/时效、卡片限制、评价承接、规格安装说明、Ozon归因断层均未被证实。",
+    "716088179的创建人/来源、推广商品、预算策略、授权依据、审核状态与当前设置未知；715426752从11-08起展示萎缩的确定原因未知。",
+    "Ozon站外转化目标与Yandex Direct点击、Ozon浏览/加购/订单之间是否接通未知；0转化也可能是未追踪而非真实无成交，需证据区分。",
+    "完整净利不可算：采购costCny之外，物流、平台费、退货、广告、汇率与税费缺少年度/线路级真实值；orderedRevenueRub不是实收或净利。",
+    "竞品当前直接可比证据不可用：11-13批次HTTP 429且uploaded=0，11-12批次超过24h窗口；价格Regular有效性、direct_comparable身份与可售状态需新批次确认。",
+    "4个在售offer无可用direct_comparable链接：CN-CHERY-T7P-TPMS2-01、MAR-YAM-61N-CABLE-01、MAR-YAM-66T-CABLE-01、MOT-168F-CLUTCH-01；其规格/装数/长度/适配仍需人工或规则核验。",
+    "GEN-BELT-35X1126-01->4843317615连续404、MOT-MIK-VM34-KIT-01->2769863364连续MISSING_REQUIRED、GEN-BELT-33X14-01->1661575255时好时坏；CN-DASHCOVER-JOLION-01不在经营19品范围内，映射范围需核对。",
+    "recentPricingAudit的10条记录nonzeroOldPrices=0，不能证明Ozon真实改价前后；旧本机扫描不得恢复，缺口不能由补造竞品价格填补。"
+  ],
+  "stopped": [
+    "评价活动负余额继续暂停：不充值、不恢复；不恢复已停止选品或不合格素材制作，不扩搜货源，不把搜索次数当成果。",
+    "不涨价、不降价、不开启或建议开启自动调价；PROMO_AUTO_DECISION=false，10条零旧价审计记录不作为真实调价证据。",
+    "不启动、不恢复、不扩大Direct投放；715426752仅限保温罩/俄罗斯/CPA $1.2/周预算$12/预算自动上浮关闭的既定边界核验，不扩品、不加预算、不改CPA。",
+    "不通过ONZO Ads Manager或任何API修改marketplace广告设置；不把716088179报表行当作扩品或扩大授权依据。",
+    "不混用Direct站外数据与Ozon原生广告；Ozon广告unavailable不等于0，Direct 0转化时actual CPA记null而不是0或undefined。",
+    "不恢复旧本机竞品扫描；429之后不连续手动重跑；不用market_reference、pending_verification、legacy_unknown、缺priceRegular或展示优惠价冒充无条件成交价。",
+    "不把null评分/评论当0，不把lastCapturedAt当实时价格，不把reviewCount/salesCount当销量，不把滚动7天直接相加，不用不足四个不重叠周窗口冒充28天，不用28天单独证明季节性。",
+    "不重复跑模型、不改任何生产数据；所有模型评审仅为只读建议，未执行且productionChanges=false。"
+  ],
+  "modelNotes": [
+    "Astra/Opus/Gemini均确认：现有店铺快照与竞品验证不可用，只能历史参考；三家均未做生产修改，输出为建议而非已完成。",
+    "纠偏旧提示词风险：lastRun并非不存在，2026-11-13T03-17-03-398Z真实存在但因HTTP 429 fatalError且uploaded=0；失败计数不等于整批回执缺失。",
+    "对账纠偏：两批pendingReconciliation.count=0且reconciliationErrors=[]，只能证明这两项当前为空，不能抵消latest run失败、stale超限、oldestDirectAgeHours>24及必填字段缺失。",
+    "经营口径纠偏：本地订单窗口11-02至11-08与经营看板11-03至11-09相差一天，不相加；0下单使orderRatePct=0但0转化时Direct actual CPA为null；orderedRevenueRub不是实收或净利润。",
+    "Opus/Gemini共同强调716088179治理风险：在主计划715426752萎缩后出现，授权与归因未知；该风险按只读核查处理，任何停用/保留由用户决定并由Kimi执行回读。",
+    "Gemini指出4个在售offer当前0条direct_comparable链接；该事实不改变“竞品验证不可用则不得调价”的结论，只作为恢复采集后的映射清理清单。",
+    "最终整合未采纳任何“下周已恢复”“已核验通过”“已改价/已扩投”表述；所有行动均为未执行计划，验收以一周内原始回执、时间窗、校验字段和Kimi只读回读为准。"
+  ],
+  "models": [
+    {
+      "seat": "Astra",
+      "requestedModel": "gpt-6-astra",
+      "actualModel": "gpt-6-astra",
+      "actualEffort": "high",
+      "sessionId": "01a1d671-1770-71b0-8c5f-b4e1237c0771",
+      "status": "SUCCESS",
+      "review": "**一、核心经营判读**\n\n**当前优先级是恢复可信数据、核查保温罩成交障碍，再修复竞品比较依据。现有证据不支持调价或扩大投放。**\n\n- **事实｜历史经营窗口：**2026-11-03至11-09，浏览1,306、加购15、下单0件、下单金额0₽，加购率1.15%。快照校验已过期112.28小时、`usable=false`，只能作历史参考。下单金额不是实收或净利润；本地订单窗口为11-02至11-08，不能与经营看板直接合并。\n- **事实｜关注集中于保温罩：**保温罩590次浏览、12次加购，占历史全店浏览约45.2%、加购80%，仍无下单。其余商品合计716次浏览、3次加购。\n- **推断：**保温罩值得优先检查从商品页到下单的障碍；这些数据不能证明问题一定是价格、物流或内容，也不能把12次加购认定为12位独立买家。\n- **事实｜Direct仅有历史效果证据：**`715426752`在11-05至11-11为195次点击、花费$5.67、报表转化0；前一完整周为225次点击、$12.59、转化0。点击成本下降没有证明获客有效，实际CPA不可计算。`716088179`必须独立看：完整周窗口内仅1个活跃日，21次点击、$1.03、转化0；11-12的5次点击、$0.12属于当时UTC日部分数据。\n- **未知：**店铺当前订单、实际利润、两项campaign当前状态及转化归因链路是否正常。Direct报表也已过期40.41小时；Ozon原生广告的历史零值不能扩展成当前全渠道零支出。现有采购成本不足以核算完整净利。\n\n**二、竞品数据缺口及处置**\n\n| 缺口 | 事实与处置 |\n|---|---|\n| 当前数据不可用 | 11-12报告最老直接可比快照已达40.46小时；11-13最新运行因HTTP 429失败、上传0条，`validation.usable=false`。两批均不能作为当前价格比较依据。 |\n| 覆盖率不等于有效比较率 | 历史19/19商品、60条链接只是映射覆盖。11-12的29条直接可比标记包含1条抓取失败、2条必需字段缺失；实际保存26条，不能称29条有效快照。 |\n| 比较范围存在差异 | 远程报告包含经营快照未列出的`CN-DASHCOVER-JOLION-01`，应核对两份数据的商品范围；不能由此推断该商品已上架或已归档。 |\n| 规格与分类待核 | 奇瑞TPMS两条均为不同装数的市场参考；两款拉线和离合器缺准确适配证据。泵修包本店标题含壳体，却有竞品因“含壳体”被排除；6E7同时存在橡胶衬套与止推垫圈描述，应复核身份和分类，不能直接认定分类错误。 |\n| 可选字段缺失 | 11-12报告缺评分15条、评论数6条，不能填0；明确返回的评论数0可以保留。旧字段`salesCount`存的是评论数，不是销量。 |\n\n**待对账单列：**所给两批`pendingReconciliation.count`均为0。  \n**对账错误单列：**所给两批`reconciliationErrors`均为空。  \n这两项通过不能抵消最新运行失败、新鲜度超限及必需字段缺失。\n\n后续仅让**身份与可售状态核验通过、`direct_comparable`、`priceType=regular`、常规价有效且时间合格**的记录进入比较。`price/cardPrice`不能冒充无条件成交价，`lastCapturedAt`不能冒充实时价格。\n\n**三、下周最多3项行动（负责人、完成标准）**\n\n以下按影响力与风险排序，验收期为**2026-11-16至11-22**；均为建议，尚未执行。\n\n| 优先级与行动 | 负责人 | 可核验完成标准 |\n|---|---|---|\n| **1．恢复经营与广告证据，先明确资金风险** | 数据维护人员；Kimi主Agent终审 | 周前半段取得采集时间不超过36小时、非未来时间的新经营快照及Direct报表，保留原始回执、时间窗和指纹；核对商品明细与总计。Direct按campaign分列完整日窗口及UTC当日部分数据，并由Kimi另行只读核验实际投放状态、授权范围和预算。交付逐项PASS/FAIL；数据或状态仍未知时，明确阻断新增投放决策。 |\n| **2．完成保温罩成交障碍与投放条件复核** | Kimi主Agent；运营分析人员整理证据 | 一周内完成目标地区下的可售性、运费与预计送达、规格/安装说明、现有素材准确性及下单入口检查，留带时间戳证据，不制造测试订单。按实际线路补齐采购、物流、平台费用、退货及广告成本，区分已知值与假设；核对转化目标、归因窗口与Ozon集成。每项问题给出证据、影响和处置结论；如需生产修改，仅由Kimi在授权范围内实施并回读。未发现确定障碍则明确“原因未证实”，不以出单承诺作为验收。 |\n| **3．恢复远程竞品采集并校正可比清单** | 服务器采集维护人员；Kimi主Agent复核分类 | 一周内完成429失败排查；通过既有服务器链路取得非dry-run、非子集、无致命错误的新全量运行。验收时纳入比较的快照均在24小时内，成功回执与正式latest对应；失败项逐条排除并说明。核对商品范围、29条标记与26条保存的差异，集中复核上述规格矛盾。`pendingReconciliation`与`reconciliationErrors`分别验收；未解决则报告FAIL并继续禁用当前比较，不用旧批次冒充恢复。 |\n\n**四、明确停止／不做事项**\n\n- 评价活动保持暂停，不充值、不恢复；不恢复已停止的选品或不合格素材制作，不扩搜货源、不重复跑模型。\n- 不因竞品缺口建议涨价、降价或开启自动调价；自动调价保持`false`。10条旧价格为0的审计记录不作为真实改价证明。\n- 不启动、恢复或扩大Direct投放。`715426752`仅按本prompt限定的保温罩、俄罗斯、目标CPA $1.2、周预算$12、预算自动上浮关闭进行核验；这些是约束，不能声称已由Reports验证。任何启动仍须Kimi完成利润、预算、广告法资料及Ozon集成核验。\n- 不通过API修改marketplace设置，不把`716088179`的报表行当作扩大授权；不混用Direct与Ozon原生广告，不把零转化解释为免费获客。\n- 不恢复旧本机竞品扫描，不反复冲击429通道；不将过期数据、市场参考、待复核或`legacy_unknown`用于当前直接价格判断。",
+      "output": "D:\\Onzo\\data\\weekly-reviews\\runs\\weekly-2026-11-13T19-44-55-598Z\\astra.txt",
+      "processOutput": "D:\\Onzo\\data\\weekly-reviews\\runs\\weekly-2026-11-13T19-44-55-598Z\\astra-process.json",
+      "note": "模型、档位和会话ID来自本次Codex CLI启动回执",
+      "productionChanges": false,
+      "outputSha256": "bbd8f6c2f2f39a596485985f82afea0ca09183f288b8a072e822d4eb4f4d0be3"
+    },
+    {
+      "seat": "Opus",
+      "requestedModel": "claude-opus-5-5-high",
+      "actualModel": "claude-opus-5-5-high",
+      "actualEffort": "high",
+      "requestedEffort": "high",
+      "permissionMode": "request-review",
+      "conversationId": "c383f4c4-6280-4cea-a2c0-fde8e449ba5c",
+      "status": "SUCCESS",
+      "review": "# 下周运营评审（只读分析）\n\n**数据说明**：本次只用了你提供的四份数据，没有读仓库，没有改任何生产数据，也没有调用其他模型。\n- **事实**：数据里能直接看到的数值。\n- **推断**：我根据事实做的判断，还没有核验。\n- **未知**：现有数据无法回答的问题。\n\n---\n\n## 一、核心经营判读\n\n### 1. 店铺快照（2026-11-03～11-09）只能当历史参考\n采集时间是 2026-11-09T03:28Z，已过去 112.28h，`stale=true`、`usable=false`，所以**不能称为店铺当前近7天**。\n\n| 类型 | 内容 |\n|---|---|\n| 事实 | 浏览 1306，加购 15，加购率 1.15%，下单 0 件、0₽，取消 0，送达 0，库存合计 565。按 2026-11-02～11-08 统计的本地订单也是 0。 |\n| 事实 | **保温罩 `CN-AUTO-GRILLE-COVER-01`** 有 590 浏览，占全店 45%；12 次加购，占全店 80%；加购率 2.03%；下单 0。 |\n| 事实 | 只有另外三个 SKU 各有 1 次加购：`MOT-168F-CLUTCH-01`（165 浏览）、`MOT-CARB-PZ30-01`（160）、`GEN-BELT-33X14-01`（57）。其余 15 个 SKU 加购为 0。TPMS2 浏览为 0，TPMS4 浏览为 2。 |\n| 事实 | Ozon 原生广告在该期记录为花费 0、展示 0，但这同样是过期快照里的值。 |\n| 事实 | `recentPricingAudit` 共 10 条，其中 `nonzeroOldPrices=0`，**不能证明 Ozon 上实际改过价**。 |\n| 推断 | 全店只有保温罩有明显需求信号，而且现在正处于冬季窗口。它的问题出在\"加购 → 下单\"这一步，不是没有流量。 |\n| 未知 | 截至今天的店铺漏斗、保温罩加购后没下单的原因（配送时效、到手价、评价数、卡片受限等）、实际利润。 |\n\n### 2. Direct 站外数据（只读 Reports，采集于 2026-11-12T03:20Z，已过 40.41h，`stale=true`）\n这部分是站外数据，不和 Ozon 原生广告合并。\n\n| 类型 | 内容 |\n|---|---|\n| 事实 | `715426752` 最近 7 个完整日（11-05～11-11）：展示 3840、点击 195、CTR 5.08%、花费 $5.67、0 转化，实际 CPA 无法计算。前 7 天（10-29～11-04，有投放 6 天）：展示 4610、点击 225、花费 $12.59。 |\n| 事实 | **投放量在快速萎缩**：日展示从 11-05 的 1036、11-06 的 1060 降到 11-08 的 377，11-11 只有 49。11-12 是不完整的当天数据，该 campaign 无任何活动。 |\n| 事实 | **出现了第二个 campaign `716088179`**（名称\"电商平台销售，自11.11.26\"）。11-11 展示 1017、点击 21、花费 $1.03；11-12 部分日展示 344、点击 5、花费 $0.12。30 天累计花费 $1.15，0 转化。 |\n| 推断 | 现行授权只覆盖 `715426752`（仅保温罩）。`716088179` 正在花钱，但推广的是什么商品、谁创建的、有没有授权都不清楚，这是**治理风险**。`715426752` 从 11-08 开始萎缩，早于 `716088179` 上线（11-11），所以不能简单解释为两者抢量。 |\n| 未知 | 两个 campaign 的当前状态、审核状态、出价设置；Ozon 转化目标是否真正接通（0 转化可能是确实没成交，也可能是没追踪到）；前 7 天 $12.59 是否超过周预算。该窗口和 Direct 的预算周不对齐，不能直接判定超支。 |\n\n---\n\n## 二、竞品数据缺口及处置\n\n### 1. 批次状态（单列）\n\n| 批次 | 状态 | 能不能用 |\n|---|---|---|\n| 2026-11-12 03:17Z | 完成，60 条链接，上传 26 条快照，覆盖 15 个 offer。`pendingReconciliation=0`，`reconciliationErrors=[]` | 已入库，但距今约 40h，超过 24h 新鲜度要求 |\n| 2026-11-13 03:17Z | `fatalError: HTTP 429`，只跑了 54 条，**上传 0** | 失败批次，其中的价格**不得引用** |\n| validation | `usable=false`、`stale=true`。原因：快照时间戳异常、最旧的直接可比快照已过 40.46h、最新一轮因 429 失败、报告完成时间过期 | **不能当作当前可比数据**，本周不做任何直接价格比较 |\n\n对账本身是干净的（待对账 0、对账错误 0），但这**不等于整批数据健康**。\n\n### 2. 结构性缺口（事实）\n- **\"19/19 已覆盖\"只表示每个品都有链接，不表示都有可比数据。** 11-12 批次中，真正有直接可比、常规价已入库快照的 offer 只有 15 个。\n- **以下 4 个品没有任何直接可比链接**，不参与价格比较：\n  - `MAR-YAM-61N-CABLE-01`：3 条，全部待复核（长度、型号未核实）\n  - `MAR-YAM-66T-CABLE-01`：2 条，待复核（未标长度，且共享评价池）\n  - `MOT-168F-CLUTCH-01`：2 条，待复核（168F/170F 适配未证实）\n  - `CN-CHERY-T7P-TPMS2-01`：2 条都只是市场参考（1 只装和 4 只装，本品是 2 只装），`lastCapturedAt=null`\n- **标为直接可比的链接里，有 2 条连续两轮失败：**\n  - `GEN-BELT-35X1126-01` → `4843317615`：两轮都是 HTTP 404\n  - `MOT-MIK-VM34-KIT-01` → `2769863364`：两轮都是 MISSING_REQUIRED\n- `GEN-BELT-33X14-01` → `1661575255`：11-12 缺字段，11-13 抓到了，但那一轮失败没有入库。属于时好时坏。\n- **对照样本偏弱**：`ZERK-T8P-L` 唯一的直接可比链接 `2723843455` 评分 1、只有 1 条评价；`2995668092` 已降为待复核。\n- **映射范围对不上**：`CN-DASHCOVER-JOLION-01` 有 3 条竞品链接，但不在本店 19 个在售品里。它是否已归档是未知。\n- **评分和评论数**：评分缺失 15 处，按未知处理，不当作 0。`salesCount` 存的是评论数，不是销量。\n\n### 3. 处置原则\n- 不因为数据缺口调价，不开启自动调价。\n- 不恢复本机扫描。429 之后不连续手动重跑，按服务器定时任务或 SOP 规定的单次补跑恢复。\n- 不为凑满 3 条链接去接收型号不对的竞品。\n\n---\n\n## 三、下周最多 3 项行动（按风险/影响排序）\n\n### 行动 1：Direct 两个 campaign 的授权核查和投放状态回读（风险最高）\n- **负责人**：Kimi 主 Agent 在 Direct 网页后台只读回读并截图存档。是否停用 `716088179` 由**用户决定**。ONZO Ads Manager 不能改设置，本项不改任何 CPA 或预算。\n- **内容**：\n  1. 查清 `716088179` 的创建时间、创建来源、推广商品、落地链接、预算/策略和状态，并对照现有授权记录。\n  2. 回读 `715426752` 的五项设置：地域、CPA 1.2 USD、周预算 12 USD、预算自动上浮关闭、状态/审核。\n  3. 查清 11-08 起展示萎缩的原因，以及 Ozon 转化目标的接通状态。\n- **完成标准**（全部满足才算 PASS）：\n  1. `716088179` 有书面结论：要么附有授权证据，要么有\"未授权，已报用户\"的记录。如果用户决定停用，由 Kimi 执行后回读状态，并且下一份 ONZO Reports（`collectedAt` 在 24h 内）显示该 campaign 当天花费为 0。\n  2. `715426752` 的五项设置有对照表，逐项标\"一致/不一致\"。不一致只上报，不自行修正。\n  3. 萎缩原因归入\"状态/审核/出价/限额/竞价/未知\"之一，并附截图证据。\n  4. 转化追踪标注为\"已接通/未接通/未知\"，并附证据。\n  5. 新拉一份 Reports，`freshness.stale=false`。\n\n### 行动 2：在新鲜数据上诊断保温罩\"有加购、没下单\"（影响最大）\n- **负责人**：Kimi 主 Agent，只读。\n- **内容**：\n  1. 先通过只读接口重采店铺经营快照，拿到可用的完整 7 日窗口。\n  2. 回读保温罩卡片：前台到手价与常规价、各仓库存、配送方案和时效、评价数/评分、卡片状态和限制项。\n  3. 对比新窗口里浏览、加购、下单、取消的数据。\n  4. 列出候选原因，每条标注是\"有证据\"还是\"未知\"。如需改卡片或配送，走既有门禁，另行报批。\n- **完成标准**：\n  1. 新快照 `usable=true`，`ageHours≤36`，窗口为完整 7 日。\n  2. 保温罩新窗口的漏斗数值落盘，并附采集时间。\n  3. 卡片回读证据（带时间戳）覆盖上面列出的每个字段。\n  4. 产出 PASS/FAIL 结论：\n     - 新窗口加购 ≥10 且下单 0 → 判定为\"加购未转化\"问题，给出排序后的原因假设和需要补的证据。\n     - 有下单 → 如实记录件数和下单额，注明下单额不是实收也不是净利。\n  5. 本项不产生任何调价或改库存的操作。\n\n### 行动 3：恢复竞品校验可用性，清理失败的直接可比链接\n- **负责人**：Kimi 主 Agent。只改服务器上的竞品映射和可比性配置，不碰 Ozon 生产数据。\n- **内容**：\n  1. 对 `4843317615`、`2769863364` 按 SOP 复核：降为 `pending_verification`，或先备份再删除映射，历史价格保留。\n  2. 观察 `1661575255` 下一轮是否稳定。\n  3. 核实 `CN-DASHCOVER-JOLION-01` 是否已归档；如已归档，按 SOP 先备份再删除映射。\n  4. 等定时任务跑出一轮完整批次，不在 429 后连续手动重跑。\n- **完成标准**：\n  1. 至少有一轮完整的非 dry-run 批次满足 `fatalError=null`。\n  2. validation 满足 `usable=true`、`stale=false`、`oldestDirectAgeHours≤24`。\n  3. `pendingReconciliation.count=0` 且 `reconciliationErrors=[]`，两项单独列出。\n  4. 直接可比链接中抓取失败或缺必填字段的数量为 0，每条调整都附原因和备份路径。\n  5. 报告中明确列出\"无直接可比、不参与价格比较\"的 offer 清单（目前是上面 4 个）。\n\n---\n\n## 四、明确停止/不做事项\n- **评价与选品**：评价活动不充值、不恢复；不恢复已停止的选品或不合格素材的制作；不扩搜货源。\n- **价格**：不调价、不开自动调价。竞品价差（包括 11-12 已入库的快照）只作历史参考，11-13 失败批次的数据一律不引用。\n- **Direct**：\n  - 不启动、不扩大、不加预算；不改 `715426752` 的 CPA 或预算。\n  - 不用 ONZO API 改设置。\n  - 不把 `716088179` 的数据当作扩品依据。\n  - 不把 Direct 站外数据和 Ozon 原生广告合并。\n  - 不把 0 转化写成 CPA=0 或\"免费获客\"。\n- **竞品采集**：不恢复本机扫描；429 后不反复手动重跑；不为凑数加入型号不对的链接；评分缺失不当作 0，`salesCount` 不当作销量。\n- **口径**：不把过期的 11-03～11-09 快照称为\"当前近7天\"；不把 `orderedRevenueRub` 当实收或净利；不把搜索次数、工具调用次数或模型调用当成果。\n- **模型**：本周以上三项都不需要再跑模型。",
+      "usage": {
+        "input_tokens": 77929,
+        "output_tokens": 11646,
+        "thinking_tokens": 0,
+        "cache_read_tokens": 7407,
+        "total_tokens": 89575
+      },
+      "output": "D:\\Onzo\\data\\weekly-reviews\\runs\\weekly-2026-11-13T19-44-55-598Z\\opus.json",
+      "toolsUsed": [],
+      "productionChanges": false,
+      "outputSha256": "cb844f6c1b3cb3ccb53f385a281b2bd0d087320aed130acbe361050e04390cef"
+    },
+    {
+      "seat": "Gemini",
+      "requestedModel": "gemini-4-argon",
+      "actualModel": "gemini-4-argon",
+      "actualEffort": null,
+      "requestedEffort": "HIGH",
+      "status": "SUCCESS",
+      "review": "### 一、 核心经营判读\n\n#### 1. 事实（基于带时间戳的只读证据）\n* **店铺历史经营快照（不可作当前近7天）：** 采集于 `2026-11-09T03:28:10.765Z`（距今 `112.28` 小时，`stale: true`，`usable: false`），统计窗口为 `2026-11-03` 至 `2026-11-09`（仅作历史参考）。该历史周期内：总浏览 `1306`，总加购 `15`（加购率 `1.15%`），下单件数 `0`，下单金额（`orderedRevenueRub`，非实收或净利润）为 `0₽`，取消与妥投均为 `0`，总库存 `565`。本地非取消订单（`2026-11-02` 至 `2026-11-08`）同样为 `0` 单、`0` 营收。\n* **历史单品流量结构：** 在 `2026-11-03` 至 `2026-11-09` 历史窗口中，流量高度集中于保温罩 `CN-AUTO-GRILLE-COVER-01`（浏览 `590`，加购 `12`，加购率 `2.03%`，当前价与底价同为 `760.12₽`）。其余有加购商品为 `MOT-168F-CLUTCH-01`（浏览 `165`/加购 `1`）、`MOT-CARB-PZ30-01`（浏览 `160`/加购 `1`）、`GEN-BELT-33X14-01`（浏览 `57`/加购 `1`）。`CN-CHERY-T7P-TPMS2-01` 历史浏览为 `0`。\n* **Ozon原生广告与近期调价审计：** `2026-11-03` 至 `2026-11-09` 期间 Ozon 原生广告记录为 `0`（注：`unavailableMeansNotZero: true`，数据不可用不等于实际为零）。近期调价审计记录 `10` 条，其中 `nonzeroOldPrices: 0`，不构成有效的调价前后对比证据。\n* **Direct 站外广告只读报表（独立于 Ozon 原生广告）：** 采集于 `2026-11-12T03:20:06.406Z`（`ageHours: 40.41`，`stale: true`）：\n  * **主计划 `715426752`（仅保温罩）：** 完整周 `last7Days`（`2026-11-05` 至 `2026-11-11`）曝光 `3840`、点击 `195`、CTR `5.08%`、花费 `$5.67`、转化 `0`（实际 CPA 不可计算）；较 `previous7Days`（`2026-10-29` 至 `2026-11-04`，曝光 `4610`、点击 `225`、花费 `$12.59`、转化 `0`）消耗明显收窄，且日消耗从 `11-05` 的 `$2.78` 逐日衰减至 `11-11` 的 `$0.06`。部分日 `currentDay`（`2026-11-12` 单列）无活动（曝光 `0`、点击 `0`、花费 `$0`）。\n  * **第二计划 `716088179`（名称含“自11.11.26”）：** 在 `2026-11-11` 产生完整日数据（曝光 `1017`、点击 `21`、CTR `2.06%`、花费 `$1.03`、转化 `0`）；在部分日 `currentDay`（`2026-11-12` 单列）产生曝光 `344`、点击 `5`、CTR `1.45%`、花费 `$0.12`、转化 `0`（实际 CPA 不可计算）。\n\n#### 2. 推断\n* **保温罩（`CN-AUTO-GRILLE-COVER-01`）面临转化漏斗阻塞与无底价空间双重约束：** 历史期内 Direct 计划 `715426752` 持续引入站外点击，使该单品贡献了全店 `45.18%` 的浏览与 `80%` 的加购，但最终成交为 `0`；同时其 `currentPriceRub`（`760.12₽`）已贴合 `minPriceRub`（`760.12₽`），无向下调价空间。\n* **Direct 流量结构发生切换且存在失控风险：** 主计划 `715426752` 在 `11-11` 濒临停滞并于 `11-12` 归零，与此同时计划 `716088179` 自 `11-11` 起开始消耗预算但 CTR（`1.45%~2.06%`）显著低于主计划（`4.97%`），且累计 `446` 次双计划总点击均未带来任何转化。\n\n#### 3. 未知\n* **近期真实经营表现未知：** `2026-11-09T03:28:10Z` 之后（即 `11-09` 至 `11-13`）的店铺实际浏览、加购、订单、实收及库存变动完全未知。\n* **计划 `716088179` 的业务背景未知：** 该计划推广的具体商品、定向、预算设置、合规资料及 Ozon 归因集成状态在现有只读数据中未知；`2026-11-12T03:20:06Z` 之后的站外花费未知。\n\n---\n\n### 二、 竞品数据缺口及处置\n\n#### 1. 采集可用性与对账状态单列\n* **整体可用性判定（不可用）：** `competitor.json` 校验显示 `stale: true`，`usable: false`（`completedAgeHours: 40.36`，最旧直接可比快照已超 `40.46` 小时，突破 24h 窗口）。最新运行 `lastRun`（`2026-11-13T03-17-03-398Z`）因 `Ozon translation channel returned HTTP 429` 触发致命错误（`fatalError`），导致 `uploaded: 0`（未入库）。**因此，当前全部竞品数据均不可作为实时有效可比数据用于直接调价判断。**\n* **对账状态单列：**\n  * `2026-11-12` 批次（`runId: 2026-11-12T03-17-02-812Z`）：`pendingReconciliation: {\"count\": 0, \"items\": []}`，`reconciliationErrors: []`。\n  * `2026-11-13` 批次（`runId: 2026-11-13T03-17-03-398Z`）：`pendingReconciliation: {\"count\": 0, \"items\": []}`，`reconciliationErrors: []`（全批次因 HTTP 429 未执行上传）。\n\n#### 2. 竞品数据缺口分类明细\n1. **覆盖率为零（0条 `direct_comparable` 链接）的在售商品（4个）：**\n   * `CN-CHERY-T7P-TPMS2-01`（历史 `lastCapturedAt: null`；现有 2 条链接均为 1只装/4只装的 `market_reference`，与本品 2只装不匹配）。\n   * `MAR-YAM-61N-CABLE-01`（3 条链接均为长度/型号未核实的 `pending_verification`，历史快照停留在 `2026-11-02`）。\n   * `MAR-YAM-66T-CABLE-01`（2 条链接均为未标长度且共享评价池的 `pending_verification`，历史快照停留在 `2026-11-02`）。\n   * `MOT-168F-CLUTCH-01`（2 条链接均为 168F/170F 适配未证实的 `pending_verification`，历史快照停留在 `2026-11-02`）。\n2. **直接可比（`direct_comparable`）但抓取失败或缺失必选字段的链接（3条）：**\n   * `GEN-BELT-35X1126-01` -> SKU `4843317615`：两批次均 `FETCH_FAILED`（HTTP 404），缺失 `sku/price/rating/reviewCount`。\n   * `MOT-MIK-VM34-KIT-01` -> SKU `2769863364`：两批次均 `MISSING_REQUIRED`，缺失 `price/priceRegular/rating/reviewCount/availability`。\n   * `GEN-BELT-33X14-01` -> SKU `1661575255`：`11-12` 批次 `MISSING_REQUIRED`；`11-13` 批次虽抓到价格（`priceRegular: 4668₽`），但因批次 429 未上传入库。\n3. **非在售映射冗余与待复核/缺失评分项：**\n   * `CN-DASHCOVER-JOLION-01` 存在于竞品采集中（3条链接均为 `pending_verification` 或 `market_reference`），但不在店铺 `19` 个活跃商品列表内。\n   * 另有 `CN-AUTO-GLP-12V-01`（SKU `3250182880`）、`CN-AUTO-GLP-24V-01`（SKU `3250182880`）、`MAR-YAM-6E7-01`（SKU `2129622188`）、`ZERK-T8P-L`（SKU `2995668092`）共 4 条 `pending_verification` 链接，以及 `16` 条 `market_reference` 链接，均不可用于直接比价。\n   * 多个有效快照（如 `CN-AUTO-GRILLE-COVER-01` 竞品 `5951640146`、`CN-HAV-JOLION-TPMS4-01` 竞品等）`rating: null`（因 `SKIPPED_CHANNEL_UNAVAILABLE` 或验证拦截未恢复），按约束保留为缺失（非 0 分）。\n\n#### 3. 缺口处置原则\n* 严禁因上述缺口或历史价差（如保温罩历史常规价 `723₽` vs 本品 `760.12₽`，或点火塞、镜片价差）建议涨价、降价或开启自动调价。\n* 优先从工程侧修复远程 `server-google-translate-proxy` 的 HTTP 429 限流问题并替换死链（HTTP 404），在 `validation.usable` 恢复为 `true` 前冻结一切基于竞品的价格决策。\n\n---\n\n### 三、 下周最多3项优先行动（按影响力/风险排序）\n\n#### 行动 1：修复店铺经营数据源（`source.json`）与 Direct 报表（`direct.json`）的超期（Stale）采集阻塞\n* **影响力/风险排序理由：** 最高优先级（底座级风险）。当前店铺经营数据已中断超 `112` 小时，Direct 报表已超 `40` 小时，盲目做任何商品或投放调整均属违规且高风险，必须首先恢复数据可见性。\n* **具体执行内容：** 排查并修复店铺经营数据及 ONZO Ads Manager 只读报表的定时拉取管道，生成包含最新周期的 `source.json` 与 `direct.json`，消除 `stale: true` 与 `usable: false` 状态。\n* **负责人：** 数据/工程运维负责人（或 Kimi 主 Agent 调度数据采集任务）。\n* **可核验完成标准（一周内验收）：**\n  1. 最新生成的周评运行目录中，`source.json` 校验满足 `ageHours < 36`、`stale: false`、`usable: true`，且 `operationsPeriod.dateTo` 更新至验收日近 24 小时内。\n  2. `direct.json` 的 `freshness.stale` 恢复为 `false`（`ageHours < 24`），完整呈现 `2026-11-12` 之后的每日花费与转化明细。\n\n#### 行动 2：核查 Yandex Direct 计划 `716088179` 的产生原因及主计划 `715426752` 的归因/利润合规性（仅核查，不直接扩投）\n* **影响力/风险排序理由：** 次高优先级（直接资金流失与合规风险）。Direct 累计点击 `446` 次却 `0` 转化，且在主计划 `715426752` 停滞的同时，计划 `716088179` 已从 `11-11` 开始产生实际花费（累计 `$1.15`），必须由 Kimi 核验其合规性与归因链路。\n* **具体执行内容：**\n  1. 针对计划 `716088179`：核查其对应的推广商品、开启原因、预算上限及是否符合“仅投保温罩”的当前策略边界。\n  2. 针对主计划 `715426752`（保温罩 `CN-AUTO-GRILLE-COVER-01`）：由 Kimi 开展四项前置核验——① 核算 `760.12₽` 售价与 `10.9 CNY` 成本下的真实毛利能否承受 `$1.2` CPA；② 核验 `$12` 周预算及自动上浮关闭状态；③ 核验俄罗斯广告法备案资料；④ 核验 Ozon 站外转化归因集成是否正常（排查 `590` 浏览 / `12` 加购 / `0` 订单是否存在归因断层或前台承接障碍）。\n* **负责人：** Kimi 主 Agent（负责核验与必要的生产状态处置）。\n* **可核验完成标准（一周内验收）：**\n  1. 输出书面核验记录，明确列出计划 `716088179` 的归属与处置结论，以及计划 `715426752` 的【利润测算、预算设置、广告法资料、Ozon集成】四项核验通过与否的布尔结论。\n  2. 在四项核验全部通过前，只读报表证明未新增任何计划预算或放宽 CPA 限制。\n\n#### 行动 3：治理远程竞品采集 HTTP 429 限流故障，并清理 4 个零可比商品的链接状态\n* **影响力/风险排序理由：** 第三优先级（消除比价盲区与无效请求消耗）。`lastRun` 因 HTTP 429 导致 `0` 条入库，且 `60` 条链接中仅 `29` 条为直接可比，大量无效或 `pending_verification` 请求加剧了通道限流。\n* **具体执行内容：**\n  1. 调整 `server-google-translate-proxy` 远程采集的请求并发间隔与重试退避策略，解决 `HTTP 429` 报错；移除或标记已返回 `HTTP 404` 的失效链接（`GEN-BELT-35X1126-01` 的 `4843317615`）及非在售商品 `CN-DASHCOVER-JOLION-01` 的 3 条链接。\n  2. 对 `MAR-YAM-61N-CABLE-01`、`MAR-YAM-66T-CABLE-01`、`MOT-168F-CLUTCH-01` 的 7 条 `pending_verification` 链接完成人工/规则规格核实（确认长度及 168F/170F 适配），并补齐 `CN-CHERY-T7P-TPMS2-01`（2只装）的同规格竞品映射。\n* **负责人：** 竞品采集工程维护人 & 运营核对人员。\n* **可核验完成标准（一周内验收）：**\n  1. 下次远程采集报告满足 `validation.usable: true`、`stale: false`、`fatalError: null`，且 `pendingReconciliation.count == 0`、`reconciliationErrors` 为空。\n  2. 上述 4 个零可比商品的 `pending_verification` 链接完成定性归类（转为 `direct_comparable` 或 `market_reference`），`FETCH_FAILED`（HTTP 404）计数降为 `0`。\n\n---\n\n### 四、 明确停止/不做事项\n\n1. **严禁操作生产价格与自动调价：** 当前自动调价为 `false`，且店铺快照与竞品验证均为 `usable: false`，严禁因任何竞品数据缺口或历史价差建议降价、涨价或开启自动调价；除 Kimi 主 Agent 外，不触碰任何 Ozon 生产商品、价格与库存。\n2. **严禁擅自启动、恢复或扩大 Direct 投放：** 在 Kimi 完成利润、预算、广告法资料、Ozon 集成四项核验前，严禁启动或恢复 `715426752`，严禁扩大 `716088179` 投放、上调 `$12` 周预算或 `$1.2` CPA，不通过 API 修改任何 marketplace 广告设置。\n3. **严禁恢复旧本机扫描或混用非可比竞品数据：** 竞品仅限服务器远程采集，绝不恢复旧本机扫描；严禁将 `market_reference`、`pending_verification`、缺 `priceRegular` 记录或展示优惠价（`price`/`cardPrice`）用于直接比价，严禁将 `null` 评分/评论当成 `0` 或将 `lastCapturedAt` 当作实时价格。\n4. **严禁混用广告指标或曲解零值：** 严禁将 Direct 站外数据与 Ozon 原生广告混用；严禁将 Direct `0` 转化下的实际 CPA 当作 `0` 或目标 CPA；严禁将 Ozon 原生广告的不可用状态直接等同于真实零消耗。\n5. **严禁恢复已停项目与无效内耗：** 评价活动负余额保持暂停（不充值、不恢复）；不恢复已停止的选品（如非在售的 `CN-DASHCOVER-JOLION-01`）或不合格素材制作；不重复跑模型、不扩搜货源、不把搜索次数当成果。",
+      "usage": {
+        "total_tokens": 53516,
+        "total_input_tokens": 49030,
+        "input_tokens_by_modality": [
+          {
+            "modality": "text",
+            "tokens": 49030
+          }
+        ],
+        "total_cached_tokens": 0,
+        "total_output_tokens": 4486,
+        "output_tokens_by_modality": [
+          {
+            "modality": "text",
+            "tokens": 4486
+          }
+        ],
+        "total_tool_use_tokens": 0,
+        "total_thought_tokens": 0,
+        "initial_input_tokens": 49030
+      },
+      "output": "D:\\Onzo\\data\\weekly-reviews\\runs\\weekly-2026-11-13T19-44-55-598Z\\argon.json",
+      "note": "Interactions实际文本已返回，档位元数据未返回，不伪称已验证HIGH",
+      "productionChanges": false,
+      "outputSha256": "db9cd20ff1a6049e0f4a40176b549c2758e4ee09b39bd0dff62539dbf438fa57"
+    },
+    {
+      "seat": "Kimi",
+      "status": "SUCCESS",
+      "actualModel": "moonshot-v1-8k-vision",
+      "usage": {
+        "prompt": 55826,
+        "completion": 3704,
+        "total": 59530
+      },
+      "review": {
+        "summary": "现有证据只支持“恢复可信数据、核查保温罩加购不转化、核验Direct计划治理与竞品采集可用性”，不支持任何调价、扩品、加预算或启动投放结论。2026-11-03至11-09经营快照已过期112.28小时且usable=false，只能作历史参考：浏览1306、加购15、下单0件、orderedRevenueRub为0₽且不是实收或净利；本地订单窗口11-02至11-08也为0，但不得与看板合并。历史信号高度集中于保温罩CN-AUTO-GRILLE-COVER-01：590浏览、12加购、0下单，占浏览约45.2%、加购80%，且currentPriceRub=minPriceRub=760.12₽，无向下调价空间；不能认定12次加购等于12位独立买家，也不能证明原因一定是价格、物流或内容。Direct只读报表同样stale=true：715426752在11-05至11-11完整窗口点击195、花费$5.67、转化0，实际CPA为null不可计算，日消耗从11-05的$2.78衰减到11-11的$0.06；第二计划716088179自11-11起产生花费，归属、授权、推广商品与归因未知，构成治理风险。竞品校验usable=false：11-12批次已过期且只上传26条，11-13批次因HTTP 429上传0条；pendingReconciliation=0与reconciliationErrors=[]只能说明这两项当前为空，不能抵消批次失败、新鲜度超限和必填字段缺失。PROMO_AUTO_DECISION=false，自动调价保持关闭；评价活动负余额继续暂停，不充值、不恢复。",
+        "actions": [
+          {
+            "priority": 1,
+            "action": "恢复店铺经营快照与Direct只读报表的新鲜度，作为所有后续决策的前置闸门；不据此直接改价、扩品或改广告。",
+            "owner": "数据/工程运维负责人；Kimi主Agent复核",
+            "deadline": "2026-11-20",
+            "completionCriteria": [
+              "新source.json满足ageHours<36、stale=false、usable=true，operationsPeriod为完整7日且dateTo在验收前24小时内；保留原始回执、采集时间、窗口与文件指纹。",
+              "新direct.json满足freshness.stale=false且ageHours<24；currentDay继续单列部分日，last7Days/previous7Days只含完整日，所有campaign分列展示。",
+              "商品明细与总计可复算：views=1306、carts=15、orderedUnits=0、orderedRevenueRub=0仅作为历史样本被替换说明，不冒充当前快照。",
+              "若任一 freshness/usable 仍为false，输出明确FAIL并阻断新增投放、调价与扩品决策；不得用历史数据冒充本周最新经营快照。"
+            ]
+          },
+          {
+            "priority": 2,
+            "action": "完成Direct治理与保温罩承接只读核查：查清716088179来源/授权/商品/状态，回读715426752五项约束，并验证保温罩从点击/浏览到加购/下单的承接与Ozon归因；不启动、不扩品、不加预算、不改CPA。",
+            "owner": "Kimi主Agent；运营分析人员整理证据",
+            "deadline": "2026-11-20",
+            "completionCriteria": [
+              "716088179形成书面结论：创建来源、推广商品、落地链接、预算/策略、当前状态、授权证据或“未授权已上报”的记录；若用户决定停用，由Kimi执行后回读状态，且下一份24小时内Reports显示该campaign当日花费为0。",
+              "715426752输出五项设置对照表：仅保温罩、俄罗斯、目标CPA $1.2、周预算$12、预算自动上浮关闭；逐项标“一致/不一致/未知”，不一致只上报不自行修正。",
+              "所有报表中0转化窗口的actualCpaUsd/costPerConversionUsd保持null语义；验收记录明确不得写成0或undefined，也不得解释为免费获客。",
+              "保温罩承接核查覆盖前台到手价与常规价、库存与仓配、运费/预计送达、评价数与评分、卡片状态/限制项、下单入口与Ozon站外转化归因；每条结论标注“事实/推断/未知”，需生产修改时仅由Kimi在授权范围内执行并回读。",
+              "利润门槛核验列出已知成本、物流、平台费、退货与广告成本，未知项标unknown；在利润、预算、广告法资料、Ozon集成四项全部有证据通过前，不得建议或执行启动/扩大投放。"
+            ]
+          },
+          {
+            "priority": 3,
+            "action": "修复服务器远程竞品采集的HTTP 429与死链问题，并治理0直接可比offer的映射状态；不恢复本机扫描，不连续重跑429通道。",
+            "owner": "竞品采集工程维护人；Kimi主Agent复核分类",
+            "deadline": "2026-11-20",
+            "completionCriteria": [
+              "至少一轮完整非dry-run采集满足fatalError=null；validation.usable=true、stale=false、oldestDirectAgeHours<=24，且正式latest与成功回执对应。",
+              "pendingReconciliation.count与reconciliationErrors分别列出并均为0；若不为0则本周报告标FAIL，不得假称全批健康。",
+              "明确列出不参与直接比价的offer清单：CN-CHERY-T7P-TPMS2-01、MAR-YAM-61N-CABLE-01、MAR-YAM-66T-CABLE-01、MOT-168F-CLUTCH-01，并说明其链接是market_reference还是pending_verification。",
+              "对连续失败的GEN-BELT-35X1126-01->4843317615与MOT-MIK-VM34-KIT-01->2769863364给出处置：备份后删除/降级/待复核，历史价格保留；HTTP 404计数降为0或说明保留原因。",
+              "核查CN-DASHCOVER-JOLION-01是否已归档/非在售；非在售则先备份再处理映射；评分/评论缺失保留null，不得填0，salesCount不得当销量。"
+            ]
+          }
+        ],
+        "dataGaps": [
+          "2026-11-09T03:28:10.765Z之后的店铺真实浏览、加购、下单、取消、妥投、实收与利润未知；当前快照stale=true、usable=false，不能称当前近7天。",
+          "保温罩12次加购未下单的具体原因未知：到手价/运费/时效、卡片限制、评价承接、规格安装说明、Ozon归因断层均未被证实。",
+          "716088179的创建人/来源、推广商品、预算策略、授权依据、审核状态与当前设置未知；715426752从11-08起展示萎缩的确定原因未知。",
+          "Ozon站外转化目标与Yandex Direct点击、Ozon浏览/加购/订单之间是否接通未知；0转化也可能是未追踪而非真实无成交，需证据区分。",
+          "完整净利不可算：采购costCny之外，物流、平台费、退货、广告、汇率与税费缺少年度/线路级真实值；orderedRevenueRub不是实收或净利。",
+          "竞品当前直接可比证据不可用：11-13批次HTTP 429且uploaded=0，11-12批次超过24h窗口；价格Regular有效性、direct_comparable身份与可售状态需新批次确认。",
+          "4个在售offer无可用direct_comparable链接：CN-CHERY-T7P-TPMS2-01、MAR-YAM-61N-CABLE-01、MAR-YAM-66T-CABLE-01、MOT-168F-CLUTCH-01；其规格/装数/长度/适配仍需人工或规则核验。",
+          "GEN-BELT-35X1126-01->4843317615连续404、MOT-MIK-VM34-KIT-01->2769863364连续MISSING_REQUIRED、GEN-BELT-33X14-01->1661575255时好时坏；CN-DASHCOVER-JOLION-01不在经营19品范围内，映射范围需核对。",
+          "recentPricingAudit的10条记录nonzeroOldPrices=0，不能证明Ozon真实改价前后；旧本机扫描不得恢复，缺口不能由补造竞品价格填补。"
+        ],
+        "stopped": [
+          "评价活动负余额继续暂停：不充值、不恢复；不恢复已停止选品或不合格素材制作，不扩搜货源，不把搜索次数当成果。",
+          "不涨价、不降价、不开启或建议开启自动调价；PROMO_AUTO_DECISION=false，10条零旧价审计记录不作为真实调价证据。",
+          "不启动、不恢复、不扩大Direct投放；715426752仅限保温罩/俄罗斯/CPA $1.2/周预算$12/预算自动上浮关闭的既定边界核验，不扩品、不加预算、不改CPA。",
+          "不通过ONZO Ads Manager或任何API修改marketplace广告设置；不把716088179报表行当作扩品或扩大授权依据。",
+          "不混用Direct站外数据与Ozon原生广告；Ozon广告unavailable不等于0，Direct 0转化时actual CPA记null而不是0或undefined。",
+          "不恢复旧本机竞品扫描；429之后不连续手动重跑；不用market_reference、pending_verification、legacy_unknown、缺priceRegular或展示优惠价冒充无条件成交价。",
+          "不把null评分/评论当0，不把lastCapturedAt当实时价格，不把reviewCount/salesCount当销量，不把滚动7天直接相加，不用不足四个不重叠周窗口冒充28天，不用28天单独证明季节性。",
+          "不重复跑模型、不改任何生产数据；所有模型评审仅为只读建议，未执行且productionChanges=false。"
+        ],
+        "modelNotes": [
+          "Astra/Opus/Gemini均确认：现有店铺快照与竞品验证不可用，只能历史参考；三家均未做生产修改，输出为建议而非已完成。",
+          "纠偏旧提示词风险：lastRun并非不存在，2026-11-13T03-17-03-398Z真实存在但因HTTP 429 fatalError且uploaded=0；失败计数不等于整批回执缺失。",
+          "对账纠偏：两批pendingReconciliation.count=0且reconciliationErrors=[]，只能证明这两项当前为空，不能抵消latest run失败、stale超限、oldestDirectAgeHours>24及必填字段缺失。",
+          "经营口径纠偏：本地订单窗口11-02至11-08与经营看板11-03至11-09相差一天，不相加；0下单使orderRatePct=0但0转化时Direct actual CPA为null；orderedRevenueRub不是实收或净利润。",
+          "Opus/Gemini共同强调716088179治理风险：在主计划715426752萎缩后出现，授权与归因未知；该风险按只读核查处理，任何停用/保留由用户决定并由Kimi执行回读。",
+          "Gemini指出4个在售offer当前0条direct_comparable链接；该事实不改变“竞品验证不可用则不得调价”的结论，只作为恢复采集后的映射清理清单。",
+          "最终整合未采纳任何“下周已恢复”“已核验通过”“已改价/已扩投”表述；所有行动均为未执行计划，验收以一周内原始回执、时间窗、校验字段和Kimi只读回读为准。"
+        ]
+      },
+      "productionChanges": false,
+      "output": "D:\\Onzo\\data\\weekly-reviews\\runs\\weekly-2026-11-13T19-44-55-598Z\\kimi-final.json"
+    }
+  ],
+  "evidence": {
+    "source": "D:\\Onzo\\data\\weekly-reviews\\runs\\weekly-2026-11-13T19-44-55-598Z\\source.json",
+    "competitor": "D:\\Onzo\\data\\weekly-reviews\\runs\\weekly-2026-11-13T19-44-55-598Z\\competitor.json",
+    "lastRun": "D:\\Onzo\\data\\weekly-reviews\\runs\\weekly-2026-11-13T19-44-55-598Z\\competitor-last-run.json",
+    "direct": "D:\\Onzo\\data\\weekly-reviews\\runs\\weekly-2026-11-13T19-44-55-598Z\\direct.json",
+    "prompt": "D:\\Onzo\\data\\weekly-reviews\\runs\\weekly-2026-11-13T19-44-55-598Z\\prompt.txt",
+    "promptSha256": "e3a820468bc224af4f3a31d518d76c2da9b7d8148e7b25ba86b42c1055075cc7",
+    "integrationOutput": "D:\\Onzo\\data\\weekly-reviews\\runs\\weekly-2026-11-13T19-44-55-598Z\\kimi-final.json"
+  },
+  "note": "由独立Windows系统任务执行，不依赖Kimi会话；数据陈旧或模型失败必须明确标注，不能冒充全量成功。"
+}

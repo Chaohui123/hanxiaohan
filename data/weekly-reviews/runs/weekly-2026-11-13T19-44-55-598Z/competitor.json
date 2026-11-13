@@ -1,0 +1,1953 @@
+{
+  "schemaVersion": 1,
+  "runId": "2026-11-12T03-17-02-812Z",
+  "startedAt": "2026-11-12T03:17:02.812Z",
+  "completedAt": "2026-11-12T03:23:06.555Z",
+  "source": "server-google-translate-proxy",
+  "channel": "translate",
+  "dryRun": false,
+  "proxyConfigured": true,
+  "filters": {
+    "offerId": null,
+    "limit": null,
+    "onlyFailed": false
+  },
+  "notes": [
+    "salesCount in the legacy snapshot API stores review count, not units sold",
+    "missing optional values are retained as null, not measured zeros; identity, availability and both prices are verified before upload",
+    "price retains the display candidate; priceRegular is the comparison baseline and precise snapshots require priceType=regular",
+    "ambiguous uploads are persisted for reconciliation and never automatically retried"
+  ],
+  "previousRunId": null,
+  "attemptTotals": {
+    "links": 60,
+    "verified": 54,
+    "partial": 9,
+    "fetchFailed": 1,
+    "identityMismatch": 0,
+    "comparisonFetchFailed": 1,
+    "comparisonIdentityMismatch": 0,
+    "missingRequired": 5,
+    "comparisonMissingRequired": 2,
+    "missingFields": {
+      "price": 6,
+      "priceRegular": 5,
+      "rating": 15,
+      "reviewCount": 6,
+      "availability": 5,
+      "sku": 1
+    },
+    "uploaded": 26,
+    "uploadFailures": 0,
+    "excludedUploadFailures": 0
+  },
+  "totals": {
+    "links": 60,
+    "verified": 54,
+    "partial": 9,
+    "fetchFailed": 1,
+    "identityMismatch": 0,
+    "comparisonFetchFailed": 1,
+    "comparisonIdentityMismatch": 0,
+    "missingRequired": 5,
+    "comparisonMissingRequired": 2,
+    "missingFields": {
+      "price": 6,
+      "priceRegular": 5,
+      "rating": 15,
+      "reviewCount": 6,
+      "availability": 5,
+      "sku": 1
+    },
+    "uploaded": 26,
+    "uploadFailures": 0,
+    "excludedUploadFailures": 0
+  },
+  "fatalError": null,
+  "links": [
+    {
+      "offerId": "CN-AUTO-GLP-12V-01",
+      "competitorUrl": "https://www.ozon.ru/product/svecha-nakala-dlya-avtonomnogo-dizelnogo-otopitelya-12-24-220v-universalnaya-3250182880/",
+      "expectedSku": "3250182880",
+      "actualSku": "3250182880",
+      "status": "MISSING_REQUIRED",
+      "capturedAt": "2026-11-12T03:17:06.650Z",
+      "name": "Запчасти для автономного отопителя - купить на OZON",
+      "available": null,
+      "price": null,
+      "priceRegular": null,
+      "rating": null,
+      "reviewCount": null,
+      "missingFields": [
+        "price",
+        "priceRegular",
+        "rating",
+        "reviewCount",
+        "availability"
+      ],
+      "snapshot": null,
+      "directRatingRecovered": false,
+      "directRatingStatus": "FETCH_FAILED",
+      "directRatingError": "challenge not passed (title: Похоже, нет соединения)",
+      "comparability": "pending_verification",
+      "includeInPriceComparison": false,
+      "comparabilityReason": "电压通用但功率/端子未核实"
+    },
+    {
+      "offerId": "CN-AUTO-GLP-12V-01",
+      "competitorUrl": "https://www.ozon.ru/product/svecha-nakala-dlya-avtonomnogo-otopitelya-12v-3082687849/",
+      "expectedSku": "3082687849",
+      "actualSku": "3082687849",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:17:29.737Z",
+      "name": "Свеча накала для автономного отопителя 12в",
+      "available": true,
+      "price": 1409,
+      "priceRegular": 1560,
+      "rating": 4.9,
+      "reviewCount": 407,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/svecha-nakala-dlya-avtonomnogo-otopitelya-12v-3082687849/",
+        "price": 1409,
+        "priceRegular": 1560,
+        "priceType": "regular",
+        "rating": 4.9,
+        "salesCount": 407,
+        "capturedAt": "2026-11-12T03:17:29.737Z"
+      },
+      "comparability": "direct_comparable",
+      "includeInPriceComparison": true,
+      "comparabilityReason": "标题/OE/规格与本品一致",
+      "uploadStatus": "SAVED"
+    },
+    {
+      "offerId": "CN-AUTO-GLP-12V-01",
+      "competitorUrl": "https://www.ozon.ru/product/remkomplekt-dlya-avtonomnogo-dizelnogo-otopitelya-12v-5kvt-svecha-nakala-setka-i-prokladki-5927696188/",
+      "expectedSku": "5927696188",
+      "actualSku": "5927696188",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:17:35.197Z",
+      "name": "Ремкомплект для автономного дизельного отопителя 12В 5кВт свеча накала, сетка и прокладки",
+      "available": true,
+      "price": 1235,
+      "priceRegular": 1373,
+      "rating": 4.9,
+      "reviewCount": 166,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/remkomplekt-dlya-avtonomnogo-dizelnogo-otopitelya-12v-5kvt-svecha-nakala-setka-i-prokladki-5927696188/",
+        "price": 1235,
+        "priceRegular": 1373,
+        "priceType": "regular",
+        "rating": 4.9,
+        "salesCount": 166,
+        "capturedAt": "2026-11-12T03:17:35.197Z"
+      },
+      "comparability": "market_reference",
+      "includeInPriceComparison": false,
+      "comparabilityReason": "维修包含滤网垫片，非单支点火塞"
+    },
+    {
+      "offerId": "CN-AUTO-GLP-24V-01",
+      "competitorUrl": "https://www.ozon.ru/product/svecha-nakala-avtonomka-suhoy-fen-otopitel-24v-2492696631/",
+      "expectedSku": "2492696631",
+      "actualSku": "2492696631",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:17:41.747Z",
+      "name": "Свеча накала автономка сухой фен отопитель 24V",
+      "available": true,
+      "price": 990,
+      "priceRegular": 1100,
+      "rating": 4.8,
+      "reviewCount": 542,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/svecha-nakala-avtonomka-suhoy-fen-otopitel-24v-2492696631/",
+        "price": 990,
+        "priceRegular": 1100,
+        "priceType": "regular",
+        "rating": 4.8,
+        "salesCount": 542,
+        "capturedAt": "2026-11-12T03:17:41.747Z"
+      },
+      "comparability": "direct_comparable",
+      "includeInPriceComparison": true,
+      "comparabilityReason": "标题/OE/规格与本品一致",
+      "uploadStatus": "SAVED"
+    },
+    {
+      "offerId": "CN-AUTO-GLP-24V-01",
+      "competitorUrl": "https://www.ozon.ru/product/svecha-nakala-dlya-avtonomnogo-dizelnogo-otopitelya-12-24-220v-universalnaya-3250182880/",
+      "expectedSku": "3250182880",
+      "actualSku": "3250182880",
+      "status": "MISSING_REQUIRED",
+      "capturedAt": "2026-11-12T03:17:48.174Z",
+      "name": "Запчасти для автономного отопителя - купить на OZON",
+      "available": null,
+      "price": null,
+      "priceRegular": null,
+      "rating": null,
+      "reviewCount": null,
+      "missingFields": [
+        "price",
+        "priceRegular",
+        "rating",
+        "reviewCount",
+        "availability"
+      ],
+      "snapshot": null,
+      "directRatingRecovered": false,
+      "directRatingStatus": "SKIPPED_CHANNEL_UNAVAILABLE",
+      "comparability": "pending_verification",
+      "includeInPriceComparison": false,
+      "comparabilityReason": "通用电压，24V电气参数未核实"
+    },
+    {
+      "offerId": "CN-AUTO-GLP-24V-01",
+      "competitorUrl": "https://www.ozon.ru/product/nabor-9-predmetov-dlya-remonta-avtonomnogo-otopitelya-5kvt-svecha-nakala-dlya-avtonomnogo-otopitelya-3482375819/",
+      "expectedSku": "3482375819",
+      "actualSku": "3482375819",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:17:53.573Z",
+      "name": "Набор 9 предметов для ремонта автономного отопителя 2-5-8 кВт: свеча накала 12В 120Вт, сетка, ключ, прокладки",
+      "available": true,
+      "price": 1078,
+      "priceRegular": 1198,
+      "rating": 4.9,
+      "reviewCount": 439,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/nabor-9-predmetov-dlya-remonta-avtonomnogo-otopitelya-5kvt-svecha-nakala-dlya-avtonomnogo-otopitelya-3482375819/",
+        "price": 1078,
+        "priceRegular": 1198,
+        "priceType": "regular",
+        "rating": 4.9,
+        "salesCount": 439,
+        "capturedAt": "2026-11-12T03:17:53.573Z"
+      },
+      "comparability": "market_reference",
+      "includeInPriceComparison": false,
+      "comparabilityReason": "12V九件套，电压与套装均不同"
+    },
+    {
+      "offerId": "CN-AUTO-GRILLE-COVER-01",
+      "competitorUrl": "https://www.ozon.ru/product/5951640146/",
+      "expectedSku": "5951640146",
+      "actualSku": "5951640146",
+      "status": "OK_WITH_MISSING",
+      "capturedAt": "2026-11-12T03:17:59.107Z",
+      "name": "Утеплитель радиатора, арт. 827895565533, 1 шт.",
+      "available": true,
+      "price": 687,
+      "priceRegular": 723,
+      "rating": null,
+      "reviewCount": 0,
+      "missingFields": [
+        "rating"
+      ],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/5951640146/",
+        "price": 687,
+        "priceRegular": 723,
+        "priceType": "regular",
+        "salesCount": 0,
+        "capturedAt": "2026-11-12T03:17:59.107Z"
+      },
+      "directRatingRecovered": false,
+      "directRatingStatus": "SKIPPED_CHANNEL_UNAVAILABLE",
+      "comparability": "direct_comparable",
+      "includeInPriceComparison": true,
+      "comparabilityReason": "标题/OE/规格与本品一致",
+      "uploadStatus": "SAVED"
+    },
+    {
+      "offerId": "CN-AUTO-GRILLE-COVER-01",
+      "competitorUrl": "https://www.ozon.ru/product/2484288549/",
+      "expectedSku": "2484288549",
+      "actualSku": "2484288549",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:18:04.962Z",
+      "name": "Утеплитель решетки радиатора для Haval JOLION Хавал Джулион (2024-н.в.)новый кузов С камерой",
+      "available": true,
+      "price": 8091,
+      "priceRegular": 8990,
+      "rating": 4.8,
+      "reviewCount": 19,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/2484288549/",
+        "price": 8091,
+        "priceRegular": 8990,
+        "priceType": "regular",
+        "rating": 4.8,
+        "salesCount": 19,
+        "capturedAt": "2026-11-12T03:18:04.962Z"
+      },
+      "comparability": "market_reference",
+      "includeInPriceComparison": false,
+      "comparabilityReason": "Jolion专车带摄像头款，非通用罩"
+    },
+    {
+      "offerId": "CN-AUTO-GRILLE-COVER-01",
+      "competitorUrl": "https://www.ozon.ru/product/5505223853/",
+      "expectedSku": "5505223853",
+      "actualSku": "5505223853",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:18:11.912Z",
+      "name": "Утеплитель радиатора для Хавал Джулион / Haval Jolion 2023-2026 Черный с Белой строчкой",
+      "available": true,
+      "price": 1404,
+      "priceRegular": 1614,
+      "rating": 4.6,
+      "reviewCount": 5,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/5505223853/",
+        "price": 1404,
+        "priceRegular": 1614,
+        "priceType": "regular",
+        "rating": 4.6,
+        "salesCount": 5,
+        "capturedAt": "2026-11-12T03:18:11.912Z"
+      },
+      "comparability": "market_reference",
+      "includeInPriceComparison": false,
+      "comparabilityReason": "Jolion专车款，非通用罩"
+    },
+    {
+      "offerId": "CN-CHERY-T7P-TPMS2-01",
+      "competitorUrl": "https://www.ozon.ru/product/802000121aa-datchik-davleniya-v-shine-tpms-dlya-chery-tiggo-7-pro-8-pro-8-pro-max-1-shtuka-1875865005/",
+      "expectedSku": "1875865005",
+      "actualSku": "1875865005",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:18:17.474Z",
+      "name": "802000121AA Датчик давления в шине TPMS для Chery Tiggo 7 Pro / 8 Pro / 8 Pro Max - 1 штука",
+      "available": true,
+      "price": 399,
+      "priceRegular": 420,
+      "rating": 4.5,
+      "reviewCount": 80,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/802000121aa-datchik-davleniya-v-shine-tpms-dlya-chery-tiggo-7-pro-8-pro-8-pro-max-1-shtuka-1875865005/",
+        "price": 399,
+        "priceRegular": 420,
+        "priceType": "regular",
+        "rating": 4.5,
+        "salesCount": 80,
+        "capturedAt": "2026-11-12T03:18:17.474Z"
+      },
+      "comparability": "market_reference",
+      "includeInPriceComparison": false,
+      "comparabilityReason": "2026-11-08前台实读：准确OE、可售，但1只装与本品2只装不同，仅作市场参考"
+    },
+    {
+      "offerId": "CN-CHERY-T7P-TPMS2-01",
+      "competitorUrl": "https://www.ozon.ru/product/4-sht-datchiki-davleniya-shin-chery-exeed-jaecoo-802000121aa-2839415427/",
+      "expectedSku": "2839415427",
+      "actualSku": "2839415427",
+      "status": "OK_WITH_MISSING",
+      "capturedAt": "2026-11-12T03:18:23.155Z",
+      "name": "4 шт.Датчики давления шин Chery/Exeed/Jaecoo 802000121AA",
+      "available": true,
+      "price": 2094,
+      "priceRegular": 2212,
+      "rating": null,
+      "reviewCount": 1,
+      "missingFields": [
+        "rating"
+      ],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/4-sht-datchiki-davleniya-shin-chery-exeed-jaecoo-802000121aa-2839415427/",
+        "price": 2094,
+        "priceRegular": 2212,
+        "priceType": "regular",
+        "salesCount": 1,
+        "capturedAt": "2026-11-12T03:18:23.155Z"
+      },
+      "directRatingRecovered": false,
+      "directRatingStatus": "SKIPPED_CHANNEL_UNAVAILABLE",
+      "comparability": "market_reference",
+      "includeInPriceComparison": false,
+      "comparabilityReason": "2026-11-08前台实读：准确OE、可售，但4只装与本品2只装不同，仅作市场参考"
+    },
+    {
+      "offerId": "CN-DASHCOVER-JOLION-01",
+      "competitorUrl": "https://www.ozon.ru/product/999043637/",
+      "expectedSku": "999043637",
+      "actualSku": "999043637",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:18:28.839Z",
+      "name": "Накидка на панель приборов Haval Jolion(алькантара,нескользящая основа)",
+      "available": true,
+      "price": 2414,
+      "priceRegular": 2683,
+      "rating": 4.8,
+      "reviewCount": 364,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/999043637/",
+        "price": 2414,
+        "priceRegular": 2683,
+        "priceType": "regular",
+        "rating": 4.8,
+        "salesCount": 364,
+        "capturedAt": "2026-11-12T03:18:28.839Z"
+      },
+      "comparability": "pending_verification",
+      "includeInPriceComparison": false,
+      "comparabilityReason": "HUD版本未核实"
+    },
+    {
+      "offerId": "CN-DASHCOVER-JOLION-01",
+      "competitorUrl": "https://www.ozon.ru/product/5934197149/",
+      "expectedSku": "5934197149",
+      "actualSku": "5934197149",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:18:34.838Z",
+      "name": "Накидка на торпеду HAVAL JOLION (2021-2026г) без проекции",
+      "available": true,
+      "price": 2282,
+      "priceRegular": 2535,
+      "rating": 4.5,
+      "reviewCount": 2,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/5934197149/",
+        "price": 2282,
+        "priceRegular": 2535,
+        "priceType": "regular",
+        "rating": 4.5,
+        "salesCount": 2,
+        "capturedAt": "2026-11-12T03:18:34.838Z"
+      },
+      "comparability": "pending_verification",
+      "includeInPriceComparison": false,
+      "comparabilityReason": "无HUD款但本店版本仍需核实"
+    },
+    {
+      "offerId": "CN-DASHCOVER-JOLION-01",
+      "competitorUrl": "https://www.ozon.ru/product/3534452942/",
+      "expectedSku": "3534452942",
+      "actualSku": "3534452942",
+      "status": "MISSING_REQUIRED",
+      "capturedAt": "2026-11-12T03:18:41.490Z",
+      "name": "Накидка автомобильная - купить на OZON",
+      "available": null,
+      "price": null,
+      "priceRegular": null,
+      "rating": null,
+      "reviewCount": null,
+      "missingFields": [
+        "price",
+        "priceRegular",
+        "rating",
+        "reviewCount",
+        "availability"
+      ],
+      "snapshot": null,
+      "directRatingRecovered": false,
+      "directRatingStatus": "SKIPPED_CHANNEL_UNAVAILABLE",
+      "comparability": "market_reference",
+      "includeInPriceComparison": false,
+      "comparabilityReason": "带HUD投影款，版本不同"
+    },
+    {
+      "offerId": "CN-HAV-JOLION-TPMS4-01",
+      "competitorUrl": "https://www.ozon.ru/product/datchik-davleniya-v-shinah-4-shtuki-3641100akr02a-dlya-greatwall-ora-cat-3641100akr02a-tpms-433-mgts-3416336453/",
+      "expectedSku": "3416336453",
+      "actualSku": "3416336453",
+      "status": "OK_WITH_MISSING",
+      "capturedAt": "2026-11-12T03:18:48.190Z",
+      "name": "датчик давления в шинах 4 штуки 3641100AKR02A для GreatWall ORA Cat 3641100AKR02A TPMS 433 МГц",
+      "available": true,
+      "price": 2874,
+      "priceRegular": 3028,
+      "rating": null,
+      "reviewCount": 0,
+      "missingFields": [
+        "rating"
+      ],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/datchik-davleniya-v-shinah-4-shtuki-3641100akr02a-dlya-greatwall-ora-cat-3641100akr02a-tpms-433-mgts-3416336453/",
+        "price": 2874,
+        "priceRegular": 3028,
+        "priceType": "regular",
+        "salesCount": 0,
+        "capturedAt": "2026-11-12T03:18:48.190Z"
+      },
+      "directRatingRecovered": false,
+      "directRatingStatus": "SKIPPED_CHANNEL_UNAVAILABLE",
+      "comparability": "direct_comparable",
+      "includeInPriceComparison": true,
+      "comparabilityReason": "2026-11-07前台实读：同OE、4只装、433MHz、可售",
+      "uploadStatus": "SAVED"
+    },
+    {
+      "offerId": "CN-HAV-JOLION-TPMS4-01",
+      "competitorUrl": "https://www.ozon.ru/product/datchik-davleniya-v-shinah-4-shtuki-3641100akr02a-dlya-greatwall-ora-cat-3641100akr02a-tpms-433-mgts-6187677876/",
+      "expectedSku": "6187677876",
+      "actualSku": "6187677876",
+      "status": "OK_WITH_MISSING",
+      "capturedAt": "2026-11-12T03:18:53.554Z",
+      "name": "датчик давления в шинах 4 штуки 3641100AKR02A для GreatWall ORA Cat 3641100AKR02A TPMS 433 МГц",
+      "available": true,
+      "price": 2801,
+      "priceRegular": 2951,
+      "rating": null,
+      "reviewCount": 0,
+      "missingFields": [
+        "rating"
+      ],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/datchik-davleniya-v-shinah-4-shtuki-3641100akr02a-dlya-greatwall-ora-cat-3641100akr02a-tpms-433-mgts-6187677876/",
+        "price": 2801,
+        "priceRegular": 2951,
+        "priceType": "regular",
+        "salesCount": 0,
+        "capturedAt": "2026-11-12T03:18:53.554Z"
+      },
+      "directRatingRecovered": false,
+      "directRatingStatus": "SKIPPED_CHANNEL_UNAVAILABLE",
+      "comparability": "direct_comparable",
+      "includeInPriceComparison": true,
+      "comparabilityReason": "2026-11-07前台实读：同OE、4只装、433MHz、可售",
+      "uploadStatus": "SAVED"
+    },
+    {
+      "offerId": "GEN-BELT-33X14-01",
+      "competitorUrl": "https://www.ozon.ru/product/1661575255/",
+      "expectedSku": "1661575255",
+      "actualSku": "1661575255",
+      "status": "MISSING_REQUIRED",
+      "capturedAt": "2026-11-12T03:18:59.391Z",
+      "name": "Ремень вариатора для мототехники - купить на OZON",
+      "available": null,
+      "price": null,
+      "priceRegular": null,
+      "rating": null,
+      "reviewCount": null,
+      "missingFields": [
+        "price",
+        "priceRegular",
+        "rating",
+        "reviewCount",
+        "availability"
+      ],
+      "snapshot": null,
+      "directRatingRecovered": false,
+      "directRatingStatus": "SKIPPED_CHANNEL_UNAVAILABLE",
+      "comparability": "direct_comparable",
+      "includeInPriceComparison": true,
+      "comparabilityReason": "标题/OE/规格与本品一致"
+    },
+    {
+      "offerId": "GEN-BELT-33X14-01",
+      "competitorUrl": "https://www.ozon.ru/product/5144394988/",
+      "expectedSku": "5144394988",
+      "actualSku": "5144394988",
+      "status": "OK_WITH_MISSING",
+      "capturedAt": "2026-11-12T03:19:05.118Z",
+      "name": "TOYOPOWER 33x14-1120 Ремень вариатора для снегохода Буран, Рысь, Тайга, для вездехода Каракат, для мотобуксировщика",
+      "available": true,
+      "price": 2603,
+      "priceRegular": 2743,
+      "rating": null,
+      "reviewCount": 0,
+      "missingFields": [
+        "rating"
+      ],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/5144394988/",
+        "price": 2603,
+        "priceRegular": 2743,
+        "priceType": "regular",
+        "salesCount": 0,
+        "capturedAt": "2026-11-12T03:19:05.118Z"
+      },
+      "directRatingRecovered": false,
+      "directRatingStatus": "SKIPPED_CHANNEL_UNAVAILABLE",
+      "comparability": "direct_comparable",
+      "includeInPriceComparison": true,
+      "comparabilityReason": "标题/OE/规格与本品一致",
+      "uploadStatus": "SAVED"
+    },
+    {
+      "offerId": "GEN-BELT-33X14-01",
+      "competitorUrl": "https://www.ozon.ru/product/1742721162/",
+      "expectedSku": "1742721162",
+      "actualSku": "1742721162",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:19:10.686Z",
+      "name": "Вариаторный ремень DUNLOP BLUE 33*14*1120 усиленный кевраловым кордом и арамидным волокном для снегохода, квадроцикла",
+      "available": true,
+      "price": 4448,
+      "priceRegular": 4942,
+      "rating": 4.8,
+      "reviewCount": 37,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/1742721162/",
+        "price": 4448,
+        "priceRegular": 4942,
+        "priceType": "regular",
+        "rating": 4.8,
+        "salesCount": 37,
+        "capturedAt": "2026-11-12T03:19:10.686Z"
+      },
+      "comparability": "direct_comparable",
+      "includeInPriceComparison": true,
+      "comparabilityReason": "标题/OE/规格与本品一致",
+      "uploadStatus": "SAVED"
+    },
+    {
+      "offerId": "GEN-BELT-35X1126-01",
+      "competitorUrl": "https://www.ozon.ru/product/1887285378/",
+      "expectedSku": "1887285378",
+      "actualSku": "1887285378",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:19:16.172Z",
+      "name": "Ремень вариатора для снегохода Yamaha, Тайга 1126*35 40G4340 8DN-17641-00 414617500",
+      "available": true,
+      "price": 6015,
+      "priceRegular": 6684,
+      "rating": 4.5,
+      "reviewCount": 60,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/1887285378/",
+        "price": 6015,
+        "priceRegular": 6684,
+        "priceType": "regular",
+        "rating": 4.5,
+        "salesCount": 60,
+        "capturedAt": "2026-11-12T03:19:16.172Z"
+      },
+      "comparability": "direct_comparable",
+      "includeInPriceComparison": true,
+      "comparabilityReason": "标题/OE/规格与本品一致",
+      "uploadStatus": "SAVED"
+    },
+    {
+      "offerId": "GEN-BELT-35X1126-01",
+      "competitorUrl": "https://www.ozon.ru/product/3415746292/",
+      "expectedSku": "3415746292",
+      "actualSku": "3415746292",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:19:21.510Z",
+      "name": "Ремень вариатора тайга варяг 550, 1126*35мм, оригинальное качество для Yamaha Viking 540",
+      "available": true,
+      "price": 4688,
+      "priceRegular": 4993,
+      "rating": 5,
+      "reviewCount": 1,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/3415746292/",
+        "price": 4688,
+        "priceRegular": 4993,
+        "priceType": "regular",
+        "rating": 5,
+        "salesCount": 1,
+        "capturedAt": "2026-11-12T03:19:21.510Z"
+      },
+      "comparability": "direct_comparable",
+      "includeInPriceComparison": true,
+      "comparabilityReason": "标题/OE/规格与本品一致",
+      "uploadStatus": "SAVED"
+    },
+    {
+      "offerId": "GEN-BELT-35X1126-01",
+      "competitorUrl": "https://www.ozon.ru/product/4843317615/",
+      "expectedSku": "4843317615",
+      "status": "FETCH_FAILED",
+      "capturedAt": "2026-11-12T03:19:27.211Z",
+      "error": "Ozon translation channel returned HTTP 404",
+      "errorCode": null,
+      "cause": null,
+      "missingFields": [
+        "sku",
+        "price",
+        "rating",
+        "reviewCount"
+      ],
+      "snapshot": null,
+      "comparability": "direct_comparable",
+      "includeInPriceComparison": true,
+      "comparabilityReason": "标题/OE/规格与本品一致"
+    },
+    {
+      "offerId": "GEN-CARB-188F-02",
+      "competitorUrl": "https://www.ozon.ru/product/karbyurator-gaz-i-benzin-dlya-generatora-elektrostantsiy-4-9kvt-188f-190f-192f-gx340-gx390-5845819034/",
+      "expectedSku": "5845819034",
+      "actualSku": "5845819034",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:19:32.858Z",
+      "name": "Карбюратор Газ и Бензин для генератора, электростанций 4-9кВт (188F, 190F, 192F/GX340,GX390,GX420,GX440) с Редуктором",
+      "available": true,
+      "price": 1816,
+      "priceRegular": 1985,
+      "rating": 4.9,
+      "reviewCount": 786,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/karbyurator-gaz-i-benzin-dlya-generatora-elektrostantsiy-4-9kvt-188f-190f-192f-gx340-gx390-5845819034/",
+        "price": 1816,
+        "priceRegular": 1985,
+        "priceType": "regular",
+        "rating": 4.9,
+        "salesCount": 786,
+        "capturedAt": "2026-11-12T03:19:32.858Z"
+      },
+      "comparability": "market_reference",
+      "includeInPriceComparison": false,
+      "comparabilityReason": "含减压阀套装，配置不同"
+    },
+    {
+      "offerId": "GEN-CARB-188F-02",
+      "competitorUrl": "https://www.ozon.ru/product/karbyurator-gaz-benzin-dlya-generatora-elektrostantsiy-5-10-kvt-dvigatel-13-18ls-188f-190f-192f-1619983913/",
+      "expectedSku": "1619983913",
+      "actualSku": "1619983913",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:19:37.978Z",
+      "name": "Карбюратор газ-бензин для генератора 5-10 кВт, 188F/190F/192F",
+      "available": true,
+      "price": 1716,
+      "priceRegular": 1972,
+      "rating": 4.8,
+      "reviewCount": 5155,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/karbyurator-gaz-benzin-dlya-generatora-elektrostantsiy-5-10-kvt-dvigatel-13-18ls-188f-190f-192f-1619983913/",
+        "price": 1716,
+        "priceRegular": 1972,
+        "priceType": "regular",
+        "rating": 4.8,
+        "salesCount": 5155,
+        "capturedAt": "2026-11-12T03:19:37.978Z"
+      },
+      "comparability": "direct_comparable",
+      "includeInPriceComparison": true,
+      "comparabilityReason": "标题/OE/规格与本品一致",
+      "uploadStatus": "SAVED"
+    },
+    {
+      "offerId": "GEN-CARB-188F-02",
+      "competitorUrl": "https://www.ozon.ru/product/trehtoplivnyy-karbyurator-s-avtomaticheskoy-zaslonkoy-dlya-dvigateley-188f-190f-gx390-5756089169/",
+      "expectedSku": "5756089169",
+      "actualSku": "5756089169",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:19:43.643Z",
+      "name": "Трехтопливный карбюратор с автоматической заслонкой для двигателей 188F,190F,GX390,GX420, генераторов 5 8 кВт, работает на бензине, LNG, CNG",
+      "available": true,
+      "price": 1331,
+      "priceRegular": 1438,
+      "rating": 4.2,
+      "reviewCount": 5,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/trehtoplivnyy-karbyurator-s-avtomaticheskoy-zaslonkoy-dlya-dvigateley-188f-190f-gx390-5756089169/",
+        "price": 1331,
+        "priceRegular": 1438,
+        "priceType": "regular",
+        "rating": 4.2,
+        "salesCount": 5,
+        "capturedAt": "2026-11-12T03:19:43.643Z"
+      },
+      "comparability": "market_reference",
+      "includeInPriceComparison": false,
+      "comparabilityReason": "三燃料自动风门款，配置不同"
+    },
+    {
+      "offerId": "MAR-PUMP-61N-01",
+      "competitorUrl": "https://www.ozon.ru/product/remkomplekt-pompy-dlya-lodochnyh-motorov-yamaha-25-30-2t-61n-w0078-69p-w0078-5143851229/",
+      "expectedSku": "5143851229",
+      "actualSku": "5143851229",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:19:49.132Z",
+      "name": "Ремкомплект помпы для лодочных моторов Yamaha 25, 30 2T - 61N-W0078, 69P-W0078",
+      "available": true,
+      "price": 2485,
+      "priceRegular": 2761,
+      "rating": 5,
+      "reviewCount": 13,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/remkomplekt-pompy-dlya-lodochnyh-motorov-yamaha-25-30-2t-61n-w0078-69p-w0078-5143851229/",
+        "price": 2485,
+        "priceRegular": 2761,
+        "priceType": "regular",
+        "rating": 5,
+        "salesCount": 13,
+        "capturedAt": "2026-11-12T03:19:49.132Z"
+      },
+      "comparability": "direct_comparable",
+      "includeInPriceComparison": true,
+      "comparabilityReason": "标题/OE/规格与本品一致",
+      "uploadStatus": "SAVED"
+    },
+    {
+      "offerId": "MAR-PUMP-61N-01",
+      "competitorUrl": "https://www.ozon.ru/product/remkomplekt-pompy-dlya-yamaha-25-30-l-s-2t-61n-w0078-11-s-korpusom-2909195201/",
+      "expectedSku": "2909195201",
+      "actualSku": "2909195201",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:19:56.025Z",
+      "name": "Ремкомплект помпы для Yamaha 25, 30 л.с. 2т 61N-W0078-11 с корпусом",
+      "available": true,
+      "price": 2934,
+      "priceRegular": 3260,
+      "rating": 5,
+      "reviewCount": 3,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/remkomplekt-pompy-dlya-yamaha-25-30-l-s-2t-61n-w0078-11-s-korpusom-2909195201/",
+        "price": 2934,
+        "priceRegular": 3260,
+        "priceType": "regular",
+        "rating": 5,
+        "salesCount": 3,
+        "capturedAt": "2026-11-12T03:19:56.025Z"
+      },
+      "comparability": "market_reference",
+      "includeInPriceComparison": false,
+      "comparabilityReason": "含水泵壳体，套装不同"
+    },
+    {
+      "offerId": "MAR-PUMP-61N-01",
+      "competitorUrl": "https://www.ozon.ru/product/remkomplekt-pompy-ohlazhdeniya-yamaha-25-30-f25-30-61n-w0078-omax-2745679711/",
+      "expectedSku": "2745679711",
+      "actualSku": "2745679711",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:20:01.959Z",
+      "name": "Ремкомплект помпы охлаждения Yamaha 25-30/ F25-30 (61N-W0078) (Omax)",
+      "available": true,
+      "price": 3000,
+      "priceRegular": 3448,
+      "rating": 5,
+      "reviewCount": 12,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/remkomplekt-pompy-ohlazhdeniya-yamaha-25-30-f25-30-61n-w0078-omax-2745679711/",
+        "price": 3000,
+        "priceRegular": 3448,
+        "priceType": "regular",
+        "rating": 5,
+        "salesCount": 12,
+        "capturedAt": "2026-11-12T03:20:01.959Z"
+      },
+      "comparability": "direct_comparable",
+      "includeInPriceComparison": true,
+      "comparabilityReason": "标题/OE/规格与本品一致",
+      "uploadStatus": "SAVED"
+    },
+    {
+      "offerId": "MAR-YAM-61N-01",
+      "competitorUrl": "https://www.ozon.ru/product/remkomplekt-karbyuratora-tohatsu-mercury-mizashi-1675854612/",
+      "expectedSku": "1675854612",
+      "actualSku": "1675854612",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:20:08.083Z",
+      "name": "Ремкомплект карбюратора Tohatsu/Mercury (MIZASHI)",
+      "available": true,
+      "price": 1698,
+      "priceRegular": 1887,
+      "rating": 4.9,
+      "reviewCount": 20,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/remkomplekt-karbyuratora-tohatsu-mercury-mizashi-1675854612/",
+        "price": 1698,
+        "priceRegular": 1887,
+        "priceType": "regular",
+        "rating": 4.9,
+        "salesCount": 20,
+        "capturedAt": "2026-11-12T03:20:08.083Z"
+      },
+      "comparability": "market_reference",
+      "includeInPriceComparison": false,
+      "comparabilityReason": "Tohatsu/Mercury不同OEM"
+    },
+    {
+      "offerId": "MAR-YAM-61N-01",
+      "competitorUrl": "https://www.ozon.ru/product/63v-w0093-00-remkomplekt-karbyuratora-lodochnogo-motora-sovmestim-s-2-taktnogo-podvesnogo-4950071692/",
+      "expectedSku": "4950071692",
+      "actualSku": "4950071692",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:20:13.709Z",
+      "name": "63V-W0093-00 Ремкомплект карбюратора лодочного мотора совместим с 2-тактного подвесного двигателя 9.9HP 15HP",
+      "available": true,
+      "price": 342,
+      "priceRegular": 360,
+      "rating": 5,
+      "reviewCount": 1,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/63v-w0093-00-remkomplekt-karbyuratora-lodochnogo-motora-sovmestim-s-2-taktnogo-podvesnogo-4950071692/",
+        "price": 342,
+        "priceRegular": 360,
+        "priceType": "regular",
+        "rating": 5,
+        "salesCount": 1,
+        "capturedAt": "2026-11-12T03:20:13.709Z"
+      },
+      "comparability": "market_reference",
+      "includeInPriceComparison": false,
+      "comparabilityReason": "63V与9.9-15HP，型号马力不同"
+    },
+    {
+      "offerId": "MAR-YAM-61N-01",
+      "competitorUrl": "https://www.ozon.ru/product/825546112/",
+      "expectedSku": "825546112",
+      "actualSku": "825546112",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:20:19.139Z",
+      "name": "Рем.комплект карбюратора MIZASHI для YAMAHA 25B/30H OEM 61N-W0093-00",
+      "available": true,
+      "price": 1840,
+      "priceRegular": 2045,
+      "rating": 4.1,
+      "reviewCount": 24,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/825546112/",
+        "price": 1840,
+        "priceRegular": 2045,
+        "priceType": "regular",
+        "rating": 4.1,
+        "salesCount": 24,
+        "capturedAt": "2026-11-12T03:20:19.139Z"
+      },
+      "comparability": "direct_comparable",
+      "includeInPriceComparison": true,
+      "comparabilityReason": "标题/OE/规格与本品一致",
+      "uploadStatus": "SAVED"
+    },
+    {
+      "offerId": "MAR-YAM-61N-01",
+      "competitorUrl": "https://www.ozon.ru/product/1119825219/",
+      "expectedSku": "1119825219",
+      "actualSku": "1119825219",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:20:24.430Z",
+      "name": "Ремкомплект карбюратора OMAX для Yamaha 25B, 30H, OEM 61N-W0093-00 3G2-87122-2, 803826A1",
+      "available": true,
+      "price": 1736,
+      "priceRegular": 1929,
+      "rating": 5,
+      "reviewCount": 5,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/1119825219/",
+        "price": 1736,
+        "priceRegular": 1929,
+        "priceType": "regular",
+        "rating": 5,
+        "salesCount": 5,
+        "capturedAt": "2026-11-12T03:20:24.430Z"
+      },
+      "comparability": "direct_comparable",
+      "includeInPriceComparison": true,
+      "comparabilityReason": "标题/OE/规格与本品一致",
+      "uploadStatus": "SAVED"
+    },
+    {
+      "offerId": "MAR-YAM-61N-CABLE-01",
+      "competitorUrl": "https://www.ozon.ru/product/3321402268/",
+      "expectedSku": "3321402268",
+      "actualSku": "3321402268",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:20:30.070Z",
+      "name": "Трос управления газом и реверсом С2 13 футов, Control, трос газ реверс C2 для лодки, катера, дистанционное управление",
+      "available": true,
+      "price": 1918,
+      "priceRegular": 2131,
+      "rating": 4.8,
+      "reviewCount": 671,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/3321402268/",
+        "price": 1918,
+        "priceRegular": 2131,
+        "priceType": "regular",
+        "rating": 4.8,
+        "salesCount": 671,
+        "capturedAt": "2026-11-12T03:20:30.070Z"
+      },
+      "comparability": "pending_verification",
+      "includeInPriceComparison": false,
+      "comparabilityReason": "拉线长度与精确型号未核实"
+    },
+    {
+      "offerId": "MAR-YAM-61N-CABLE-01",
+      "competitorUrl": "https://www.ozon.ru/product/2307138629/",
+      "expectedSku": "2307138629",
+      "actualSku": "2307138629",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:20:35.311Z",
+      "name": "Трос газ реверс для лодочного мотора C8 9 футов, LODKA 116, трос газ реверс для лодки, катера, дистанционное управление",
+      "available": true,
+      "price": 1607,
+      "priceRegular": 1848,
+      "rating": 5,
+      "reviewCount": 1145,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/2307138629/",
+        "price": 1607,
+        "priceRegular": 1848,
+        "priceType": "regular",
+        "rating": 5,
+        "salesCount": 1145,
+        "capturedAt": "2026-11-12T03:20:35.311Z"
+      },
+      "comparability": "pending_verification",
+      "includeInPriceComparison": false,
+      "comparabilityReason": "拉线长度与精确型号未核实"
+    },
+    {
+      "offerId": "MAR-YAM-61N-CABLE-01",
+      "competitorUrl": "https://www.ozon.ru/product/1846466398/",
+      "expectedSku": "1846466398",
+      "actualSku": "1846466398",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:20:41.029Z",
+      "name": "winibo Трос управления для лодки",
+      "available": true,
+      "price": 3257,
+      "priceRegular": 3428,
+      "rating": 4.9,
+      "reviewCount": 814,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/1846466398/",
+        "price": 3257,
+        "priceRegular": 3428,
+        "priceType": "regular",
+        "rating": 4.9,
+        "salesCount": 814,
+        "capturedAt": "2026-11-12T03:20:41.029Z"
+      },
+      "comparability": "pending_verification",
+      "includeInPriceComparison": false,
+      "comparabilityReason": "未标长度"
+    },
+    {
+      "offerId": "MAR-YAM-66T-CABLE-01",
+      "competitorUrl": "https://www.ozon.ru/product/1701884696/",
+      "expectedSku": "1701884696",
+      "actualSku": "1701884696",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:20:46.695Z",
+      "name": "winibo Трос управления для лодки",
+      "available": true,
+      "price": 1628,
+      "priceRegular": 1714,
+      "rating": 4.9,
+      "reviewCount": 344,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/1701884696/",
+        "price": 1628,
+        "priceRegular": 1714,
+        "priceType": "regular",
+        "rating": 4.9,
+        "salesCount": 344,
+        "capturedAt": "2026-11-12T03:20:46.695Z"
+      },
+      "comparability": "pending_verification",
+      "includeInPriceComparison": false,
+      "comparabilityReason": "未标长度且共享评价池"
+    },
+    {
+      "offerId": "MAR-YAM-66T-CABLE-01",
+      "competitorUrl": "https://www.ozon.ru/product/1701868489/",
+      "expectedSku": "1701868489",
+      "actualSku": "1701868489",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:20:52.783Z",
+      "name": "winibo Трос управления для лодки",
+      "available": true,
+      "price": 1416,
+      "priceRegular": 1491,
+      "rating": 4.9,
+      "reviewCount": 344,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/1701868489/",
+        "price": 1416,
+        "priceRegular": 1491,
+        "priceType": "regular",
+        "rating": 4.9,
+        "salesCount": 344,
+        "capturedAt": "2026-11-12T03:20:52.783Z"
+      },
+      "comparability": "pending_verification",
+      "includeInPriceComparison": false,
+      "comparabilityReason": "未标长度且共享评价池"
+    },
+    {
+      "offerId": "MAR-YAM-6E7-01",
+      "competitorUrl": "https://www.ozon.ru/product/vtulka-grebnogo-vinta-rezinovaya-yamaha-9-9-20-3173237511/",
+      "expectedSku": "3173237511",
+      "actualSku": "3173237511",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:20:58.641Z",
+      "name": "Втулка гребного винта резиновая Yamaha 9.9-20",
+      "available": true,
+      "price": 2690,
+      "priceRegular": 2988,
+      "rating": 4.9,
+      "reviewCount": 10,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/vtulka-grebnogo-vinta-rezinovaya-yamaha-9-9-20-3173237511/",
+        "price": 2690,
+        "priceRegular": 2988,
+        "priceType": "regular",
+        "rating": 4.9,
+        "salesCount": 10,
+        "capturedAt": "2026-11-12T03:20:58.641Z"
+      },
+      "comparability": "direct_comparable",
+      "includeInPriceComparison": true,
+      "comparabilityReason": "标题/OE/规格与本品一致",
+      "uploadStatus": "SAVED"
+    },
+    {
+      "offerId": "MAR-YAM-6E7-01",
+      "competitorUrl": "https://www.ozon.ru/product/vtulka-grebnogo-vinta-2129622188/",
+      "expectedSku": "2129622188",
+      "actualSku": "2129622188",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:21:03.711Z",
+      "name": "Втулка гребного винта",
+      "available": true,
+      "price": 1881,
+      "priceRegular": 2090,
+      "rating": 5,
+      "reviewCount": 26,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/vtulka-grebnogo-vinta-2129622188/",
+        "price": 1881,
+        "priceRegular": 2090,
+        "priceType": "regular",
+        "rating": 5,
+        "salesCount": 26,
+        "capturedAt": "2026-11-12T03:21:03.711Z"
+      },
+      "comparability": "pending_verification",
+      "includeInPriceComparison": false,
+      "comparabilityReason": "未标适配马力/件号"
+    },
+    {
+      "offerId": "MAR-YAM-6E7-01",
+      "competitorUrl": "https://www.ozon.ru/product/vtulka-grebnogo-vinta-rezinovaya-yamaha-25-30-3173192285/",
+      "expectedSku": "3173192285",
+      "actualSku": "3173192285",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:21:09.086Z",
+      "name": "Втулка гребного винта резиновая Yamaha 25-30",
+      "available": true,
+      "price": 3008,
+      "priceRegular": 3342,
+      "rating": 4.9,
+      "reviewCount": 10,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/vtulka-grebnogo-vinta-rezinovaya-yamaha-25-30-3173192285/",
+        "price": 3008,
+        "priceRegular": 3342,
+        "priceType": "regular",
+        "rating": 4.9,
+        "salesCount": 10,
+        "capturedAt": "2026-11-12T03:21:09.086Z"
+      },
+      "comparability": "market_reference",
+      "includeInPriceComparison": false,
+      "comparabilityReason": "25-30马力，范围不同"
+    },
+    {
+      "offerId": "MAR-YAM-6E7-01",
+      "competitorUrl": "https://www.ozon.ru/product/ustanovochnyy-komplekt-grebnogo-vinta-dlya-plm-yamaha-9-9-15-l-s-6e7-45987-00-1606934059/",
+      "expectedSku": "1606934059",
+      "actualSku": "1606934059",
+      "status": "OK_WITH_MISSING",
+      "capturedAt": "2026-11-12T03:21:14.121Z",
+      "name": "Установочный комплект гребного винта для ПЛМ YAMAHA 9,9-15 л.с. (6E7-45987-00)",
+      "available": true,
+      "price": 2269,
+      "priceRegular": 2521,
+      "rating": null,
+      "reviewCount": 0,
+      "missingFields": [
+        "rating"
+      ],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/ustanovochnyy-komplekt-grebnogo-vinta-dlya-plm-yamaha-9-9-15-l-s-6e7-45987-00-1606934059/",
+        "price": 2269,
+        "priceRegular": 2521,
+        "priceType": "regular",
+        "salesCount": 0,
+        "capturedAt": "2026-11-12T03:21:14.121Z"
+      },
+      "directRatingRecovered": false,
+      "directRatingStatus": "SKIPPED_CHANNEL_UNAVAILABLE",
+      "comparability": "market_reference",
+      "includeInPriceComparison": false,
+      "comparabilityReason": "全套安装件，非单一衬套"
+    },
+    {
+      "offerId": "MAR-YAM-6E7-01",
+      "competitorUrl": "https://www.ozon.ru/product/58120-93701-dempfernaya-rezina-vtulka-grebnogo-vinta-dlya-lodochnogo-dvigatelya-2011702736/",
+      "expectedSku": "2011702736",
+      "actualSku": "2011702736",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:21:19.314Z",
+      "name": "58120-93701 Демпферная Резина, Втулка Гребного Винта Для Лодочного Двигателя",
+      "available": true,
+      "price": 575,
+      "priceRegular": 605,
+      "rating": 4.3,
+      "reviewCount": 4,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/58120-93701-dempfernaya-rezina-vtulka-grebnogo-vinta-dlya-lodochnogo-dvigatelya-2011702736/",
+        "price": 575,
+        "priceRegular": 605,
+        "priceType": "regular",
+        "rating": 4.3,
+        "salesCount": 4,
+        "capturedAt": "2026-11-12T03:21:19.314Z"
+      },
+      "comparability": "market_reference",
+      "includeInPriceComparison": false,
+      "comparabilityReason": "58120-93701不同件号"
+    },
+    {
+      "offerId": "MAR-YAM-6E7-01",
+      "competitorUrl": "https://www.ozon.ru/product/692042497/",
+      "expectedSku": "692042497",
+      "actualSku": "692042497",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:21:24.434Z",
+      "name": "YATW Шайба упорная для YAMAHA 9.9-15 л.с. OEM: 6E7-45987-00/683-45987-00 (Solas)",
+      "available": true,
+      "price": 1698,
+      "priceRegular": 1887,
+      "rating": 5,
+      "reviewCount": 6,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/692042497/",
+        "price": 1698,
+        "priceRegular": 1887,
+        "priceType": "regular",
+        "rating": 5,
+        "salesCount": 6,
+        "capturedAt": "2026-11-12T03:21:24.434Z"
+      },
+      "comparability": "direct_comparable",
+      "includeInPriceComparison": true,
+      "comparabilityReason": "标题/OE/规格与本品一致",
+      "uploadStatus": "SAVED"
+    },
+    {
+      "offerId": "MAR-YAM-6E7-01",
+      "competitorUrl": "https://www.ozon.ru/product/1439369677/",
+      "expectedSku": "1439369677",
+      "actualSku": "1439369677",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:21:29.853Z",
+      "name": "Шайба гребного винта Yamaha 9.9-20HP",
+      "available": true,
+      "price": 762,
+      "priceRegular": 847,
+      "rating": 4.7,
+      "reviewCount": 7,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/1439369677/",
+        "price": 762,
+        "priceRegular": 847,
+        "priceType": "regular",
+        "rating": 4.7,
+        "salesCount": 7,
+        "capturedAt": "2026-11-12T03:21:29.853Z"
+      },
+      "comparability": "direct_comparable",
+      "includeInPriceComparison": true,
+      "comparabilityReason": "标题/OE/规格与本品一致",
+      "uploadStatus": "SAVED"
+    },
+    {
+      "offerId": "MAR-YAM-F20-CARB-01",
+      "competitorUrl": "https://www.ozon.ru/product/remkomplekt-karbyuratora-yamaha-20-25-f20-25-mizashi-1675879623/",
+      "expectedSku": "1675879623",
+      "actualSku": "1675879623",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:21:35.657Z",
+      "name": "Ремкомплект карбюратора Yamaha 20-25/F20-25 (MIZASHI)",
+      "available": true,
+      "price": 1656,
+      "priceRegular": 1904,
+      "rating": 5,
+      "reviewCount": 1,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/remkomplekt-karbyuratora-yamaha-20-25-f20-25-mizashi-1675879623/",
+        "price": 1656,
+        "priceRegular": 1904,
+        "priceType": "regular",
+        "rating": 5,
+        "salesCount": 1,
+        "capturedAt": "2026-11-12T03:21:35.657Z"
+      },
+      "comparability": "direct_comparable",
+      "includeInPriceComparison": true,
+      "comparabilityReason": "标题/OE/规格与本品一致",
+      "uploadStatus": "SAVED"
+    },
+    {
+      "offerId": "MAR-YAM-F20-CARB-01",
+      "competitorUrl": "https://www.ozon.ru/product/mizashi-zapchasti-dlya-lodochnyh-motorov-1061233331/",
+      "expectedSku": "1061233331",
+      "actualSku": "1061233331",
+      "status": "OK_WITH_MISSING",
+      "capturedAt": "2026-11-12T03:21:40.974Z",
+      "name": "Ремкомплект карбюратора Yamaha 65W-W0093-01-00",
+      "available": true,
+      "price": 1749,
+      "priceRegular": 1943,
+      "rating": null,
+      "reviewCount": 4,
+      "missingFields": [
+        "rating"
+      ],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/mizashi-zapchasti-dlya-lodochnyh-motorov-1061233331/",
+        "price": 1749,
+        "priceRegular": 1943,
+        "priceType": "regular",
+        "salesCount": 4,
+        "capturedAt": "2026-11-12T03:21:40.974Z"
+      },
+      "directRatingRecovered": false,
+      "directRatingStatus": "SKIPPED_CHANNEL_UNAVAILABLE",
+      "comparability": "direct_comparable",
+      "includeInPriceComparison": true,
+      "comparabilityReason": "标题/OE/规格与本品一致",
+      "uploadStatus": "SAVED"
+    },
+    {
+      "offerId": "MAR-YAM-F20-CARB-01",
+      "competitorUrl": "https://www.ozon.ru/product/podhodit-dlya-yamaha-67c-w0093-01-20hp-25hp-30-hp-40-hp20-25-30-40-hp67c-w0093-00-65w-w0093-02-5610520400/",
+      "expectedSku": "5610520400",
+      "actualSku": "5610520400",
+      "status": "OK_WITH_MISSING",
+      "capturedAt": "2026-11-12T03:21:47.310Z",
+      "name": "Подходит для Yamaha 67C-W0093-01 20HP 25HP 30 HP 40 HP20 25 30 40 HP67C-W0093-00 65W-W0093-02",
+      "available": true,
+      "price": 2290,
+      "priceRegular": 2414,
+      "rating": null,
+      "reviewCount": 0,
+      "missingFields": [
+        "rating"
+      ],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/podhodit-dlya-yamaha-67c-w0093-01-20hp-25hp-30-hp-40-hp20-25-30-40-hp67c-w0093-00-65w-w0093-02-5610520400/",
+        "price": 2290,
+        "priceRegular": 2414,
+        "priceType": "regular",
+        "salesCount": 0,
+        "capturedAt": "2026-11-12T03:21:47.310Z"
+      },
+      "directRatingRecovered": false,
+      "directRatingStatus": "SKIPPED_CHANNEL_UNAVAILABLE",
+      "comparability": "market_reference",
+      "includeInPriceComparison": false,
+      "comparabilityReason": "67C及20-40HP不同OEM"
+    },
+    {
+      "offerId": "MOT-168F-CLUTCH-01",
+      "competitorUrl": "https://www.ozon.ru/product/1375010785/",
+      "expectedSku": "1375010785",
+      "actualSku": "1375010785",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:21:52.486Z",
+      "name": "Комплект дисков сцепления для мотобуксировщика",
+      "available": true,
+      "price": 1894,
+      "priceRegular": 2104,
+      "rating": 5,
+      "reviewCount": 35,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/1375010785/",
+        "price": 1894,
+        "priceRegular": 2104,
+        "priceType": "regular",
+        "rating": 5,
+        "salesCount": 35,
+        "capturedAt": "2026-11-12T03:21:52.486Z"
+      },
+      "comparability": "pending_verification",
+      "includeInPriceComparison": false,
+      "comparabilityReason": "168F/170F适配未在标题证实"
+    },
+    {
+      "offerId": "MOT-168F-CLUTCH-01",
+      "competitorUrl": "https://www.ozon.ru/product/1262619571/",
+      "expectedSku": "1262619571",
+      "actualSku": "1262619571",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:21:58.607Z",
+      "name": "Диски сцепления редуктора с автоматическим сцеплением, мотобуксировщик, мотособака",
+      "available": true,
+      "price": 2013,
+      "priceRegular": 2237,
+      "rating": 4.9,
+      "reviewCount": 75,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/1262619571/",
+        "price": 2013,
+        "priceRegular": 2237,
+        "priceType": "regular",
+        "rating": 4.9,
+        "salesCount": 75,
+        "capturedAt": "2026-11-12T03:21:58.607Z"
+      },
+      "comparability": "pending_verification",
+      "includeInPriceComparison": false,
+      "comparabilityReason": "168F/170F适配未在标题证实"
+    },
+    {
+      "offerId": "MOT-CARB-PZ30-01",
+      "competitorUrl": "https://www.ozon.ru/product/karbyurator-pz30-na-mototsikl-motobuksirovshchik-200-250ss-pz-30-985504393/",
+      "expectedSku": "985504393",
+      "actualSku": "985504393",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:22:04.601Z",
+      "name": "Карбюратор PZ30 на мотоцикл мотобуксировщик 200-250сс / PZ 30",
+      "available": true,
+      "price": 1852,
+      "priceRegular": 2058,
+      "rating": 4.8,
+      "reviewCount": 1056,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/karbyurator-pz30-na-mototsikl-motobuksirovshchik-200-250ss-pz-30-985504393/",
+        "price": 1852,
+        "priceRegular": 2058,
+        "priceType": "regular",
+        "rating": 4.8,
+        "salesCount": 1056,
+        "capturedAt": "2026-11-12T03:22:04.601Z"
+      },
+      "comparability": "direct_comparable",
+      "includeInPriceComparison": true,
+      "comparabilityReason": "标题/OE/规格与本品一致",
+      "uploadStatus": "SAVED"
+    },
+    {
+      "offerId": "MOT-CARB-PZ30-01",
+      "competitorUrl": "https://www.ozon.ru/product/5628200287/",
+      "expectedSku": "5628200287",
+      "actualSku": "5628200287",
+      "status": "OK_WITH_MISSING",
+      "capturedAt": "2026-11-12T03:22:10.418Z",
+      "name": "Карбюратор PZ30 (c ускорительным насосом) CB250/TTR 250 250см3",
+      "available": true,
+      "price": 1326,
+      "priceRegular": 1396,
+      "rating": null,
+      "reviewCount": 0,
+      "missingFields": [
+        "rating"
+      ],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/5628200287/",
+        "price": 1326,
+        "priceRegular": 1396,
+        "priceType": "regular",
+        "salesCount": 0,
+        "capturedAt": "2026-11-12T03:22:10.418Z"
+      },
+      "directRatingRecovered": false,
+      "directRatingStatus": "SKIPPED_CHANNEL_UNAVAILABLE",
+      "comparability": "direct_comparable",
+      "includeInPriceComparison": true,
+      "comparabilityReason": "标题/OE/规格与本品一致",
+      "uploadStatus": "SAVED"
+    },
+    {
+      "offerId": "MOT-MIK-VM34-KIT-01",
+      "competitorUrl": "https://www.ozon.ru/product/2775779558/",
+      "expectedSku": "2775779558",
+      "actualSku": "2775779558",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:22:17.797Z",
+      "name": "Ремкомплект карбюратора Mikuni VM 32/34 (Микуни) для снегохода Буран и мототехники",
+      "available": true,
+      "price": 814,
+      "priceRegular": 905,
+      "rating": 5,
+      "reviewCount": 6,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/2775779558/",
+        "price": 814,
+        "priceRegular": 905,
+        "priceType": "regular",
+        "rating": 5,
+        "salesCount": 6,
+        "capturedAt": "2026-11-12T03:22:17.797Z"
+      },
+      "comparability": "direct_comparable",
+      "includeInPriceComparison": true,
+      "comparabilityReason": "标题/OE/规格与本品一致",
+      "uploadStatus": "SAVED"
+    },
+    {
+      "offerId": "MOT-MIK-VM34-KIT-01",
+      "competitorUrl": "https://www.ozon.ru/product/836356307/",
+      "expectedSku": "836356307",
+      "actualSku": "836356307",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:22:23.054Z",
+      "name": "Ремкомплект карбюратора MIKUNI VM 30/32/34 SM-07081",
+      "available": true,
+      "price": 939,
+      "priceRegular": 1044,
+      "rating": 4.6,
+      "reviewCount": 37,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/836356307/",
+        "price": 939,
+        "priceRegular": 1044,
+        "priceType": "regular",
+        "rating": 4.6,
+        "salesCount": 37,
+        "capturedAt": "2026-11-12T03:22:23.054Z"
+      },
+      "comparability": "direct_comparable",
+      "includeInPriceComparison": true,
+      "comparabilityReason": "标题/OE/规格与本品一致",
+      "uploadStatus": "SAVED"
+    },
+    {
+      "offerId": "MOT-MIK-VM34-KIT-01",
+      "competitorUrl": "https://www.ozon.ru/product/2769863364/",
+      "expectedSku": "2769863364",
+      "actualSku": "2769863364",
+      "status": "MISSING_REQUIRED",
+      "capturedAt": "2026-11-12T03:22:30.409Z",
+      "name": "Запчасти карбюратора для мототехники - купить на OZON",
+      "available": null,
+      "price": null,
+      "priceRegular": null,
+      "rating": null,
+      "reviewCount": null,
+      "missingFields": [
+        "price",
+        "priceRegular",
+        "rating",
+        "reviewCount",
+        "availability"
+      ],
+      "snapshot": null,
+      "directRatingRecovered": false,
+      "directRatingStatus": "SKIPPED_CHANNEL_UNAVAILABLE",
+      "comparability": "direct_comparable",
+      "includeInPriceComparison": true,
+      "comparabilityReason": "标题/OE/规格与本品一致"
+    },
+    {
+      "offerId": "ZERK-T8P-L",
+      "competitorUrl": "https://www.ozon.ru/product/2995668092/",
+      "expectedSku": "2995668092",
+      "actualSku": "2995668092",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:22:36.152Z",
+      "name": "Зеркальный элемент левого зеркала для Chery Tiggo 4, 4 Pro, 7 Pro, 8, 8 Pro, 8 Pro Max / J68-8202110BA",
+      "available": true,
+      "price": 1735,
+      "priceRegular": 1928,
+      "rating": 4.7,
+      "reviewCount": 12,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/2995668092/",
+        "price": 1735,
+        "priceRegular": 1928,
+        "priceType": "regular",
+        "rating": 4.7,
+        "salesCount": 12,
+        "capturedAt": "2026-11-12T03:22:36.152Z"
+      },
+      "comparability": "pending_verification",
+      "includeInPriceComparison": false,
+      "comparabilityReason": "原为同OE直接可比；2026-11-02原页失去价格/可售组件，保留映射与历史待复核"
+    },
+    {
+      "offerId": "ZERK-T8P-L",
+      "competitorUrl": "https://www.ozon.ru/product/1410921372/",
+      "expectedSku": "1410921372",
+      "actualSku": "1410921372",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:22:41.654Z",
+      "name": "Зеркальный элемент левый с обогревом для автомобиля Chery Tiggo 7 PRO MAX I(1) поколение 2022-наше время",
+      "available": true,
+      "price": 1913,
+      "priceRegular": 2126,
+      "rating": 4.7,
+      "reviewCount": 67,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/1410921372/",
+        "price": 1913,
+        "priceRegular": 2126,
+        "priceType": "regular",
+        "rating": 4.7,
+        "salesCount": 67,
+        "capturedAt": "2026-11-12T03:22:41.654Z"
+      },
+      "comparability": "market_reference",
+      "includeInPriceComparison": false,
+      "comparabilityReason": "Tiggo 7 Pro Max变体不同"
+    },
+    {
+      "offerId": "ZERK-T8P-L",
+      "competitorUrl": "https://www.ozon.ru/product/2723843455/",
+      "expectedSku": "2723843455",
+      "actualSku": "2723843455",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:22:47.644Z",
+      "name": "Зеркальный элемент левый с обогревом для автомобиля Chery Tiggo 8 PRO MAX I(1) поколение 2021-наше время",
+      "available": true,
+      "price": 1961,
+      "priceRegular": 2179,
+      "rating": 1,
+      "reviewCount": 1,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/2723843455/",
+        "price": 1961,
+        "priceRegular": 2179,
+        "priceType": "regular",
+        "rating": 1,
+        "salesCount": 1,
+        "capturedAt": "2026-11-12T03:22:47.644Z"
+      },
+      "comparability": "direct_comparable",
+      "includeInPriceComparison": true,
+      "comparabilityReason": "建品调研同款：Tiggo 8 Pro Max左侧加热镜片，与现售适配和规格一致",
+      "uploadStatus": "SAVED"
+    },
+    {
+      "offerId": "ZERK-T8P-R",
+      "competitorUrl": "https://www.ozon.ru/product/2995667397/",
+      "expectedSku": "2995667397",
+      "actualSku": "2995667397",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:22:54.464Z",
+      "name": "Зеркальный элемент правого зеркала для Chery Tiggo 4, 4 Pro, 7 Pro, 8, 8 Pro, 8 Pro Max / J68-8202120BA",
+      "available": true,
+      "price": 1287,
+      "priceRegular": 1431,
+      "rating": 5,
+      "reviewCount": 9,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/2995667397/",
+        "price": 1287,
+        "priceRegular": 1431,
+        "priceType": "regular",
+        "rating": 5,
+        "salesCount": 9,
+        "capturedAt": "2026-11-12T03:22:54.464Z"
+      },
+      "comparability": "direct_comparable",
+      "includeInPriceComparison": true,
+      "comparabilityReason": "标题/OE/规格与本品一致",
+      "uploadStatus": "SAVED"
+    },
+    {
+      "offerId": "ZERK-T8P-R",
+      "competitorUrl": "https://www.ozon.ru/product/1740736830/",
+      "expectedSku": "1740736830",
+      "actualSku": "1740736830",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:22:59.695Z",
+      "name": "Зеркальный элемент правый CHERY Tiggo 8 Pro (21- ) сфера нейтральный с обогревом",
+      "available": true,
+      "price": 1267,
+      "priceRegular": 1407,
+      "rating": 5,
+      "reviewCount": 4,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/1740736830/",
+        "price": 1267,
+        "priceRegular": 1407,
+        "priceType": "regular",
+        "rating": 5,
+        "salesCount": 4,
+        "capturedAt": "2026-11-12T03:22:59.695Z"
+      },
+      "comparability": "direct_comparable",
+      "includeInPriceComparison": true,
+      "comparabilityReason": "标题/OE/规格与本品一致",
+      "uploadStatus": "SAVED"
+    },
+    {
+      "offerId": "ZERK-T8P-R",
+      "competitorUrl": "https://www.ozon.ru/product/1410925022/",
+      "expectedSku": "1410925022",
+      "actualSku": "1410925022",
+      "status": "OK",
+      "capturedAt": "2026-11-12T03:23:06.396Z",
+      "name": "Зеркальный элемент правый с обогревом для автомобиля Chery Tiggo 7 PRO MAX I(1) поколение 2022-наше время",
+      "available": true,
+      "price": 1970,
+      "priceRegular": 2188,
+      "rating": 4.7,
+      "reviewCount": 67,
+      "missingFields": [],
+      "snapshot": {
+        "competitorUrl": "https://www.ozon.ru/product/1410925022/",
+        "price": 1970,
+        "priceRegular": 2188,
+        "priceType": "regular",
+        "rating": 4.7,
+        "salesCount": 67,
+        "capturedAt": "2026-11-12T03:23:06.396Z"
+      },
+      "comparability": "market_reference",
+      "includeInPriceComparison": false,
+      "comparabilityReason": "Tiggo 7 Pro Max变体不同"
+    }
+  ],
+  "uploads": [
+    {
+      "offerId": "CN-AUTO-GLP-12V-01",
+      "status": "SAVED",
+      "snapshots": [
+        {
+          "competitorUrl": "https://www.ozon.ru/product/svecha-nakala-dlya-avtonomnogo-otopitelya-12v-3082687849/",
+          "capturedAt": "2026-11-12T03:17:29.737Z"
+        }
+      ],
+      "inserted": 1
+    },
+    {
+      "offerId": "CN-AUTO-GLP-24V-01",
+      "status": "SAVED",
+      "snapshots": [
+        {
+          "competitorUrl": "https://www.ozon.ru/product/svecha-nakala-avtonomka-suhoy-fen-otopitel-24v-2492696631/",
+          "capturedAt": "2026-11-12T03:17:41.747Z"
+        }
+      ],
+      "inserted": 1
+    },
+    {
+      "offerId": "CN-AUTO-GRILLE-COVER-01",
+      "status": "SAVED",
+      "snapshots": [
+        {
+          "competitorUrl": "https://www.ozon.ru/product/5951640146/",
+          "capturedAt": "2026-11-12T03:17:59.107Z"
+        }
+      ],
+      "inserted": 1
+    },
+    {
+      "offerId": "CN-HAV-JOLION-TPMS4-01",
+      "status": "SAVED",
+      "snapshots": [
+        {
+          "competitorUrl": "https://www.ozon.ru/product/datchik-davleniya-v-shinah-4-shtuki-3641100akr02a-dlya-greatwall-ora-cat-3641100akr02a-tpms-433-mgts-3416336453/",
+          "capturedAt": "2026-11-12T03:18:48.190Z"
+        },
+        {
+          "competitorUrl": "https://www.ozon.ru/product/datchik-davleniya-v-shinah-4-shtuki-3641100akr02a-dlya-greatwall-ora-cat-3641100akr02a-tpms-433-mgts-6187677876/",
+          "capturedAt": "2026-11-12T03:18:53.554Z"
+        }
+      ],
+      "inserted": 2
+    },
+    {
+      "offerId": "GEN-BELT-33X14-01",
+      "status": "SAVED",
+      "snapshots": [
+        {
+          "competitorUrl": "https://www.ozon.ru/product/5144394988/",
+          "capturedAt": "2026-11-12T03:19:05.118Z"
+        },
+        {
+          "competitorUrl": "https://www.ozon.ru/product/1742721162/",
+          "capturedAt": "2026-11-12T03:19:10.686Z"
+        }
+      ],
+      "inserted": 2
+    },
+    {
+      "offerId": "GEN-BELT-35X1126-01",
+      "status": "SAVED",
+      "snapshots": [
+        {
+          "competitorUrl": "https://www.ozon.ru/product/1887285378/",
+          "capturedAt": "2026-11-12T03:19:16.172Z"
+        },
+        {
+          "competitorUrl": "https://www.ozon.ru/product/3415746292/",
+          "capturedAt": "2026-11-12T03:19:21.510Z"
+        }
+      ],
+      "inserted": 2
+    },
+    {
+      "offerId": "GEN-CARB-188F-02",
+      "status": "SAVED",
+      "snapshots": [
+        {
+          "competitorUrl": "https://www.ozon.ru/product/karbyurator-gaz-benzin-dlya-generatora-elektrostantsiy-5-10-kvt-dvigatel-13-18ls-188f-190f-192f-1619983913/",
+          "capturedAt": "2026-11-12T03:19:37.978Z"
+        }
+      ],
+      "inserted": 1
+    },
+    {
+      "offerId": "MAR-PUMP-61N-01",
+      "status": "SAVED",
+      "snapshots": [
+        {
+          "competitorUrl": "https://www.ozon.ru/product/remkomplekt-pompy-dlya-lodochnyh-motorov-yamaha-25-30-2t-61n-w0078-69p-w0078-5143851229/",
+          "capturedAt": "2026-11-12T03:19:49.132Z"
+        },
+        {
+          "competitorUrl": "https://www.ozon.ru/product/remkomplekt-pompy-ohlazhdeniya-yamaha-25-30-f25-30-61n-w0078-omax-2745679711/",
+          "capturedAt": "2026-11-12T03:20:01.959Z"
+        }
+      ],
+      "inserted": 2
+    },
+    {
+      "offerId": "MAR-YAM-61N-01",
+      "status": "SAVED",
+      "snapshots": [
+        {
+          "competitorUrl": "https://www.ozon.ru/product/825546112/",
+          "capturedAt": "2026-11-12T03:20:19.139Z"
+        },
+        {
+          "competitorUrl": "https://www.ozon.ru/product/1119825219/",
+          "capturedAt": "2026-11-12T03:20:24.430Z"
+        }
+      ],
+      "inserted": 2
+    },
+    {
+      "offerId": "MAR-YAM-6E7-01",
+      "status": "SAVED",
+      "snapshots": [
+        {
+          "competitorUrl": "https://www.ozon.ru/product/vtulka-grebnogo-vinta-rezinovaya-yamaha-9-9-20-3173237511/",
+          "capturedAt": "2026-11-12T03:20:58.641Z"
+        },
+        {
+          "competitorUrl": "https://www.ozon.ru/product/692042497/",
+          "capturedAt": "2026-11-12T03:21:24.434Z"
+        },
+        {
+          "competitorUrl": "https://www.ozon.ru/product/1439369677/",
+          "capturedAt": "2026-11-12T03:21:29.853Z"
+        }
+      ],
+      "inserted": 3
+    },
+    {
+      "offerId": "MAR-YAM-F20-CARB-01",
+      "status": "SAVED",
+      "snapshots": [
+        {
+          "competitorUrl": "https://www.ozon.ru/product/remkomplekt-karbyuratora-yamaha-20-25-f20-25-mizashi-1675879623/",
+          "capturedAt": "2026-11-12T03:21:35.657Z"
+        },
+        {
+          "competitorUrl": "https://www.ozon.ru/product/mizashi-zapchasti-dlya-lodochnyh-motorov-1061233331/",
+          "capturedAt": "2026-11-12T03:21:40.974Z"
+        }
+      ],
+      "inserted": 2
+    },
+    {
+      "offerId": "MOT-CARB-PZ30-01",
+      "status": "SAVED",
+      "snapshots": [
+        {
+          "competitorUrl": "https://www.ozon.ru/product/karbyurator-pz30-na-mototsikl-motobuksirovshchik-200-250ss-pz-30-985504393/",
+          "capturedAt": "2026-11-12T03:22:04.601Z"
+        },
+        {
+          "competitorUrl": "https://www.ozon.ru/product/5628200287/",
+          "capturedAt": "2026-11-12T03:22:10.418Z"
+        }
+      ],
+      "inserted": 2
+    },
+    {
+      "offerId": "MOT-MIK-VM34-KIT-01",
+      "status": "SAVED",
+      "snapshots": [
+        {
+          "competitorUrl": "https://www.ozon.ru/product/2775779558/",
+          "capturedAt": "2026-11-12T03:22:17.797Z"
+        },
+        {
+          "competitorUrl": "https://www.ozon.ru/product/836356307/",
+          "capturedAt": "2026-11-12T03:22:23.054Z"
+        }
+      ],
+      "inserted": 2
+    },
+    {
+      "offerId": "ZERK-T8P-L",
+      "status": "SAVED",
+      "snapshots": [
+        {
+          "competitorUrl": "https://www.ozon.ru/product/2723843455/",
+          "capturedAt": "2026-11-12T03:22:47.644Z"
+        }
+      ],
+      "inserted": 1
+    },
+    {
+      "offerId": "ZERK-T8P-R",
+      "status": "SAVED",
+      "snapshots": [
+        {
+          "competitorUrl": "https://www.ozon.ru/product/2995667397/",
+          "capturedAt": "2026-11-12T03:22:54.464Z"
+        },
+        {
+          "competitorUrl": "https://www.ozon.ru/product/1740736830/",
+          "capturedAt": "2026-11-12T03:22:59.695Z"
+        }
+      ],
+      "inserted": 2
+    }
+  ],
+  "pendingReconciliation": {
+    "count": 0,
+    "items": []
+  },
+  "reconciliationResolved": [],
+  "reconciliationErrors": []
+}

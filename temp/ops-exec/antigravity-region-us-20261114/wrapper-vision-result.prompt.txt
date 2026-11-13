@@ -1,0 +1,4 @@
+只输出 WORD=...; CIRCLE=...; BACKGROUND=...，不要解释。
+
+视觉输入要求：以下图片必须实际调用 read_file 或 view_file 读取，不得根据提示文字或文件名推断内容。只读图片，不修改任何文件或生产数据。
+1. 使用 view_file 或 read_file 读取 D:\Onzo\temp\ops-exec\hydrogen-routing-20261113\vision-input.png，按原提示检查该图，不得只根据文字猜测。
