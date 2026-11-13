@@ -55,7 +55,7 @@ function validateDynamicsDates(period: WordstatPeriod, fromDate: string, toDate?
   if (period !== "monthly") return;
   if (fromDate.slice(8, 10) !== "01") throw new Error("Cloud Wordstat monthly fromDate must be the first day of the month");
   if (toDate) {
-    const nextDay = new Date(`${toDate}T00:00:00Z`);
+    const nextDay = new Date(toDate);
     nextDay.setUTCDate(nextDay.getUTCDate() + 1);
     if (nextDay.getUTCDate() !== 1) throw new Error("Cloud Wordstat monthly toDate must be the last day of the month");
   }

@@ -77,6 +77,18 @@ describe("Yandex Cloud client", () => {
     expect(calls).toBe(0);
   });
 
+  it("accepts valid monthly boundaries after RFC3339 conversion", async () => {
+    const bodies: string[] = [];
+    const fetchImpl = async (_url: string | URL | Request, init?: { body?: string }) => {
+      bodies.push(String(init?.body || ""));
+      if (bodies.length === 1) return response({ iamToken: "iam-token", expiresAt: "2026-11-14T12:00:00Z" });
+      return response({ results: [] });
+    };
+    const client = new YandexCloudClient({ fetchImpl: fetchImpl as never });
+    await client.wordstatDynamics({ phrase: "ремень", period: "monthly", fromDate: "2026-01-01", toDate: "2026-10-31" });
+    expect(JSON.parse(bodies[1])).toMatchObject({ fromDate: "2026-01-01T00:00:00Z", toDate: "2026-10-31T00:00:00Z", period: "PERIOD_MONTHLY" });
+  });
+
   it("rejects non-month-end dynamics dates before any request", async () => {
     let calls = 0;
     const client = new YandexCloudClient({ fetchImpl: (async () => { calls++; return response({}); }) as never });

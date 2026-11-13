@@ -446,7 +446,7 @@ pnpm exec vitest run apps/api-services/tests/search-analytics.test.ts apps/api-s
 
 服务器每周一 **03:28 UTC** 只读生成 `/home/ubuntu/onzo/data/weekly-reviews/latest.json`。本机 Windows 任务 **`ONZO Weekly Review`** 每周一 **14:41（本地时间）** 以当前用户 S4U 执行 `scripts/run-weekly-review.ps1`，不再依赖 Kimi 会话或会话 Cron。2026-11-11 系统任务实跑成功后，旧会话任务 `01M735EZ33KK15Q9E5ATQHNG75` 已删除，不再按旧 Cron 补建或双跑。
 
-该任务仍依赖本机开机、已有模型授权及所需代理服务，不是云端无人值守承诺；不得把本机 OAuth、模型密钥或 Chrome 登录态复制到服务器。自 2026-11-13 起，Astra、Gemini 4 Carbon、Argon 与 Kimi API 的实际模型、档位和用量以各次回执为准，失败不得以其他模型冒充；Opus 因地区限制退出当前调度。任务只读，不改 Ozon 商品、价格、库存、促销、Direct、广告或评价。
+该任务仍依赖本机开机、已有模型授权及所需代理服务，不是云端无人值守承诺；不得把本机 OAuth、模型密钥或 Chrome 登录态复制到服务器。当前正式路由为 Astra、Antigravity Opus 5.5 High、Gemini 4 Argon HIGH 与 Kimi API；实际模型、档位和用量以各次回执为准，失败不得以其他模型冒充。2026-11-13 的 Carbon 接替是历史状态，Opus 已于 2026-11-14 恢复。任务只读，不改 Ozon 商品、价格、库存、促销、Direct、广告或评价。
 
 ```powershell
 # 注册或恢复正常周任务（不带恢复目录）
@@ -473,7 +473,7 @@ Start-ScheduledTask -TaskName "ONZO Weekly Review"
 node --import tsx scripts/weekly-review-runner.mjs --resume data/weekly-reviews/runs/<existing-runId>
 ```
 
-`--resume` 只接受当前存储 `runs` 下的已有目录，复用原始输入、提示词及已保存的模型文件，不重新抓取输入，也不调用 Astra、Carbon 或 Argon。缺失的 Astra 原文标 `ASTRA_RAW_OUTPUT_MISSING`，已有失败回执不自动重试；只允许重新执行 Kimi 最终整合。自 2026-11-13 起新运行使用 `carbon.json`，旧 `opus.json` 只按历史 Opus 证据恢复，不改名或冒充 Carbon。`scripts/run-weekly-review.ps1 -Resume <目录>` 是相同能力的系统包装。若临时给系统任务添加恢复参数，完成后必须立即还原为不带 `-Resume` 的正常动作，防止下周重复处理旧目录。
+`--resume` 只接受当前存储 `runs` 下的已有目录，复用原始输入、提示词及已保存的模型文件，不重新抓取输入，也不调用 Astra、Carbon 或 Argon。缺失的 Astra 原文标 `ASTRA_RAW_OUTPUT_MISSING`，已有失败回执不自动重试；只允许重新执行 Kimi 最终整合。当前新运行使用 `opus.json`；带历史 `seat=Carbon` 标记的目录仍按 `carbon.json` 恢复，旧 `opus.json` 也保留原模型，互不冒充。`scripts/run-weekly-review.ps1 -Resume <目录>` 是相同能力的系统包装。若临时给系统任务添加恢复参数，完成后必须立即还原为不带 `-Resume` 的正常动作，防止下周重复处理旧目录。
 
 ### 10.4 本次恢复验收与检查
 
@@ -536,9 +536,9 @@ python scripts/gemini-carbon-continue.py --prompt <prompt.txt> --resume-state <c
 - 正式任务 `ONZO Direct Daily Report` 于2026-11-11 15:14实跑返回0，下一次11-12 11:20；此前0x800710E0无对应脚本/API错误记录，原因不伪造。周复盘任务仍在11-16 14:41执行，不新建重复调度。
 - 7天或5单先到复盘，后续调整需重新核利润、真实CPA、库存和授权，不自动启停、不自动加预算。最新监测与启动不代表已出单或盈利。全项目786项测试、build通过，Lint 0 errors/215既有warnings。修改前备份为 `data/backups/direct-plan-execution-20261111/`。
 
-### 10.8 Gemini 4 Carbon 接替 Opus（2026-11-13）
+### 10.8 Gemini 4 Carbon 接替 Opus（2026-11-13 历史；11-14 已恢复 Opus）
 
-- Opus 因持续地区资格限制退出当前工作流。复杂跨文件审计、竞品证据、经营分析、分镜与经济交叉复核改由 Carbon；Hydrogen 仍负责日常代码、桌面任务分析和视觉理解，Astra、Argon、Luna 的既有职责不变。不自动重试 Opus、换区或把其他模型输出改名为 Opus。
+- 以下记录只保留当时的替换方案与实证，不代表当前路由；当前恢复状态以 11.6 为准。当时 Opus 因持续地区资格限制退出工作流。复杂跨文件审计、竞品证据、经营分析、分镜与经济交叉复核改由 Carbon；Hydrogen 仍负责日常代码、桌面任务分析和视觉理解，Astra、Argon、Luna 的既有职责不变。不自动重试 Opus、换区或把其他模型输出改名为 Opus。
 - 通用审查使用 `python scripts/gemini-carbon-review.py --prompt-file <文件> --output <JSON>`。执行器固定 `gemini-4-carbon`，保存 prompt SHA-256、实际模型、正文、finishReason 和 usage；仅实际模型一致、STOP 且过滤 thought 后正文非空才 SUCCESS。请求 HIGH 但 `actualThinkingLevel` 未返回时保持 NULL；MAX_TOKENS、空正文、HTTP/网络/密钥错误均保留脱敏失败回执，不换模或自动续写。
 - 周复盘第二席由 Opus 改为 Carbon，实际执行为 `python scripts/gemini-carbon-review.py --prompt-file <冻结prompt> --output <runDir>/carbon.json`。新运行先原子保存 `model-route.json`，标明第二席 Carbon 和精确模型；正式报告顺序为 Astra/Carbon/Gemini/Kimi。不得只凭系统任务返回0就宣称替换成功，必须回读 Carbon 证据与最终报告。
 - 恢复历史运行时，无新路由标记的目录继续读取旧 `opus.json`，保留 seat、旧模型、错误和字段；新路由目录读取并严格校验 `carbon.json`。新旧证据不得混名，失败/缺失分别保留 `CARBON_EXECUTION_FAILED`、`CARBON_EVIDENCE_INVALID`、`CARBON_RAW_OUTPUT_MISSING`。
@@ -601,7 +601,7 @@ node scripts/yandex-wordstat.mjs --phrase "ремень вариатора сн�
 - **STT**：同步 v1 使用 OggOpus，**不支持 MP3**；`recognizeRussianOggOpus` 已回读配音原文。`POST /api/yandex-cloud/stt` 接收 `audioOggOpusBase64` 并要求 `confirmNoSensitiveData=true`，解码后不得超过 1 MB。首次音色验收或高风险文案可在 plan 设置 `main.voice.stt_verify=true`，临时 WAV 转 OggOpus 后回读，规范化文本与原文一致才替换正式音轨；默认不逐句计费复核，差异/失败不自动重发。真实回执 `pipeline-voice-stt-verified/vo1.speechkit.json` 为 PASS。供应商语音和售后转写仍须审查隐私并复核文本，不替代真实音频模型盲评。
 - **Translate 与辅助接口**：`POST /api/yandex-cloud/translate` 接收 `texts` 与可选 `sourceLanguageCode`，只返回待审草稿，不替代 DeepSeek/Luna/Kimi 终审。`POST /api/yandex-cloud/stt`、`POST /api/yandex-cloud/ocr` 均要求 `confirmNoSensitiveData=true`，缺少确认在调用上游前返回 400；真实三接口验收见 `auxiliary-api-smoke-result.json`。
 - **Vision OCR**：`POST /api/yandex-cloud/ocr` 接收 `imageBase64` 与可选 `languages`，要求 `text_detection_config` 并检查业务内层 `error`，不能只凭外层 HTTP 200 判成功。测试图中文、英文和数字均识别，但部分语言标签出现 `hu` 误判，故只按实际文字与业务证据使用，不盲信语言标签。订单、买家、卡号、地址等敏感截图不得上传，未确认不上传，不默认把采购截图交给 OCR。
-- Cloud Functions、Object Storage、Lockbox 均只读验证 `access=PASS, count=0`，表示账户可访问且当前没有对应资源，**不代表已经创建或迁移**。后续可评估 Cloud Functions + Scheduler 承载 Wordstat 定时采集、Object Storage 归档原始回执、Lockbox 管理秘密；实施前须另做成本、权限、网络、数据驻留与回滚评审。
+- Cloud Functions、Object Storage、Lockbox 的 `access=PASS, count=0` 仅为 11.1 当时盘点，**不代表后续状态**。后续已创建 Wordstat/Ozon 探针并归档脱敏回执，未创建 Scheduler 或生产定时采集，Lockbox 未使用；当前云端边界见 11.7。
 - Ozon Seller 原生搜索查询仍受会员与本机浏览器会话限制，Yandex Wordstat 不能替代其加购、独立买家和订单转化指标，也不证明此前云端 Chromium 403 已解决。
 
 ### 11.5 生产验收结果与后续轮换
@@ -621,3 +621,24 @@ node scripts/yandex-wordstat.mjs --phrase "ремень вариатора сн�
 - Opus 统一入口恢复 `node scripts/antigravity-run.mjs --prompt-file <文件> --output <JSON> --model claude-opus-5-5-high --effort high --sandbox`。执行器只允许 Opus/Hydrogen High，拒绝其他模型、effort 和 `--dangerously-skip-permissions`，并新增正文与有效用量校验。
 - 周复盘第二席恢复 `opusAdapter` 与 `opus.json`，新运行 `model-route.json` 为 `seat=Opus`。恢复目录兼容两种标记：历史 `seat=Carbon` 继续读取 `carbon.json`，新 Opus 路由读取 `opus.json`，互不改名。Astra/Opus/Argon 成功后由 Kimi 整合最多3项行动，报告中的过期数据和模型失败仍明确标缺口。
 - 正式任务 `weekly-2026-11-13T19-44-55-598Z` 已实跑：`LastTaskResult=0`，Astra/Opus/Argon/Kimi全部SUCCESS，Opus实际用量89,575 tokens，下一次仍11-16 14:41，没有重复任务。综合证据 `temp/ops-exec/antigravity-region-us-20261114/routing-validation.json`。旧地区失败和 Carbon 接替记录只作历史，不能覆盖本次恢复结论。全项目84文件809项测试、周复盘专项19项、配置5项及build通过，Lint 0 errors/215既有warnings；未改Ozon商品、价格、库存、Direct或评价，`PROMO_AUTO_DECISION=false`不变。
+
+
+### 11.7 Cloud Functions 探针与采集迁移边界（2026-11-14）
+
+- 已创建 `onzo-cloud-probe` / `d4e6j2oe98r78gjeb5j9`，只用于只读可行性验证。函数通过运行中服务账号的 metadata 取得 IAM，真实调用 Wordstat `topRequests` 返回 HTTP 200；不需要把服务账号 JSON、OAuth token 或 Lockbox 秘密复制进函数。原始回执保存在 Object Storage，函数调用不返回 IAM token、Cookie 值或 Seller 凭据。`yc serverless trigger list` 为空，当前有 5 个探针版本，**未创建 Scheduler、未部署生产定时采集**。
+- Wordstat 属于可迁移的 API 采集，但上线前仍须实现：受审词表与批次上限、原始请求/响应及 SHA-256 版本化归档、ONZO 幂等 ingest、失败告警、对账与回滚。Timer 官方要求调用方具有 `functions.functionInvoker`；运行函数的服务账号与调用 Timer 的服务账号应按最小权限分开核验，不为图方便扩大现有账号权限。官方文档：<https://yandex.cloud/en/docs/functions/concepts/trigger/timer>。
+- Timer 支持失败重试与死信队列，因此必须在任何付费 API 请求前检查 `event_id + payload + 原始哈希` 的处理账本；结果不明的请求先对账，不能让 Timer 重试直接变成重复计费请求。调度配置、DLQ、重放与回读尚未实施，不能把一次函数 HTTP 200 写成定时生产验收。创建说明：<https://yandex.cloud/en/docs/functions/operations/trigger/timer-create>。
+- Ozon 公开 composer 与 Seller 原生页最初均出现 `__rr=9 → __rr=1` 的 307 循环。后续用普通 `CookieJar`、最多 4 次重定向、无 Seller 登录态、无 Cookie 值导出再次验证，仍未收敛；本地探针以自定义 508 表示重定向上限，不是 Ozon 返回 508。普通 Cookie 会话不是解决方案，不再尝试指纹伪装、代理轮换、打码或绕过风控。**公开竞品不迁移到 Cloud Functions，Seller 原生查询继续现有本机真实 Chrome 自动降级，不改成人工导出，不上传 Seller Cookie/浏览器目录。**
+- 现有腾讯云竞品通道已直接下载 `last-run/latest` 并核对 SHA-256：`latest=2026-11-12T03-17-02-812Z` 上传 26 条，`last-run=2026-11-13T03-17-03-398Z` 因翻译通道 HTTP 429 中止且上传 0；runId 不一致、latest 超过 24h，均不得用于当前调价。待对账为 0 不等于最新抓取成功。证据：`temp/ops-exec/cloud-functions-selection-20261114/competitor-live-validation.json`。
+- 自建 28 天仍为 `insufficient_history / coverageDays=7`，相邻滚动 7 天报表不能直接相加。继续本机每日采集和现有 `selectWeeklyRuns`，只有四个连续不重叠原生周窗口才允许形成 28/28；不改成 Carbon 建议的人工导出，不盲加独立买家、去重卖家或均值。Wordstat 的 Top、关联词和搜索摘要只作候选发现与购买意图辅助，缺失月份和传输不明均不写成 0。
+- 月度日期校验已修复 RFC3339 转换后的合法月末误判，新增回归后全项目 **84 文件 810 项测试**通过，build 通过，Lint 0 errors/215 既有 warnings。探针、原始 Carbon 回执与续写、Wordstat 补验、完整选品评审及最终方案统一留档于 `temp/ops-exec/cloud-functions-selection-20261114/`。Ozon 商品、价格、库存、Direct 与 `PROMO_AUTO_DECISION=false` 未因此改变。
+
+
+### 11.8 Seller 全量查询与 Wordstat 联合选品（2026-11-14 方案，未上架）
+
+- 最新 Seller 批次 `2026-11-13T05-47-03-033Z` 为 199 页、9,949 条、公司 5140601，逐页哈希和去重通过。按明示规则形成 256 条去重初筛记录，不把该池当全市场或全量逐条语义审核。Carbon 实际 `gemini-4-carbon` 提出 8 个新方向，原始 Seller 数值逐项匹配通过；TPMS 只作现有品对照，已终止后视镜加热垫没有复活。
+- Wordstat 实际补验 **23 组完整、1 组 `UNCERTAIN`**。传输 `terminated` 时无法确定上游是否收到，当前组不盲目重发，保留 `top/dynamics/search=null` 并继续其余组；每步记录 `PENDING/RECEIVED`，失败保存旧结果，不能写成需求为 0。月度实际只有 2026 年 1–9 月，10 月未返回，所有缺月均保留缺失。女士保暖内衣另取类目共性词验证季节性，但不代替具体套装供货与经济证据。
+- Kimi 终审为 **2 个进入供货审核、5 个补证、1 个本季停止**：优先真空收纳袋与 160×200 防水床罩；厨房龙头和手机三脚架因变体/竞争未收敛先补证；万用表补 CAT/EN61010、保险丝和绝缘表笔，淋浴滤芯补固化无粉与真实滤效，按摩垫补商标/医械边界。女士冬季保暖内衣为 `FAIL_CURRENT_SEASON`，本季不采购不付费制作，不把等待 28 天或必然压库当数学事实，不自动复活。所有纺织合规、重量、包装、材质、价格与供应参数仍需真实证据，不能沿用模型估值。
+- Carbon 首轮 4 个 PASS 没有被机械照搬；终审同样区分需求成立、进入供货审核和可以上架。后续优先方向每候选最多 2 家货源+1 备选，须完成前台逐卡竞争、准确变体、关键参数、真实单元经济、8 图双视频与独立复核，才可能进入测品。当前 **0 新 SKU、0 采购、0 付费媒体、0 商品/价格/库存/广告改动**。
+- Carbon 的一次同步超时、一次提示词缺输入和两次 `MAX_TOKENS` 均保留原回执；缺输入导致的空候选不当作市场无机会。完整评审通过原 Batch continuation token 恢复，最终 `STOP`，实际模型与 prompt SHA-256 均可回读。原始与续写 usage 是累计口径，不重复相加，未虚构美元成本。
+- 完整方案：`temp/ops-exec/cloud-functions-selection-20261114/final-plan.md`，结构化终审：`evaluation.json`，原始模型回执、补验和购买意图证据均在同目录。云端生产 Scheduler 仍未创建，自建 28 天仍为 7/28，`PROMO_AUTO_DECISION=false` 不变。
