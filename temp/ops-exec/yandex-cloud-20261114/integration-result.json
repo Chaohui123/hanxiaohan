@@ -77,10 +77,10 @@
     "lockbox": "ACCESS_PASS count=0; not implemented"
   },
   "tests": {
-    "projectFiles": 83,
-    "projectTests": 804,
+    "projectFiles": 84,
+    "projectTests": 807,
     "videoPipelineTests": 66,
-    "yandexClientAndRouteTests": 12,
+    "yandexClientAndRouteTests": 15,
     "build": "PASS",
     "lintErrors": 0,
     "lintWarningsExisting": 215,
@@ -88,6 +88,7 @@
   },
   "onzoProduction": {
     "secretUploadedToServer": false,
+    "secureCredentialOnboarding": "POST /api/yandex-cloud/credential with existing auth, current-account validation, atomic mode-600 write and no private-key response",
     "gitCommitOrPushPerformed": false,
     "deployed": false,
     "remaining": "提交部署后在ONZO服务器执行密钥存在性、真实Wordstat路由、Marina WAV和日志无秘密验收"

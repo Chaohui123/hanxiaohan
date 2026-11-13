@@ -1,6 +1,7 @@
 import { existsSync } from "node:fs";
 import { Router, type Request, type Response } from "express";
 import { resolveYandexKeyFile, YandexCloudClient, YandexCloudError } from "@onzo/yandex-cloud";
+import { saveYandexCredential } from "../services/yandex-credential.js";
 
 type YandexClient = Pick<YandexCloudClient, "wordstatTop" | "wordstatDynamics" | "wordstatRegions" | "webSearch" | "translateToRussian" | "recognizeRussianOggOpus" | "recognizeText">;
 
@@ -36,6 +37,13 @@ export function createYandexCloudRouter(client: YandexClient = new YandexCloudCl
       services: ["speechkit", "wordstat", "webSearch", "translate", "stt", "visionOcr"],
       note: "configured只表示密钥文件存在；各服务可用性以真实API回执为准",
     });
+  });
+
+  router.post("/yandex-cloud/credential", async (req, res) => {
+    try {
+      const result = await saveYandexCredential(req.body || {});
+      res.json({ success: true, ...result, note: "密钥已原子写入并设为600；响应与日志不回显私钥" });
+    } catch (error) { sendError(res, error); }
   });
 
   router.post("/yandex-cloud/wordstat/top", async (req, res) => {
