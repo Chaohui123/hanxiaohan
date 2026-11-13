@@ -102,7 +102,7 @@ api-services ───── PostgreSQL + pgvector
 | Astra | 高价值经济测算和重大决策攻坚 |
 | Gemini 4 Hydrogen | 日常代码、桌面任务分析、文案辅助与视觉理解；经 `scripts/gemini-hydrogen.py` 留痕 |
 | Luna | 批量文案精修 |
-| Gemini Argon / Omni / Nano | Argon 负责高风险多模态交叉复核，Omni/Nano 负责图像、视频生成；Edge 仍是默认配音通道 |
+| Gemini Argon / Omni / Nano | Argon 负责高风险多模态交叉复核，Omni/Nano 负责图像、视频生成；Yandex SpeechKit v3 `marina+friendly` 是当前默认配音通道 |
 | Gemini 4 Carbon | 接替 Opus 的复杂代码审计、竞品证据、经营分析、分镜与经济交叉复核；经 `scripts/gemini-carbon-review.py` 留痕；Opus 当前因地区限制停用 |
 
 除 Kimi 主 Agent 外，模型与子代理不得直接写 Ozon 商品、价格或库存。任何模型输出都要由 Kimi 核验证据、合规、成本与质量。
@@ -110,7 +110,7 @@ api-services ───── PostgreSQL + pgvector
 ## 六、代码地图
 
 - `apps/`：`api-services`、`ops-agent`、`promo-agent`、`web-dashboard`。
-- `packages/`：`ai`、`cache`、`embedding`、`feishu-bot`、`logger`、`logistics`、`ozon-api-wrapper`、`ozon-order`、`price-monitor`、`scraper`、`shared-types`、`validator`。
+- `packages/`：`ai`、`cache`、`embedding`、`feishu-bot`、`logger`、`logistics`、`ozon-api-wrapper`、`ozon-order`、`price-monitor`、`scraper`、`shared-types`、`validator`、`yandex-cloud`（IAM、SpeechKit、Wordstat、Search、Translate、STT、Vision OCR）。
 - `scripts/`：部署、Direct 报表、模型封装、图片/视频与运营辅助工具。
 - `tools/ozon-mcp-server/`：上游前台工具及 ONZO 本地竞品采集接入；上游安装说明不构成调度授权。
 - `temp/`：工作产物与历史实验，不是现行架构或 SOP 的权威来源。

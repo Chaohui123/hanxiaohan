@@ -1,0 +1,1077 @@
+{
+  "status": "PASS",
+  "source": "Yandex Cloud Search API v2",
+  "dynamics": {
+    "request": {
+      "phrase": "ремень вариатора снегоход",
+      "period": "monthly",
+      "fromDate": "2026-01-01",
+      "toDate": "2026-10-31",
+      "regions": [
+        225
+      ],
+      "devices": "all"
+    },
+    "raw": {
+      "results": [
+        {
+          "date": "2026-01-01T00:00:00Z",
+          "count": "17623",
+          "share": 0.00017993471121637199
+        },
+        {
+          "date": "2026-02-01T00:00:00Z",
+          "count": "15205",
+          "share": 0.00016992899734607586
+        },
+        {
+          "date": "2026-03-01T00:00:00Z",
+          "count": "8152",
+          "share": 0.00007848131024493541
+        },
+        {
+          "date": "2026-04-01T00:00:00Z",
+          "count": "1824",
+          "share": 0.000017141740300478197
+        },
+        {
+          "date": "2026-05-01T00:00:00Z",
+          "count": "1070",
+          "share": 0.000010782153829695272
+        },
+        {
+          "date": "2026-06-01T00:00:00Z",
+          "count": "1013",
+          "share": 0.000010538765696018495
+        },
+        {
+          "date": "2026-07-01T00:00:00Z",
+          "count": "1697",
+          "share": 0.000016610382977757124
+        },
+        {
+          "date": "2026-08-01T00:00:00Z",
+          "count": "2914",
+          "share": 0.00002748213751764667
+        },
+        {
+          "date": "2026-09-01T00:00:00Z",
+          "count": "3313",
+          "share": 0.000030071491161604752
+        }
+      ]
+    }
+  },
+  "regions": {
+    "request": {
+      "phrase": "ремень вариатора снегоход",
+      "regionType": "cities",
+      "devices": "all"
+    },
+    "raw": {
+      "results": [
+        {
+          "region": "2",
+          "count": "47",
+          "share": 0.000008316833252276356,
+          "affinityIndex": 29.543877986505823
+        },
+        {
+          "region": "6",
+          "count": "2",
+          "share": 0.000004886705877920412,
+          "affinityIndex": 17.35904013390026
+        },
+        {
+          "region": "7",
+          "count": "24",
+          "share": 0.00008860235543455099,
+          "affinityIndex": 314.7420537208596
+        },
+        {
+          "region": "9",
+          "count": "5",
+          "share": 0.000010347063265462806,
+          "affinityIndex": 36.755861920138926
+        },
+        {
+          "region": "10",
+          "count": "2",
+          "share": 0.000006018663091821537,
+          "affinityIndex": 21.380090550449918
+        },
+        {
+          "region": "11",
+          "count": "6",
+          "share": 0.000009970489842688104,
+          "affinityIndex": 35.41816054776001
+        },
+        {
+          "region": "14",
+          "count": "12",
+          "share": 0.000026545262792128957,
+          "affinityIndex": 94.29670900708969
+        },
+        {
+          "region": "11278",
+          "count": "2",
+          "share": 0.000106566522553206,
+          "affinityIndex": 378.5561456214612
+        },
+        {
+          "region": "15",
+          "count": "19",
+          "share": 0.00003298001839625426,
+          "affinityIndex": 117.15488454995382
+        },
+        {
+          "region": "16",
+          "count": "15",
+          "share": 0.000035227013915468977,
+          "affinityIndex": 125.13688436192973
+        },
+        {
+          "region": "18",
+          "count": "19",
+          "share": 0.00007850460138193716,
+          "affinityIndex": 278.87181265446395
+        },
+        {
+          "region": "19",
+          "count": "22",
+          "share": 0.00010381285260684218,
+          "affinityIndex": 368.7742867765441
+        },
+        {
+          "region": "20",
+          "count": "11",
+          "share": 0.00003758286552061477,
+          "affinityIndex": 133.50557353309844
+        },
+        {
+          "region": "21",
+          "count": "14",
+          "share": 0.00004187649532739074,
+          "affinityIndex": 148.75783016526003
+        },
+        {
+          "region": "11285",
+          "count": "6",
+          "share": 0.00012346580871648032,
+          "affinityIndex": 438.5874620278795
+        },
+        {
+          "region": "23",
+          "count": "31",
+          "share": 0.0001272742680005229,
+          "affinityIndex": 452.1162479240657
+        },
+        {
+          "region": "11287",
+          "count": "3",
+          "share": 0.000052961454476893534,
+          "affinityIndex": 188.13491885567905
+        },
+        {
+          "region": "24",
+          "count": "1",
+          "share": 0.00000435013865849467,
+          "affinityIndex": 15.452992966496252
+        },
+        {
+          "region": "11288",
+          "count": "3",
+          "share": 0.0001352354652302857,
+          "affinityIndex": 480.3968004430482
+        },
+        {
+          "region": "11291",
+          "count": "15",
+          "share": 0.00017062237582785977,
+          "affinityIndex": 606.1016856201038
+        },
+        {
+          "region": "35",
+          "count": "1",
+          "share": 6.297236357068918e-7,
+          "affinityIndex": 2.2369666066649976
+        },
+        {
+          "region": "11302",
+          "count": "1",
+          "share": 0.000014936783053084432,
+          "affinityIndex": 53.05991867883743
+        },
+        {
+          "region": "41",
+          "count": "3",
+          "share": 0.00001326055938343703,
+          "affinityIndex": 47.10547110582621
+        },
+        {
+          "region": "42",
+          "count": "17",
+          "share": 0.00006400706758510032,
+          "affinityIndex": 227.37223864511841
+        },
+        {
+          "region": "43",
+          "count": "8",
+          "share": 0.000006145577043565688,
+          "affinityIndex": 21.830926847316668
+        },
+        {
+          "region": "44",
+          "count": "9",
+          "share": 0.000015090590828824209,
+          "affinityIndex": 53.606289878306654
+        },
+        {
+          "region": "45",
+          "count": "3",
+          "share": 0.000005985010899303349,
+          "affinityIndex": 21.26054790247587
+        },
+        {
+          "region": "46",
+          "count": "58",
+          "share": 0.00011106727783542743,
+          "affinityIndex": 394.54417386149817
+        },
+        {
+          "region": "11310",
+          "count": "2",
+          "share": 0.000041505056353490264,
+          "affinityIndex": 147.4383678901994
+        },
+        {
+          "region": "47",
+          "count": "15",
+          "share": 0.000009010772252076546,
+          "affinityIndex": 32.00895676328223
+        },
+        {
+          "region": "11311",
+          "count": "9",
+          "share": 0.00009289671464575541,
+          "affinityIndex": 329.9969014156027
+        },
+        {
+          "region": "48",
+          "count": "2",
+          "share": 0.0000035363857670657665,
+          "affinityIndex": 12.562299428909505
+        },
+        {
+          "region": "49",
+          "count": "3",
+          "share": 0.00000575524982858468,
+          "affinityIndex": 20.444367893395686
+        },
+        {
+          "region": "50",
+          "count": "16",
+          "share": 0.000017561554070213948,
+          "affinityIndex": 62.38388999344404
+        },
+        {
+          "region": "11314",
+          "count": "2",
+          "share": 0.000024953268765918626,
+          "affinityIndex": 88.6414703075846
+        },
+        {
+          "region": "51",
+          "count": "22",
+          "share": 0.000018840833155344553,
+          "affinityIndex": 66.92827173771465
+        },
+        {
+          "region": "53",
+          "count": "6",
+          "share": 0.000025352476537656223,
+          "affinityIndex": 90.05957565390162
+        },
+        {
+          "region": "54",
+          "count": "73",
+          "share": 0.00003656729003009468,
+          "affinityIndex": 129.89794578971438
+        },
+        {
+          "region": "55",
+          "count": "30",
+          "share": 0.00003442322740774612,
+          "affinityIndex": 122.28159439866589
+        },
+        {
+          "region": "56",
+          "count": "27",
+          "share": 0.000024196295186950926,
+          "affinityIndex": 85.95247386174275
+        },
+        {
+          "region": "57",
+          "count": "27",
+          "share": 0.00019743306306209467,
+          "affinityIndex": 701.3412615928223
+        },
+        {
+          "region": "58",
+          "count": "1",
+          "share": 0.000019263661933520717,
+          "affinityIndex": 68.43028596027956
+        },
+        {
+          "region": "62",
+          "count": "24",
+          "share": 0.00002322884306085497,
+          "affinityIndex": 82.51579469502487
+        },
+        {
+          "region": "63",
+          "count": "7",
+          "share": 0.000010889096096288606,
+          "affinityIndex": 38.68132457315229
+        },
+        {
+          "region": "11327",
+          "count": "2",
+          "share": 0.00014596004489730982,
+          "affinityIndex": 518.4937134781147
+        },
+        {
+          "region": "64",
+          "count": "17",
+          "share": 0.00003677418175552805,
+          "affinityIndex": 130.63288704766833
+        },
+        {
+          "region": "65",
+          "count": "58",
+          "share": 0.00003310638204455506,
+          "affinityIndex": 117.6037660044794
+        },
+        {
+          "region": "66",
+          "count": "13",
+          "share": 0.00001408204230342999,
+          "affinityIndex": 50.02362401572468
+        },
+        {
+          "region": "67",
+          "count": "16",
+          "share": 0.00003957997336465692,
+          "affinityIndex": 140.59989762022934
+        },
+        {
+          "region": "1091",
+          "count": "4",
+          "share": 0.000022011710780427957,
+          "affinityIndex": 78.19217697952827
+        },
+        {
+          "region": "68",
+          "count": "1",
+          "share": 0.000003114144384626229,
+          "affinityIndex": 11.06237181160001
+        },
+        {
+          "region": "1095",
+          "count": "9",
+          "share": 0.00005080131166728889,
+          "affinityIndex": 180.46144583240783
+        },
+        {
+          "region": "74",
+          "count": "12",
+          "share": 0.0000653187880730288,
+          "affinityIndex": 232.03186195031716
+        },
+        {
+          "region": "75",
+          "count": "5",
+          "share": 0.00001035212826402863,
+          "affinityIndex": 36.77385430919994
+        },
+        {
+          "region": "76",
+          "count": "10",
+          "share": 0.000022910685784412052,
+          "affinityIndex": 81.3856049376222
+        },
+        {
+          "region": "77",
+          "count": "1",
+          "share": 0.000006368417945513981,
+          "affinityIndex": 22.622524348175705
+        },
+        {
+          "region": "78",
+          "count": "7",
+          "share": 0.00006486346842200803,
+          "affinityIndex": 230.41443043442928
+        },
+        {
+          "region": "79",
+          "count": "2",
+          "share": 0.00003681765156032287,
+          "affinityIndex": 130.78730478937354
+        },
+        {
+          "region": "80",
+          "count": "8",
+          "share": 0.00005593859899681115,
+          "affinityIndex": 198.71062619243085
+        },
+        {
+          "region": "11349",
+          "count": "4",
+          "share": 0.0003346434624889777,
+          "affinityIndex": 1188.7536186985799
+        },
+        {
+          "region": "20571",
+          "count": "8",
+          "share": 0.00009308887264488062,
+          "affinityIndex": 330.6795040731385
+        },
+        {
+          "region": "21623",
+          "count": "10",
+          "share": 0.00013466718486599403,
+          "affinityIndex": 478.37809870459915
+        },
+        {
+          "region": "11391",
+          "count": "1",
+          "share": 0.00006675999714267212,
+          "affinityIndex": 237.15146740771092
+        },
+        {
+          "region": "21635",
+          "count": "4",
+          "share": 0.00024407790722720784,
+          "affinityIndex": 867.0376923029727
+        },
+        {
+          "region": "21645",
+          "count": "1",
+          "share": 0.00005546357845461831,
+          "affinityIndex": 197.02321122161993
+        },
+        {
+          "region": "21647",
+          "count": "1",
+          "share": 0.00003251328330189299,
+          "affinityIndex": 115.49690196673255
+        },
+        {
+          "region": "11411",
+          "count": "1",
+          "share": 0.00008231597646092338,
+          "affinityIndex": 292.4109563259519
+        },
+        {
+          "region": "157",
+          "count": "1",
+          "share": 0.0000014374952760311492,
+          "affinityIndex": 5.106412952263865
+        },
+        {
+          "region": "11425",
+          "count": "2",
+          "share": 0.00013305728382183098,
+          "affinityIndex": 472.65924892411533
+        },
+        {
+          "region": "162",
+          "count": "1",
+          "share": 0.0000032459989735502046,
+          "affinityIndex": 11.530758728707504
+        },
+        {
+          "region": "163",
+          "count": "1",
+          "share": 0.000004373743751450989,
+          "affinityIndex": 15.536845313297931
+        },
+        {
+          "region": "165",
+          "count": "2",
+          "share": 0.00005768305067196428,
+          "affinityIndex": 204.90744003740886
+        },
+        {
+          "region": "21675",
+          "count": "4",
+          "share": 0.0006604834408545334,
+          "affinityIndex": 2346.2346300345757
+        },
+        {
+          "region": "172",
+          "count": "23",
+          "share": 0.000020310597606219458,
+          "affinityIndex": 72.14931444572697
+        },
+        {
+          "region": "20654",
+          "count": "4",
+          "share": 0.0002649125920902398,
+          "affinityIndex": 941.0487213580808
+        },
+        {
+          "region": "191",
+          "count": "2",
+          "share": 0.000004478994813234426,
+          "affinityIndex": 15.910728549014957
+        },
+        {
+          "region": "192",
+          "count": "1",
+          "share": 0.0000025489951924676172,
+          "affinityIndex": 9.054792932615463
+        },
+        {
+          "region": "20672",
+          "count": "4",
+          "share": 0.0002905583077884154,
+          "affinityIndex": 1032.1499701724824
+        },
+        {
+          "region": "193",
+          "count": "23",
+          "share": 0.000022021233677765853,
+          "affinityIndex": 78.22600515769354
+        },
+        {
+          "region": "194",
+          "count": "5",
+          "share": 0.0000057646259859931575,
+          "affinityIndex": 20.477674807464513
+        },
+        {
+          "region": "195",
+          "count": "18",
+          "share": 0.000033487359061472856,
+          "affinityIndex": 118.95711025968636
+        },
+        {
+          "region": "197",
+          "count": "16",
+          "share": 0.000025641063856072733,
+          "affinityIndex": 91.08472408060798
+        },
+        {
+          "region": "20680",
+          "count": "1",
+          "share": 0.000042409990097267316,
+          "affinityIndex": 150.65296307337243
+        },
+        {
+          "region": "213",
+          "count": "122",
+          "share": 0.000009372951330691306,
+          "affinityIndex": 33.29552512209006
+        },
+        {
+          "region": "236",
+          "count": "8",
+          "share": 0.000021840788026552392,
+          "affinityIndex": 77.58500826128625
+        },
+        {
+          "region": "237",
+          "count": "19",
+          "share": 0.00005816394843576173,
+          "affinityIndex": 206.61573265632444
+        },
+        {
+          "region": "240",
+          "count": "8",
+          "share": 0.0000177053083767864,
+          "affinityIndex": 62.89454826499817
+        },
+        {
+          "region": "20728",
+          "count": "1",
+          "share": 0.000004707831505957148,
+          "affinityIndex": 16.723624891115506
+        },
+        {
+          "region": "20809",
+          "count": "2",
+          "share": 0.00007178859121350717,
+          "affinityIndex": 255.0145368195877
+        },
+        {
+          "region": "10653",
+          "count": "6",
+          "share": 0.00018567458671931572,
+          "affinityIndex": 659.5716384873941
+        },
+        {
+          "region": "10689",
+          "count": "3",
+          "share": 0.000058480238942458954,
+          "affinityIndex": 207.73929108952922
+        },
+        {
+          "region": "10691",
+          "count": "3",
+          "share": 0.00008033640602233835,
+          "affinityIndex": 285.37893034572164
+        },
+        {
+          "region": "10731",
+          "count": "1",
+          "share": 0.000020487609196396066,
+          "affinityIndex": 72.77811253073652
+        },
+        {
+          "region": "10732",
+          "count": "2",
+          "share": 0.00006542896867588125,
+          "affinityIndex": 232.4232563895722
+        },
+        {
+          "region": "10734",
+          "count": "1",
+          "share": 0.000008347512278564498,
+          "affinityIndex": 29.652859059218038
+        },
+        {
+          "region": "10738",
+          "count": "9",
+          "share": 0.000033929361632632626,
+          "affinityIndex": 120.5272355268356
+        },
+        {
+          "region": "10747",
+          "count": "2",
+          "share": 0.000007077889448392117,
+          "affinityIndex": 25.14277921924668
+        },
+        {
+          "region": "10750",
+          "count": "6",
+          "share": 0.00004594977260989195,
+          "affinityIndex": 163.2273287579466
+        },
+        {
+          "region": "10752",
+          "count": "1",
+          "share": 0.000008613314133681909,
+          "affinityIndex": 30.597066708689226
+        },
+        {
+          "region": "10756",
+          "count": "15",
+          "share": 0.00010069700452592757,
+          "affinityIndex": 357.70586292641656
+        },
+        {
+          "region": "10758",
+          "count": "11",
+          "share": 0.000018063248036048724,
+          "affinityIndex": 64.1660569389136
+        },
+        {
+          "region": "20010",
+          "count": "4",
+          "share": 0.00012751836822395287,
+          "affinityIndex": 452.98336489019226
+        },
+        {
+          "region": "10807",
+          "count": "2",
+          "share": 0.00006589933481211441,
+          "affinityIndex": 234.09413751900368
+        },
+        {
+          "region": "10811",
+          "count": "2",
+          "share": 0.00006193785589104883,
+          "affinityIndex": 220.02178012768022
+        },
+        {
+          "region": "10837",
+          "count": "3",
+          "share": 0.00009413654820105056,
+          "affinityIndex": 334.40116084586
+        },
+        {
+          "region": "10839",
+          "count": "15",
+          "share": 0.00014022248259979215,
+          "affinityIndex": 498.11217698266523
+        },
+        {
+          "region": "10849",
+          "count": "4",
+          "share": 0.00003112465517772645,
+          "affinityIndex": 110.56407974647489
+        },
+        {
+          "region": "20070",
+          "count": "6",
+          "share": 0.0009512319246116992,
+          "affinityIndex": 3379.0601621001847
+        },
+        {
+          "region": "10870",
+          "count": "2",
+          "share": 0.000056294514887647404,
+          "affinityIndex": 199.9749458359017
+        },
+        {
+          "region": "20097",
+          "count": "2",
+          "share": 0.00006972936638319356,
+          "affinityIndex": 247.69955462766782
+        },
+        {
+          "region": "20100",
+          "count": "1",
+          "share": 0.000025424267463293713,
+          "affinityIndex": 90.31459848329307
+        },
+        {
+          "region": "20101",
+          "count": "1",
+          "share": 0.0000566340567767746,
+          "affinityIndex": 201.1811001303786
+        },
+        {
+          "region": "10894",
+          "count": "11",
+          "share": 0.00030009916913452763,
+          "affinityIndex": 1066.041961865181
+        },
+        {
+          "region": "10895",
+          "count": "17",
+          "share": 0.0007415866989009685,
+          "affinityIndex": 2634.337648016348
+        },
+        {
+          "region": "10896",
+          "count": "14",
+          "share": 0.00044528214030585794,
+          "affinityIndex": 1581.7752771664325
+        },
+        {
+          "region": "10934",
+          "count": "2",
+          "share": 0.00013564085556826058,
+          "affinityIndex": 481.8368681128864
+        },
+        {
+          "region": "10935",
+          "count": "1",
+          "share": 0.000059051851659386556,
+          "affinityIndex": 209.76983034073064
+        },
+        {
+          "region": "10936",
+          "count": "1",
+          "share": 0.00007633459590754964,
+          "affinityIndex": 271.1633044974912
+        },
+        {
+          "region": "10940",
+          "count": "5",
+          "share": 0.00016187940696450536,
+          "affinityIndex": 575.0440465520049
+        },
+        {
+          "region": "10945",
+          "count": "5",
+          "share": 0.00007575371920459808,
+          "affinityIndex": 269.0998567985118
+        },
+        {
+          "region": "20237",
+          "count": "5",
+          "share": 0.00006300465150741149,
+          "affinityIndex": 223.8113570700496
+        },
+        {
+          "region": "20243",
+          "count": "2",
+          "share": 0.00004035329308092349,
+          "affinityIndex": 143.34696043235022
+        },
+        {
+          "region": "11071",
+          "count": "1",
+          "share": 0.00002391426830469839,
+          "affinityIndex": 84.95063006549937
+        },
+        {
+          "region": "11080",
+          "count": "3",
+          "share": 0.00004035610767493801,
+          "affinityIndex": 143.35695871169816
+        },
+        {
+          "region": "11083",
+          "count": "2",
+          "share": 0.00003176805759930059,
+          "affinityIndex": 112.84963748974286
+        },
+        {
+          "region": "11086",
+          "count": "2",
+          "share": 0.00002819559339529503,
+          "affinityIndex": 100.1591766673605
+        },
+        {
+          "region": "11087",
+          "count": "5",
+          "share": 0.0002614477512356021,
+          "affinityIndex": 928.7405708460984
+        },
+        {
+          "region": "11090",
+          "count": "1",
+          "share": 0.000022724375369413125,
+          "affinityIndex": 80.72377464700806
+        },
+        {
+          "region": "11110",
+          "count": "2",
+          "share": 0.00004052711182727021,
+          "affinityIndex": 143.9644165815918
+        },
+        {
+          "region": "11114",
+          "count": "1",
+          "share": 0.000011823999763520004,
+          "affinityIndex": 42.00238188378929
+        },
+        {
+          "region": "11115",
+          "count": "2",
+          "share": 0.0000286042785421715,
+          "affinityIndex": 101.61094848338325
+        },
+        {
+          "region": "11116",
+          "count": "1",
+          "share": 0.000006206037208171961,
+          "affinityIndex": 22.045699426252632
+        },
+        {
+          "region": "11121",
+          "count": "8",
+          "share": 0.00007852842444299298,
+          "affinityIndex": 278.95643928911545
+        },
+        {
+          "region": "11127",
+          "count": "12",
+          "share": 0.00008041274791333944,
+          "affinityIndex": 285.65011956457226
+        },
+        {
+          "region": "11135",
+          "count": "5",
+          "share": 0.000095231855284149,
+          "affinityIndex": 338.2920190414308
+        },
+        {
+          "region": "11143",
+          "count": "1",
+          "share": 0.000008820408025018912,
+          "affinityIndex": 31.332726120369326
+        },
+        {
+          "region": "11147",
+          "count": "2",
+          "share": 0.000013048655172976235,
+          "affinityIndex": 46.35272400259831
+        },
+        {
+          "region": "11149",
+          "count": "11",
+          "share": 0.00020510862179685594,
+          "affinityIndex": 728.6071407874039
+        },
+        {
+          "region": "11152",
+          "count": "5",
+          "share": 0.00009325148339797216,
+          "affinityIndex": 331.25714607976585
+        },
+        {
+          "region": "11155",
+          "count": "2",
+          "share": 0.00002513796342778253,
+          "affinityIndex": 89.29756096004206
+        },
+        {
+          "region": "11159",
+          "count": "10",
+          "share": 0.0002248413744103535,
+          "affinityIndex": 798.7037770752014
+        },
+        {
+          "region": "11160",
+          "count": "1",
+          "share": 0.000025871139476228432,
+          "affinityIndex": 91.90202146332143
+        },
+        {
+          "region": "11161",
+          "count": "5",
+          "share": 0.0001803949639498704,
+          "affinityIndex": 640.8168400943184
+        },
+        {
+          "region": "11168",
+          "count": "25",
+          "share": 0.00010969062242583532,
+          "affinityIndex": 389.6538823025901
+        },
+        {
+          "region": "11172",
+          "count": "4",
+          "share": 0.00008379079616757656,
+          "affinityIndex": 297.64995681373136
+        },
+        {
+          "region": "11173",
+          "count": "22",
+          "share": 0.0005218754781387548,
+          "affinityIndex": 1853.8577103323216
+        },
+        {
+          "region": "11175",
+          "count": "10",
+          "share": 0.00012659990631606934,
+          "affinityIndex": 449.7207136239381
+        },
+        {
+          "region": "11177",
+          "count": "1",
+          "share": 0.00003555421555667591,
+          "affinityIndex": 126.29920240674038
+        },
+        {
+          "region": "11178",
+          "count": "3",
+          "share": 0.00011735900000743273,
+          "affinityIndex": 416.8942518943649
+        },
+        {
+          "region": "11180",
+          "count": "7",
+          "share": 0.00019059106372956762,
+          "affinityIndex": 677.0364345832622
+        },
+        {
+          "region": "11184",
+          "count": "13",
+          "share": 0.00016214047376698093,
+          "affinityIndex": 575.9714338789729
+        },
+        {
+          "region": "11186",
+          "count": "4",
+          "share": 0.00010842097588094076,
+          "affinityIndex": 385.1437182208361
+        },
+        {
+          "region": "11188",
+          "count": "7",
+          "share": 0.0003011901744880735,
+          "affinityIndex": 1069.9175390314012
+        },
+        {
+          "region": "11192",
+          "count": "2",
+          "share": 0.00007726360138780881,
+          "affinityIndex": 274.4634096847702
+        },
+        {
+          "region": "11196",
+          "count": "3",
+          "share": 0.00018606162733220496,
+          "affinityIndex": 660.9465224481723
+        },
+        {
+          "region": "11200",
+          "count": "8",
+          "share": 0.0005188010248914247,
+          "affinityIndex": 1842.9363333058582
+        },
+        {
+          "region": "968",
+          "count": "11",
+          "share": 0.000041646639996410815,
+          "affinityIndex": 147.94131531555325
+        },
+        {
+          "region": "11212",
+          "count": "17",
+          "share": 0.00016849279822135039,
+          "affinityIndex": 598.5367893355369
+        },
+        {
+          "region": "973",
+          "count": "13",
+          "share": 0.000041577811418846974,
+          "affinityIndex": 147.6968156320981
+        },
+        {
+          "region": "11214",
+          "count": "3",
+          "share": 0.00006510362978777518,
+          "affinityIndex": 231.2675554006363
+        },
+        {
+          "region": "975",
+          "count": "13",
+          "share": 0.00010015277149682939,
+          "affinityIndex": 355.7725845114018
+        },
+        {
+          "region": "976",
+          "count": "2",
+          "share": 0.000015296185781354026,
+          "affinityIndex": 54.3366246112436
+        },
+        {
+          "region": "11229",
+          "count": "3",
+          "share": 0.00009156022282095826,
+          "affinityIndex": 325.2492829165829
+        },
+        {
+          "region": "11230",
+          "count": "6",
+          "share": 0.00006779333923662666,
+          "affinityIndex": 240.82220743772865
+        },
+        {
+          "region": "11231",
+          "count": "4",
+          "share": 0.00007447024197057197,
+          "affinityIndex": 264.54056197434943
+        }
+      ]
+    }
+  },
+  "search": {
+    "request": {
+      "query": "ремень вариатора на снегоход буран купить",
+      "region": 225,
+      "results": 5
+    },
+    "raw": {
+      "rawXml": "<?xml version=\"1.0\" encoding=\"utf-8\"?>\n<yandexsearch version=\"1.0\">\n<request>\n<query>ремень вариатора на снегоход буран купить</query>\n<page>0</page>\n<sortby order=\"descending\" priority=\"no\">rlv</sortby>\n<maxpassages>3</maxpassages>\n<groupings>\n<groupby attr=\"\" mode=\"flat\" groups-on-page=\"5\" docs-in-group=\"1\" curcateg=\"-1\"/>\n</groupings>\n</request>\n<response date=\"20261113T172708\">\n<reqid>1794590828050568-17712572976267441175-anlbxeezs4nu6zev-BAL</reqid>\n<found priority=\"phrase\">7149589</found>\n<found priority=\"strict\">7149589</found>\n<found priority=\"all\">7149589</found>\n<found-human>Нашлось 7 млн ответов</found-human>\n<is-local>no</is-local>\n<results>\n<grouping attr=\"\" mode=\"flat\" groups-on-page=\"5\" docs-in-group=\"1\" curcateg=\"-1\">\n<page first=\"1\" last=\"5\">0</page>\n<group>\n<doccount>1</doccount>\n<relevance priority=\"all\"/>\n<doc id=\"Z450C70BEE8218A69\">\n<relevance priority=\"all\"/>\n<saved-copy-url>https://yandexwebcache.net/yandbtm?fmode=inject&amp;tm=1794590828&amp;tld=ru&amp;lang=ru&amp;la=1793936256&amp;text=%D1%80%D0%B5%D0%BC%D0%B5%D0%BD%D1%8C+%D0%B2%D0%B0%D1%80%D0%B8%D0%B0%D1%82%D0%BE%D1%80%D0%B0+%D0%BD%D0%B0+%D1%81%D0%BD%D0%B5%D0%B3%D0%BE%D1%85%D0%BE%D0%B4+%D0%B1%D1%83%D1%80%D0%B0%D0%BD+%D0%BA%D1%83%D0%BF%D0%B8%D1%82%D1%8C&amp;url=https%3A//www.ozon.ru/category/remen-variatora-na-snegohod-buran/&amp;l10n=ru&amp;mime=html&amp;sign=cd1112f1d673fb3987d0bf162a00c5d7&amp;keyno=0</saved-copy-url>\n<url>https://www.ozon.ru/category/remen-variatora-na-snegohod-buran/</url>\n<domain>www.ozon.ru</domain>\n<title><hlword>Ремень</hlword> <hlword>вариатора</hlword> <hlword>на</hlword> <hlword>снегоход</hlword> <hlword>Буран</hlword> <hlword>купить</hlword> на OZON по...</title>\n<modtime>20221224T193729</modtime>\n<size>2872</size>\n<charset>utf-8</charset>\n<mime-type>text/html</mime-type>\n<passages>\n<passage>Быстрая и бесплатная доставка, большой ассортимент, бонусы, рассрочка и кэшбэк. Распродажи, скидки и акции. Реальные отзывы покупателей.</passage>\n</passages>\n<properties>\n<_PassagesType>0</_PassagesType>\n<lang>ru</lang>\n</properties>\n</doc>\n</group>\n<group>\n<doccount>1</doccount>\n<relevance priority=\"all\"/>\n<doc id=\"Z2DDCD789A04560DE\">\n<relevance priority=\"all\"/>\n<saved-copy-url>https://yandexwebcache.net/yandbtm?fmode=inject&amp;tm=1794590828&amp;tld=ru&amp;lang=ru&amp;la=1793674752&amp;text=%D1%80%D0%B5%D0%BC%D0%B5%D0%BD%D1%8C+%D0%B2%D0%B0%D1%80%D0%B8%D0%B0%D1%82%D0%BE%D1%80%D0%B0+%D0%BD%D0%B0+%D1%81%D0%BD%D0%B5%D0%B3%D0%BE%D1%85%D0%BE%D0%B4+%D0%B1%D1%83%D1%80%D0%B0%D0%BD+%D0%BA%D1%83%D0%BF%D0%B8%D1%82%D1%8C&amp;url=https%3A//www.wildberries.ru/catalog/tags/remenb-variatora-na-snegohod-buran&amp;l10n=ru&amp;mime=html&amp;sign=76040add6f87af5cda5cf214fa1590c3&amp;keyno=0</saved-copy-url>\n<url>https://www.wildberries.ru/catalog/tags/remenb-variatora-na-snegohod-buran</url>\n<domain>www.wildberries.ru</domain>\n<title><hlword>Ремень</hlword> <hlword>вариатора</hlword> <hlword>на</hlword> <hlword>снегоход</hlword> <hlword>буран</hlword> - <hlword>Купить</hlword> в интернет...</title>\n<modtime>20250404T213619</modtime>\n<size>18632</size>\n<charset>utf-8</charset>\n<mime-type>text/html</mime-type>\n<passages>\n<passage><hlword>Ремень</hlword> <hlword>вариатора</hlword> Rubene 33-14-1120 <hlword>снегоход</hlword> <hlword>Буран</hlword> Мой спортивный.</passage>\n<passage><hlword>Ремень</hlword> <hlword>вариатора</hlword> Pix 32х14х1120 для <hlword>снегоходов</hlword> <hlword>Буран</hlword> MopedMarket.</passage>\n</passages>\n<properties>\n<_PassagesType>0</_PassagesType>\n<lang>ru</lang>\n</properties>\n</doc>\n</group>\n<group>\n<doccount>1</doccount>\n<relevance priority=\"all\"/>\n<doc id=\"Z589789754033A58D\">\n<relevance priority=\"all\"/>\n<saved-copy-url>https://yandexwebcache.net/yandbtm?fmode=inject&amp;tm=1794590828&amp;tld=ru&amp;lang=ru&amp;la=1793919616&amp;text=%D1%80%D0%B5%D0%BC%D0%B5%D0%BD%D1%8C+%D0%B2%D0%B0%D1%80%D0%B8%D0%B0%D1%82%D0%BE%D1%80%D0%B0+%D0%BD%D0%B0+%D1%81%D0%BD%D0%B5%D0%B3%D0%BE%D1%85%D0%BE%D0%B4+%D0%B1%D1%83%D1%80%D0%B0%D0%BD+%D0%BA%D1%83%D0%BF%D0%B8%D1%82%D1%8C&amp;url=https%3A//snegohod-plus.ru/buran-parts/remen-variatora-33/&amp;l10n=ru&amp;mime=html&amp;sign=984f7d3f4189d9b95adc35fb7a58cd1b&amp;keyno=0</saved-copy-url>\n<url>https://snegohod-plus.ru/buran-parts/remen-variatora-33/</url>\n<domain>snegohod-plus.ru</domain>\n<title><hlword>Ремни</hlword> <hlword>вариатора</hlword> 33 <hlword>на</hlword> <hlword>снегоход</hlword> <hlword>Буран</hlword> - <hlword>купить</hlword> по низкой цене...</title>\n<modtime>20210419T112326</modtime>\n<size>2292</size>\n<charset>utf-8</charset>\n<mime-type>text/html</mime-type>\n<passages>\n<passage><hlword>Ремни</hlword> <hlword>вариатора</hlword> 33 <hlword>на</hlword> <hlword>снегоход</hlword> <hlword>Буран</hlword> | Запчасти для <hlword>снегохода</hlword> <hlword>Буран</hlword> - интернет-магазин <hlword>Снегоход</hlword> комплект г. Рыбинск. Товары в наличии.</passage>\n</passages>\n<properties>\n<_PassagesType>0</_PassagesType>\n<lang>ru</lang>\n</properties>\n</doc>\n</group>\n<group>\n<doccount>1</doccount>\n<relevance priority=\"all\"/>\n<doc id=\"Z5151E97D82A22F43\">\n<relevance priority=\"all\"/>\n<saved-copy-url>https://yandexwebcache.net/yandbtm?fmode=inject&amp;tm=1794590828&amp;tld=ru&amp;lang=ru&amp;la=1793922304&amp;text=%D1%80%D0%B5%D0%BC%D0%B5%D0%BD%D1%8C+%D0%B2%D0%B0%D1%80%D0%B8%D0%B0%D1%82%D0%BE%D1%80%D0%B0+%D0%BD%D0%B0+%D1%81%D0%BD%D0%B5%D0%B3%D0%BE%D1%85%D0%BE%D0%B4+%D0%B1%D1%83%D1%80%D0%B0%D0%BD+%D0%BA%D1%83%D0%BF%D0%B8%D1%82%D1%8C&amp;url=https%3A//snegohod-plus.ru/buran-parts/remen-variatora-dlya-snegoxoda-buran/&amp;l10n=ru&amp;mime=html&amp;sign=ace14f4eb5f70ea019dfdd01d1d5acfa&amp;keyno=0</saved-copy-url>\n<url>https://snegohod-plus.ru/buran-parts/remen-variatora-dlya-snegoxoda-buran/</url>\n<domain>snegohod-plus.ru</domain>\n<title><hlword>Ремень</hlword> <hlword>Вариатор</hlword> Сафари для <hlword>снегохода</hlword> <hlword>Буран</hlword>- цена, <hlword>купить</hlword>...</title>\n<modtime>20180916T144316</modtime>\n<size>2298</size>\n<charset>utf-8</charset>\n<mime-type>text/html</mime-type>\n<passages>\n<passage>Продаю <hlword>ремни</hlword> <hlword>вариатора</hlword> Сафари для <hlword>снегохода</hlword> <hlword>Буран</hlword>. <hlword>Продажа</hlword> запчастей для трансмиссии <hlword>снегоходов</hlword> <hlword>Буран</hlword>. Доставка в регионы. Отправка в день заказа. Тел.8-(960) 534-88-65.</passage>\n</passages>\n<properties>\n<offer_info>{&quot;availability&quot;:1,&quot;hatter_id&quot;:&quot;16045903187424004041:6087546924088138449&quot;,&quot;is_crossborder&quot;:0,&quot;offer_source&quot;:&quot;SITE&quot;,&quot;price&quot;:{&quot;currency&quot;:&quot;RUR&quot;,&quot;value&quot;:1500},&quot;url_hash&quot;:&quot;17304814826906904131:2628692221274386372&quot;}</offer_info>\n<_PassagesType>0</_PassagesType>\n<lang>ru</lang>\n</properties>\n</doc>\n</group>\n<group>\n<doccount>1</doccount>\n<relevance priority=\"all\"/>\n<doc id=\"Z8DBDEB7BB5FBE8BB\">\n<relevance priority=\"all\"/>\n<saved-copy-url>https://yandexwebcache.net/yandbtm?fmode=inject&amp;tm=1794590828&amp;tld=ru&amp;lang=ru&amp;la=1792788992&amp;text=%D1%80%D0%B5%D0%BC%D0%B5%D0%BD%D1%8C+%D0%B2%D0%B0%D1%80%D0%B8%D0%B0%D1%82%D0%BE%D1%80%D0%B0+%D0%BD%D0%B0+%D1%81%D0%BD%D0%B5%D0%B3%D0%BE%D1%85%D0%BE%D0%B4+%D0%B1%D1%83%D1%80%D0%B0%D0%BD+%D0%BA%D1%83%D0%BF%D0%B8%D1%82%D1%8C&amp;url=https%3A//buransnab.ru/catalog/dlya-snegoxoda/modelnyij-ryad-buran/buran-2t/shkiv-variatora-vedomyij/54222&amp;l10n=ru&amp;mime=html&amp;sign=547c29a7824e2aa85db310d32cd14e1b&amp;keyno=0</saved-copy-url>\n<url>https://buransnab.ru/catalog/dlya-snegoxoda/modelnyij-ryad-buran/buran-2t/shkiv-variatora-vedomyij/54222</url>\n<domain>buransnab.ru</domain>\n<title><hlword>Купить</hlword> <hlword>ремень</hlword> <hlword>вариатора</hlword> arctica snowpro 33х14х1120...</title>\n<modtime>20261015T234952</modtime>\n<size>2380</size>\n<charset>utf-8</charset>\n<mime-type>text/html</mime-type>\n<passages>\n<passage>ДЛЯ <hlword>СНЕГОХОДА</hlword>. Модельный ряд <hlword>Буран</hlword>.</passage>\n<passage>В интернет-магазине БуранСнаб <hlword>ремень</hlword> <hlword>вариатора</hlword> arctica snowpro 33х14х1120 (с доп кордом) по цене 2100 руб.</passage>\n</passages>\n<properties>\n<offer_info>{&quot;availability&quot;:1,&quot;hatter_id&quot;:&quot;13822911829545356634:18076567963129534731&quot;,&quot;is_crossborder&quot;:0,&quot;offer_source&quot;:&quot;SITE&quot;,&quot;price&quot;:{&quot;currency&quot;:&quot;RUR&quot;,&quot;value&quot;:2100},&quot;url_hash&quot;:&quot;1986582969076688533:17000681266867103223&quot;}</offer_info>\n<_PassagesType>0</_PassagesType>\n<lang>ru</lang>\n</properties>\n</doc>\n</group>\n<found priority=\"phrase\">17727</found>\n<found priority=\"strict\">17727</found>\n<found priority=\"all\">17727</found>\n<found-docs priority=\"phrase\">18062</found-docs>\n<found-docs priority=\"strict\">18062</found-docs>\n<found-docs priority=\"all\">18062</found-docs>\n<found-docs-human>нашёл 18 тыс. ответов</found-docs-human>\n</grouping>\n</results>\n</response>\n<resource-usage>\n<cpu-time-sum>10820785</cpu-time-sum>\n<cpu-time-max>21022</cpu-time-max>\n</resource-usage>\n</yandexsearch>\n"
+    }
+  },
+  "note": "真实API回执；搜索页原始XML保留供意图复核，不自动判为目标需求"
+}

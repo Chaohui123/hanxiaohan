@@ -544,3 +544,70 @@ python scripts/gemini-carbon-continue.py --prompt <prompt.txt> --resume-state <c
 - 恢复历史运行时，无新路由标记的目录继续读取旧 `opus.json`，保留 seat、旧模型、错误和字段；新路由目录读取并严格校验 `carbon.json`。新旧证据不得混名，失败/缺失分别保留 `CARBON_EXECUTION_FAILED`、`CARBON_EVIDENCE_INVALID`、`CARBON_RAW_OUTPUT_MISSING`。
 - 本次独立 Carbon 元数据与真实审查回执位于 `temp/ops-exec/carbon-replaces-opus-20261113/`：元数据为 `models/gemini-4-carbon`、支持 generateContent；最小真实审查返回 `CARBON_REVIEW_OK`，实际模型一致、STOP、268 total tokens，实际 HIGH 未返回。离线9项、周复盘专项17项、全项目81文件792项测试及build通过，独立复核无阻塞问题。
 - 正式 `ONZO Weekly Review` 已实跑 `weekly-2026-11-13T04-21-59-082Z`：12:21:58启动、12:27:53完成，`LastTaskResult=0`；Astra、Carbon、Argon、Kimi均SUCCESS。Carbon实际模型正确、STOP、正文9892字符、76,558 total tokens，报告SHA-256为 `1a0952e8202c31f4332f947fdd5cc972b08810a15ef88361c1103585e0211bec`。报告状态为 `COMPLETED_WITH_DECLARED_GAPS`，经营快照96.9小时且竞品存在runId不一致、fatal、陈旧直接快照与采集失败；这不是当前经营健康证明，未自动执行任何建议。下一次仍为11-16 14:41，未新增重复任务。综合校验 `routing-validation.json`，原始报告在对应运行目录。
+
+
+---
+
+## 十一、Yandex Cloud AI、SpeechKit 与 Search API（2026-11-14）
+
+### 11.1 当前账户、权限与密钥边界
+
+- `account-dione-3300`（`dn2pvzztpuqdyephhjlx`）已回读为 **Active / Paid version**，关联 1 个云。现有 `cloud-584001555qqcom` / `default` 文件夹（`b1g7kg5sf3nob759onuo`）可用，Cloud Shell 中官方 `yc 1.41.0` 已实跑，不需要重建云、文件夹或 Billing。
+- 服务账号 `onzo-yandex-api`（`ajenm8nu2hhln4p9op2c`）仅有 `ai.speechkit-tts.user`、`ai.speechkit-stt.user`、`ai.translate.user`、`ai.vision.user`、`search-api.webSearch.user` 五项角色，未授予管理员或资源编辑权限。
+- 本机服务账号 JSON 位于 `data/secrets/yandex-cloud/service_account_key.json`，该目录已忽略提交，文件权限已收紧；不得读取到聊天、打印日志、写入代码或发送给模型。ONZO 服务器部署时，秘密文件应通过受控秘密交付流程放到 `/home/ubuntu/onzo/data/secrets/yandex-cloud/service_account_key.json` 并设权限 600；`app_data` 卷会映射为容器内 `/app/data/secrets/yandex-cloud/service_account_key.json`。**本次尚未执行秘密上传、Git 提交或 ONZO 生产部署。**
+- 共享包为 `packages/yandex-cloud`，使用服务账号 JWT PS256 换取并缓存 IAM token。环境变量：`YANDEX_CLOUD_FOLDER_ID`、`YANDEX_CLOUD_SA_KEY_FILE`、`YANDEX_CLOUD_PROXY_URL`。本机脚本显式使用 `127.0.0.1:10808`，不改变系统代理；服务器按实际网络配置，不强制使用本机代理地址。
+
+### 11.2 SpeechKit 配音与真实验收
+
+正常视频默认改为 SpeechKit API v3 `marina+friendly`，不再默认 Edge。`main.voice` 必须为：
+
+```json
+{"provider":"yandex","model":"speechkit-v3","name":"marina","role":"friendly","rate":"+0%"}
+```
+
+- 正式编排仍是 `python temp/video-pro-pipeline/run_one.py <video-plan.json>`，生成器为 `temp/video-pro-pipeline/make_vo_yandex.py`。真实请求是 `POST https://tts.api.cloud.yandex.net:443/tts/v3/utteranceSynthesis`，字段为 `text` 与 `hints=[{voice:"marina"},{role:"friendly"}]`，不传速度。
+- 每句返回的 Base64 音频块合并成 WAV，校验完整解码、时长和文本/音频 SHA-256 后原子替换；付费请求失败、超时或结果不明不自动重发，不静默切换 Edge、Gemini 或其他音色。
+- 本机真实样音为 5.67 秒、22050Hz、mono、16-bit PCM。供应商隐藏盲评使用 Gemini 4 Argon 实际音频输入，结果 **PASS 96 分**；Yandex OggOpus STT 完整还原原句。证据：`temp/ops-exec/yandex-cloud-20261114/marina-blind-review.json`、`pipeline-voice/vo1.wav`、`other-capabilities-result.json`。
+- 历史 Edge/Gemini A/B 仅是当时证据，不再决定当前默认。新候选仍需逐句 WAV 与真实音频模型盲评，不能只看 HTTP 200 或文件名。
+
+### 11.3 Wordstat 与网页搜索 API
+
+选品不再默认打开 Wordstat 前台，统一使用：
+
+```bash
+node scripts/yandex-wordstat.mjs --phrase "ремень вариатора снегоход" \
+  --regions 225 --devices all --limit 50 --output temp/wordstat-result.json
+
+# 可选完整月份趋势、地区分布和购买意图搜索结果
+node scripts/yandex-wordstat.mjs --phrase "ремень вариатора снегоход" \
+  --period monthly --dynamics-from 2026-01-01 --to-date 2026-10-31 \
+  --regions-stats cities --search-intent --output temp/wordstat-full.json
+```
+
+后端路由同时挂载到 `/api` 与 `/api/v1`：
+
+- `POST /yandex-cloud/wordstat/top`
+- `POST /yandex-cloud/wordstat/dynamics`
+- `POST /yandex-cloud/wordstat/regions`
+- `POST /yandex-cloud/search`
+- `GET /yandex-cloud/status`（只表示密钥文件是否配置，不代替真实 API 验收）
+
+保留原始关键词、操作符、地区、设备、时间窗和回执。关键词总量与关联词不能自动判为目标购买需求；缺失月份保持缺失，不按 0。月度 `fromDate` 必须是月初、`toDate` 必须是月末；周/月趋势只支持 `+`，引号、精确词形、减词和分组使用日趋势。实际回执中 2026 年 10 月未返回，未补造数值。搜索 XML 同时保留并解析为 position/title/url/domain/snippet，供 Kimi 核验购买意图。
+
+### 11.4 Translate、STT、OCR 与其他云能力
+
+- **Translate**：`translateToRussian` 已真实返回俄语，可作商品文案初稿与术语辅助，但本次“水箱”被译为普通容器，证明仍须 Kimi 按商品语境终审，不能自动上线。
+- **STT**：同步 v1 使用 OggOpus，**不支持 MP3**；`recognizeRussianOggOpus` 已回读配音原文。`POST /api/yandex-cloud/stt` 接收 `audioOggOpusBase64` 并要求 `confirmNoSensitiveData=true`，解码后不得超过 1 MB。首次音色验收或高风险文案可在 plan 设置 `main.voice.stt_verify=true`，临时 WAV 转 OggOpus 后回读，规范化文本与原文一致才替换正式音轨；默认不逐句计费复核，差异/失败不自动重发。真实回执 `pipeline-voice-stt-verified/vo1.speechkit.json` 为 PASS。供应商语音和售后转写仍须审查隐私并复核文本，不替代真实音频模型盲评。
+- **Translate 与辅助接口**：`POST /api/yandex-cloud/translate` 接收 `texts` 与可选 `sourceLanguageCode`，只返回待审草稿，不替代 DeepSeek/Luna/Kimi 终审。`POST /api/yandex-cloud/stt`、`POST /api/yandex-cloud/ocr` 均要求 `confirmNoSensitiveData=true`，缺少确认在调用上游前返回 400；真实三接口验收见 `auxiliary-api-smoke-result.json`。
+- **Vision OCR**：`POST /api/yandex-cloud/ocr` 接收 `imageBase64` 与可选 `languages`，要求 `text_detection_config` 并检查业务内层 `error`，不能只凭外层 HTTP 200 判成功。测试图中文、英文和数字均识别，但部分语言标签出现 `hu` 误判，故只按实际文字与业务证据使用，不盲信语言标签。订单、买家、卡号、地址等敏感截图不得上传，未确认不上传，不默认把采购截图交给 OCR。
+- Cloud Functions、Object Storage、Lockbox 均只读验证 `access=PASS, count=0`，表示账户可访问且当前没有对应资源，**不代表已经创建或迁移**。后续可评估 Cloud Functions + Scheduler 承载 Wordstat 定时采集、Object Storage 归档原始回执、Lockbox 管理秘密；实施前须另做成本、权限、网络、数据驻留与回滚评审。
+- Ozon Seller 原生搜索查询仍受会员与本机浏览器会话限制，Yandex Wordstat 不能替代其加购、独立买家和订单转化指标，也不证明此前云端 Chromium 403 已解决。
+
+### 11.5 部署后必须执行的验收
+
+本次本机已完成真实 TTS、Wordstat Top/月度/地区/网页搜索、Translate、OggOpus STT 和 Vision OCR；全项目 83 文件 804 项测试、视频专项 66 项及 build 通过。提交并经 deploy-watch 部署后，还必须：
+
+1. 在容器内仅检查密钥文件存在与权限，不打印内容；调用 `GET /api/yandex-cloud/status`。
+2. 用受控测试词调用真实 `/api/yandex-cloud/wordstat/top`，再生成一条 Marina WAV，回读 HTTP、原始字段、文件格式和音频哈希。
+3. 核对日志没有 JWT、IAM token、私钥或完整音频 Base64；失败不回退到 Wordstat 前台或 Edge。
+4. 回读 `PROMO_AUTO_DECISION=false`、Ozon 商品价格库存与 Direct 未因此改变。未完成这些步骤前，只能称为本机真实 API 验收，不称为 ONZO 生产服务器已上线。

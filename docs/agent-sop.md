@@ -102,7 +102,7 @@
 7. **图7 安装/使用顺序**：3–4 步简化图，警示必须核对的尺寸、极性或电压。
 8. **图8 完整参数/包装/保障**：汇总购买决策信息，不编造质保或认证。
 
-**两个独立视频上传项**：视频封面（12–15 秒，零音轨优先，静音可理解）与正常视频（20–26 秒，Edge 原速俄语+字幕）按 8.3 分轨制作。视频封面不是图集里的第 8 张静态图，不能用图卡轮播、无声正片或循环定格冒充。官方 CTR/转化提升数字若无本次实证不得写成承诺。
+**两个独立视频上传项**：视频封面（12–15 秒，零音轨优先，静音可理解）与正常视频（20–26 秒，Yandex SpeechKit 原速俄语+字幕）按 8.3 分轨制作。视频封面不是图集里的第 8 张静态图，不能用图卡轮播、无声正片或循环定格冒充。官方 CTR/转化提升数字若无本次实证不得写成承诺。
 
 **无货源测品内容口径（2026-11-05）**：完整 8 图和双视频不因测品而缩减，仍须在正式上架前完成；选品与内容制作可并行，制作未完不能误判为选品失败。自拍素材在出单拿样后按更新替代路线替换首版图视频，不阻塞选品和首版制作，替换前后均须保证商品一致性并回读线上结果。
 
@@ -159,7 +159,7 @@
 - **结构**：核心词（品名）+ 属性词（材质/尺寸/马力）+ 用途词（ремонт/замена/ремкомплект）+ 需求词（OE 件号/规格段）。名称≤100 字符，零品牌词；兼容件不得使用 `оригинал`、`аналог` 或他人品牌词，适配信息用具体 OE 件号与核对提示表达。
 - **标签 23171**：按"核心/同义/马力/机型/用途/OE"扩到 12-15 个（不只 5 个！），全小写无空格词元（#ремкомплекткарбюратора），禁品牌词。
 - **老品名称品牌词红线**：不只新建品，**全部在售老品也要排查名称/图文 Yamaha 等品牌词**（61N 8/3 上架名称带 Yamaha 至 9/13 才清除——67F 侵权停售同款风险，属定时炸弹，建品和巡检都查）。
-- **主词与真实需求验证（2026-11-05 修订）**：Yandex Wordstat 可用前台 `wordstat.yandex.ru` 或 yandex-wordstat skill API；禁直译/凭感觉，一个词见空白先换 2–3 个俄语词形。保存商品词、地区、设备、时间窗、原始搜索量及 `"精确词组"`、`!词形` 等操作符，并用网页搜索或 Ozon 结果核验购买意图，区分目标购买、维修/DIY、相邻品和车型噪音。Ozon 后台查询、类目、销售榜、本店曝光订单或前台商品词/品类公开需求数据也可独立举证，以实际可见字段为准，不编造销量。
+- **主词与真实需求验证（2026-11-14 API 更新）**：Yandex Wordstat 默认走 Cloud Search API v2，不再依赖前台查询。统一入口 `node scripts/yandex-wordstat.mjs --phrase <词> --regions 225`，可选 `--dynamics-from/--to-date/--period`、`--regions-stats` 和 `--search-intent`；后端提供 `/api/yandex-cloud/wordstat/top|dynamics|regions` 与 `/api/yandex-cloud/search`。禁直译/凭感觉，一个词见空白先换 2–3 个俄语词形。保存商品词、地区、设备、时间窗、原始搜索量及 `"精确词组"`、`!词形` 等操作符和原始 API 回执，并用 Yandex 搜索结果或 Ozon 结果核验购买意图，区分目标购买、维修/DIY、相邻品和车型噪音；关联词与缺失月份不得自动当成目标需求或 0。月度趋势 `fromDate` 为月初、`toDate` 为月末；周/月趋势只支持 `+` 操作符，精确操作符用日趋势。Ozon 后台查询、类目、销售榜、本店曝光订单或前台商品词/品类公开需求数据也可独立举证，以实际可见字段为准，不编造销量。
 - **竞品证据边界**：同类跨境卖家的动销、评价和持续在售只用于判断竞争、价格带与可优化点，不能作为唯一需求证据；即使该数据来自 Ozon 前台，也仍须另有 Yandex 商品词搜索量或 Ozon 商品词/品类需求数据。
 
 ### 8.2 内容评级满分口径（2026-09-13 实证，2026-10-26 双视频修订）
@@ -173,7 +173,7 @@
 
 **视频封面**：目标 12–15 秒，4 个连续镜头：是什么→关键结构→怎么使用→购买前核对。每屏一个信息任务、俄语短标签，以真实动作、接口特写和尺寸标注实现静音理解，不调用 TTS，优先零音轨。不能把图卡直接轮播，也不能把正片去音轨冒充封面。
 
-**正常视频**：目标 20–26 秒，4–6 个连续镜头，按真实俄语原速 Edge 配音组织。先审逐字稿、生成配音，再按实际句长分配画面和字幕；超过 30 秒改文案，素材不足补真实镜头，禁止变速、定格和循环补时。
+**正常视频**：目标 20–26 秒，4–6 个连续镜头，按真实俄语原速 Yandex SpeechKit 配音组织。先审逐字稿、生成配音，再按实际句长分配画面和字幕；超过 30 秒改文案，素材不足补真实镜头，禁止变速、定格和循环补时。
 
 **源片与合成**：Omni 实测只接受 16:9/9:16 的 `response_format.aspect_ratio`，禁止传 3:4。源片按 9:16 生成，合成器中央安全裁切到 3:4；比例不一致的 clip 必须显式记录 `reframe.mode="center_crop"` 与 `safe_center:true`，无 pad、无拉伸。商品主体优先真实像素/真实动态素材，裁切后逐帧核对完整性。
 
@@ -213,20 +213,21 @@ AI Pro 应用内额度按算力消耗，不是无限。Flow 积分仅限相应�
 - 图片搜索接地默认关闭，避免竞品素材误用与检索费用。无中文/水印/logo/人脸/车标及背景清洁仍需逐张目检；自动 `image-qc.py` 不能替代商品一致性检查。素材不可用先换高清实拍或其他渠道，不靠反复付费生成赌运气。
 - Nano 仅 429 有限重试后才允许回退 `gemini-3.1-flash-image`；402/403/404/5xx 停止。网络结果不明不得自动重发，创建后记录脱敏 interaction ID；pending 不能提前成功，失败必须非零可见。
 
-### 9.3 视频：9:16 连续源片 + 3:4 后期 + Edge 原速配音
+### 9.3 视频：9:16 连续源片 + 3:4 后期 + SpeechKit 原速配音
 
 - Omni 模型自 2026-11-06 升级为 `gemini-omni-1.2-flash`。官方支持 3–15 秒逐秒控制、最多6张参考图、多轮编辑与扩展、360p/720p/1080p/4K；720p 约 $0.07/秒。适配器新增 `duration` 与 `previous_interaction_id`，`duration=None` 时保留旧调用的5秒提示，显式才写 `response_format.duration="<N>s"`；首尾帧插值仍限3–10秒，实测时长偏差超过0.25秒即失败。`previous_interaction_id` 用于续编/编辑上一互动并进入缓存指纹；编辑已有视频时输出时长必须与源片一致，不能把15秒源片直接缩成3秒，需延长时按每次3–10秒、累计不超过30秒走扩展提示；`extend=True` 必须同时给 `previous_interaction_id`、正数 `previous_duration` 和显式 `duration`，请求写新增秒数，验收按源片+新增的总时长，不能把扩展片误判为仅新增片段。官方参考视频上传等能力未接入当前适配器，不得冒充已支持。适配器保留720p默认以兼容旧调用；新品按8.3显式 `aspect_ratio="9:16"`，小零件优先1080p源片，并在批量前核对实际输出与usage。最终双片总是1080×1440，不把源片档位当成任意输出尺寸承诺。
 - `response_format.aspect_ratio` 只允许 `16:9`/`9:16`，禁止传 3:4。9:16→3:4 在后期等比放大、中央裁切，禁止 pad、拉伸；比例不同的 clip 必须显式 `reframe.mode="center_crop"` 和 `safe_center:true`，并逐帧核对主体、接口、数量和动作。
 - 可用 `first_frame`/`last_frame` 做 Omni 原生连续插值；商品真实参考必须对应同一 SKU。**禁止 `tpad`、`stream_loop`、句尾定格、配音变速和反复慢放凑时**。素材不足就补真实镜头或缩短文案。
-- 双视频编排 `python temp/video-pro-pipeline/run_one.py <path/to/video-plan.json>` 只接受 plan，`main.voice` 固定 Edge `rate="+0%"`，不提供 Gemini/GLM 环境切换。Gemini `gen_speech` 只作独立候选，不得未经新 A/B 评审接入正片。
-- 配音用真实 WAV 帧数/采样率测每句时长，再做画面与字幕；超 30 秒改文案，禁止虚构逐词时间戳。声音克隆与 GLM TTS 禁用。Gemini 样音需 24kHz、mono、16-bit WAV，manifest 指纹与实际文件哈希全匹配才可复用。
-- **当前 A/B 结论**：Argon 实际音频评审 Edge **73**、Gemini **55**，Edge 数字与单位更准确，故继续优先。候选评审必须实际提交音频，核对转写、发音、自然度和电商听感，不能凭文本或模型名假听。证据 `temp/omni-gen/test-out/tts/argon-ab-review.json`。
-- **2026-10-26 双 Edge 音色盲评**：修订后的 6 句俄语真实生成 12 条音轨，`gemini-3.8-flash` 实际听审选择 A（Dmitry），A/B 为 5/4.5，未检出重音错误；新任务优先 Dmitry，保留 `rate="+0%"`。超时、空文本、无效符号串和 404 不算评审；标准 generateContent 对当前账户的旧 `gemini-2.5-flash` 已不可用，真实音频评审改走官方支持的 `gemini-3.8-flash` Interactions 文本输出。证据 `temp/media-sop-20261026/grillecover-dual/voice-ab/gemini38-interaction-review.json`。`make_vo_edge.py` 临时 MP3/VTT 必须传绝对路径，防止子进程 cwd 改变后找不到文件；不得吞掉真实 Edge 错误后复用旧音轨。
+- 双视频编排 `python temp/video-pro-pipeline/run_one.py <path/to/video-plan.json>` 只接受 plan；自 2026-11-14 起 `main.voice` 固定 `provider=yandex`、`model=speechkit-v3`、`name=marina`、`role=friendly`、`rate="+0%"`，旧 Edge/GLM 配置必须显式迁移。共享 IAM 与 SpeechKit 客户端为 `packages/yandex-cloud`，实际生成器为 `temp/video-pro-pipeline/make_vo_yandex.py`，不读取 Edge 或 Gemini 音轨冒充本次输出。
+- 配音用真实 WAV 帧数/采样率测每句时长，再做画面与字幕；超 30 秒改文案，禁止虚构逐词时间戳。声音克隆与 GLM TTS 禁用。逐句 SpeechKit 请求使用官方 `hints=[{voice:"marina"},{role:"friendly"}]`，不传速度；保存文本、音频 SHA-256 与音色回执，完整 WAV 解码通过后才原子替换，付费失败不自动重发。首次音色验收或高风险文案可显式设置 `main.voice.stt_verify=true`，把临时 WAV 转为 OggOpus 后用 Yandex STT 回读，规范化文本与原文一致才允许替换正式音轨；默认不逐句计费复核，STT 失败或差异不自动重发、不保留新音轨。
+- **当前配音验收**：2026-11-14 Marina+friendly 真实样音为 22050Hz、mono、16-bit PCM，完整解码通过；Argon 在不知道供应商的情况下实际听审 **PASS 96 分**，Yandex OggOpus STT 完整还原原句。历史 Edge **73**、Gemini **55** 和双 Edge 音色评审仅作当时证据，不再决定当前路由。新候选仍须实际提交音频，核对发音、自然度、转写和电商听感，不能凭文本或模型名假听。证据 `temp/ops-exec/yandex-cloud-20261114/marina-blind-review.json` 与 `other-capabilities-result.json`。
 - `validate_media.py` 检查双片规格、全片解码、冻结、重复片段、场景突变与句尾；`AUTO_PASS_REVIEW_REQUIRED` 只代表技术初检，不能替代静音语义、实物一致性和俄语评审。
 
 ### 9.4 上线、成本与记录
 
 Google/GPT 只提供候选内容，Kimi 负责合规、参数与质量终审，独立 QC 复核后才可进入商品制作；本分工不授权自动改品。主 Agent 分别上传视频封面与正常视频并回读上传项，不把手动上传当默认交付。
+
+**Yandex 辅助能力按用途接入**：`POST /api/yandex-cloud/translate` 只产俄语草稿，术语、品牌禁词与参数由 Kimi 终审，不替代现有 DeepSeek/Luna 终审链；`POST /api/yandex-cloud/stt` 用于配音或经授权的语音回读，必须使用 OggOpus；`POST /api/yandex-cloud/ocr` 只处理无隐私标签、参数图或受控凭证，STT/OCR 请求都必须显式 `confirmNoSensitiveData=true`，否则在上游调用前拒绝。OCR 语言标签与识别文字、STT 转写、Translate 草稿都只是待审证据，不得直接改商品、成本、价格或广告。真实接口回执见 `temp/ops-exec/yandex-cloud-20261114/auxiliary-api-smoke-result.json`。
 
 新模型真实验证日期、规格、费用和限制写入 `docs/current-pipeline.md` 第九节，只有实证通过的能力才能标为已上线。付费失败、402/403/404/5xx 或结果不明不得自动重发；usage 与 Billing 对账，不把本地 token 汇总当余额。2026-10-26 的 1080p 5.013 秒 Omni 空场景样片为 43,440 output video tokens，按 $17.50/M 估算视频输出费约 **$0.7602**（另有输入），不作为批量费用封顶。
 

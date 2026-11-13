@@ -1,0 +1,17 @@
+{
+  "provider": "yandex",
+  "model": "speechkit-v3",
+  "voice": "marina",
+  "role": "friendly",
+  "chunks": 1,
+  "bytes": 250214,
+  "text_sha256": "797380cade0edd385cad7bb61c44b29362f90c00908615a4cbd794365f7bda26",
+  "audio_sha256": "f6e2487569aaf928199c3e735c84589e83b36116874a12f6d7f9ca5b5af930ee",
+  "rate": "+0%",
+  "stt_verify_requested": true,
+  "stt_verification": {
+    "status": "PASS",
+    "format": "oggopus",
+    "transcript": "Проверка русской речи этот товар поможет вам подготовиться к зимнему сезону"
+  }
+}

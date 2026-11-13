@@ -11,6 +11,7 @@
     { "path": "../../packages/ai" },
     { "path": "../../packages/scraper" },
     { "path": "../../packages/validator" },
-    { "path": "../../packages/embedding" }
+    { "path": "../../packages/embedding" },
+    { "path": "../../packages/yandex-cloud" }
   ]
 }

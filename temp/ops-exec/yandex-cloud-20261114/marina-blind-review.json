@@ -1,0 +1,41 @@
+{
+  "model": "gemini-4-argon",
+  "method": "actual_wav_audio_input_provider_hidden_blind_review",
+  "source_text": "Проверка русской речи. Этот товар поможет вам подготовиться к зимнему сезону.",
+  "review": "{\"verdict\":\"PASS\",\"confidence\":\"高\",\"score\":96,\"issues\":[],\"reason\":\"音频发音纯正，重音和词形完全正确，语速自然，语调流畅且符合电商广告场景，整体质量极高。\"}",
+  "verdict": {
+    "verdict": "PASS",
+    "confidence": "高",
+    "score": 96,
+    "issues": [],
+    "reason": "音频发音纯正，重音和词形完全正确，语速自然，语调流畅且符合电商广告场景，整体质量极高。"
+  },
+  "usage": {
+    "total_tokens": 423,
+    "total_input_tokens": 368,
+    "input_tokens_by_modality": [
+      {
+        "modality": "text",
+        "tokens": 196
+      },
+      {
+        "modality": "audio",
+        "tokens": 172
+      }
+    ],
+    "total_cached_tokens": 0,
+    "total_output_tokens": 55,
+    "output_tokens_by_modality": [
+      {
+        "modality": "text",
+        "tokens": 55
+      }
+    ],
+    "total_tool_use_tokens": 0,
+    "total_thought_tokens": 0,
+    "initial_input_tokens": 368
+  },
+  "audio_sha256": "33693bcb1b2e76e4adabd8b364540df2f41e603db7393464f3f7658b1852bf7a",
+  "created_at": "2026-11-13T17:29:26Z",
+  "production_changes": false
+}

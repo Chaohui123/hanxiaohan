@@ -22,6 +22,7 @@
     "@onzo/scraper-1688": "workspace:*",
     "@onzo/shared-types": "workspace:*",
     "@onzo/validation-layer": "workspace:*",
+    "@onzo/yandex-cloud": "workspace:*",
     "@opentelemetry/api": "^1.9.1",
     "@opentelemetry/exporter-trace-otlp-http": "^0.220.0",
     "@opentelemetry/instrumentation-express": "^0.68.0",

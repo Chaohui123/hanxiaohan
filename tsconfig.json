@@ -13,6 +13,7 @@
     { "path": "packages/ozon-order" },
     { "path": "packages/price-monitor" },
     { "path": "packages/logistics" },
+    { "path": "packages/yandex-cloud" },
     { "path": "apps/api-services" },
     { "path": "apps/promo-agent" },
     { "path": "apps/ops-agent" },

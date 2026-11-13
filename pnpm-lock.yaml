@@ -175,6 +175,9 @@ importers:
       '@onzo/validation-layer':
         specifier: workspace:*
         version: link:../../packages/validator
+      '@onzo/yandex-cloud':
+        specifier: workspace:*
+        version: link:../../packages/yandex-cloud
       '@opentelemetry/api':
         specifier: ^1.9.1
         version: 1.9.1
@@ -454,6 +457,12 @@ importers:
       '@onzo/shared-types':
         specifier: workspace:*
         version: link:../shared-types
+
+  packages/yandex-cloud:
+    dependencies:
+      undici:
+        specifier: ^8.11.2
+        version: 8.11.2
 
 packages:
 

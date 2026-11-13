@@ -1,0 +1,106 @@
+{
+  "status": "PASS_LOCAL_AND_YANDEX_CLOUD_REAL_API",
+  "verifiedAt": "2026-11-14T02:15:00+08:00",
+  "billing": {
+    "account": "account-dione-3300",
+    "id": "dn2pvzztpuqdyephhjlx",
+    "state": "Active",
+    "usageType": "Paid version",
+    "linkedClouds": 1
+  },
+  "cloud": {
+    "name": "cloud-584001555qqcom",
+    "folder": "default",
+    "folderId": "b1g7kg5sf3nob759onuo",
+    "cloudShell": "PASS",
+    "ycVersion": "1.41.0 linux/amd64"
+  },
+  "serviceAccount": {
+    "name": "onzo-yandex-api",
+    "id": "ajenm8nu2hhln4p9op2c",
+    "roles": [
+      "ai.speechkit-tts.user",
+      "ai.speechkit-stt.user",
+      "ai.translate.user",
+      "ai.vision.user",
+      "search-api.webSearch.user"
+    ],
+    "adminRolesGranted": false,
+    "keyStoredInControlledIgnoredPath": true,
+    "keyPrintedOrSentToModel": false
+  },
+  "speechkit": {
+    "status": "PASS",
+    "provider": "yandex",
+    "api": "v3",
+    "voice": "marina",
+    "role": "friendly",
+    "rate": "+0%",
+    "wav": {
+      "durationSeconds": 5.672789,
+      "codec": "pcm_s16le",
+      "sampleRate": 22050,
+      "channels": 1,
+      "bitsPerSample": 16,
+      "bytes": 250214,
+      "sha256": "f6e2487569aaf928199c3e735c84589e83b36116874a12f6d7f9ca5b5af930ee"
+    },
+    "pipelineRealGeneration": "PASS",
+    "blindReview": {
+      "model": "gemini-4-argon",
+      "providerHidden": true,
+      "verdict": "PASS",
+      "score": 96,
+      "confidence": "高"
+    },
+    "sttReadback": "Проверка русской речи этот товар поможет вам подготовиться к зимнему сезону",
+    "oldEdgeOrGeminiUsedAsCurrentDefault": false
+  },
+  "searchApi": {
+    "status": "PASS",
+    "wordstatTop": "PASS totalCount=3396, rows=42 for default limit=50",
+    "wordstatDynamics": "PASS monthly 2026-01-01 through 2026-10-31; October row absent and not filled with zero",
+    "wordstatRegions": "PASS cities with raw region/count/share/affinityIndex",
+    "webSearch": "PASS raw XML plus parsed results",
+    "backendRoute": "PASS /api/yandex-cloud/wordstat/top real upstream response",
+    "selectionLegacyEntry": "temp/wordstat-front.py now calls Cloud API without browser session",
+    "intentAutoApproved": false
+  },
+  "otherCapabilities": {
+    "translate": "PASS /api/yandex-cloud/translate real Russian draft; Kimi terminology review still required",
+    "stt": "PASS /api/yandex-cloud/stt OggOpus; optional main.voice.stt_verify=true real PASS receipt; default no per-sentence STT charge",
+    "visionOcr": "PASS /api/yandex-cloud/ocr Chinese/English/digits; nested errors fail; confirmNoSensitiveData=true required; language labels may be wrong",
+    "auxiliaryApiEvidence": "auxiliary-api-smoke-result.json PASS; missing confirmation guard returns 400 before upstream",
+    "sttVerificationReceipt": "pipeline-voice-stt-verified/vo1.speechkit.json PASS",
+    "cloudFunctions": "ACCESS_PASS count=0; not implemented",
+    "objectStorage": "ACCESS_PASS count=0; not implemented",
+    "lockbox": "ACCESS_PASS count=0; not implemented"
+  },
+  "tests": {
+    "projectFiles": 83,
+    "projectTests": 804,
+    "videoPipelineTests": 66,
+    "yandexClientAndRouteTests": 12,
+    "build": "PASS",
+    "lintErrors": 0,
+    "lintWarningsExisting": 215,
+    "gitDiffCheck": "PASS"
+  },
+  "onzoProduction": {
+    "secretUploadedToServer": false,
+    "gitCommitOrPushPerformed": false,
+    "deployed": false,
+    "remaining": "提交部署后在ONZO服务器执行密钥存在性、真实Wordstat路由、Marina WAV和日志无秘密验收"
+  },
+  "unchanged": {
+    "ozonProductsPricesStocks": true,
+    "directCampaigns": true,
+    "promoAutoDecision": false
+  },
+  "officialDocs": [
+    "https://yandex.cloud/en/docs/speechkit/tts/api/tts-v3-rest",
+    "https://aistudio.yandex.ru/docs/ru/search-api/concepts/wordstat.html",
+    "https://aistudio.yandex.ru/en/docs/speechkit/formats",
+    "https://aistudio.yandex.ru/en/docs/translate/operations/translate"
+  ]
+}

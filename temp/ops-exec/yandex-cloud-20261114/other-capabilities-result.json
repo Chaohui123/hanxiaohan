@@ -1,0 +1,784 @@
+{
+  "status": "PASS",
+  "translate": {
+    "request": {
+      "sourceLanguageCode": "zh",
+      "targetLanguageCode": "ru",
+      "texts": [
+        "冬季汽车水箱保温罩，四层加厚，通用尺寸 100×70 厘米"
+      ]
+    },
+    "raw": {
+      "translations": [
+        {
+          "text": "Утеплитель зимнего автомобильного бака для воды, четырехслойное утолщение, универсальный размер 100×70 см"
+        }
+      ]
+    }
+  },
+  "stt": {
+    "request": {
+      "lang": "ru-RU",
+      "format": "oggopus",
+      "source": "Marina friendly TTS sample"
+    },
+    "raw": {
+      "result": "Проверка русской речи этот товар поможет вам подготовиться к зимнему сезону"
+    }
+  },
+  "ocr": {
+    "request": {
+      "languages": [
+        "zh",
+        "en",
+        "ru"
+      ],
+      "image": "ocr-test.png (无隐私测试图)"
+    },
+    "raw": {
+      "results": [
+        {
+          "results": [
+            {
+              "textDetection": {
+                "pages": [
+                  {
+                    "width": "1200",
+                    "height": "420",
+                    "blocks": [
+                      {
+                        "boundingBox": {
+                          "vertices": [
+                            {
+                              "x": "52",
+                              "y": "74"
+                            },
+                            {
+                              "x": "52",
+                              "y": "111"
+                            },
+                            {
+                              "x": "563",
+                              "y": "111"
+                            },
+                            {
+                              "x": "563",
+                              "y": "74"
+                            }
+                          ]
+                        },
+                        "lines": [
+                          {
+                            "boundingBox": {
+                              "vertices": [
+                                {
+                                  "x": "52",
+                                  "y": "74"
+                                },
+                                {
+                                  "x": "52",
+                                  "y": "111"
+                                },
+                                {
+                                  "x": "539",
+                                  "y": "111"
+                                },
+                                {
+                                  "x": "539",
+                                  "y": "74"
+                                }
+                              ]
+                            },
+                            "words": [
+                              {
+                                "boundingBox": {
+                                  "vertices": [
+                                    {
+                                      "x": "52",
+                                      "y": "69"
+                                    },
+                                    {
+                                      "x": "52",
+                                      "y": "119"
+                                    },
+                                    {
+                                      "x": "201",
+                                      "y": "119"
+                                    },
+                                    {
+                                      "x": "201",
+                                      "y": "69"
+                                    }
+                                  ]
+                                },
+                                "text": "适用于",
+                                "confidence": 1,
+                                "languages": [
+                                  {
+                                    "languageCode": "hu",
+                                    "confidence": 1
+                                  }
+                                ],
+                                "entityIndex": "-1"
+                              },
+                              {
+                                "boundingBox": {
+                                  "vertices": [
+                                    {
+                                      "x": "226",
+                                      "y": "67"
+                                    },
+                                    {
+                                      "x": "226",
+                                      "y": "118"
+                                    },
+                                    {
+                                      "x": "426",
+                                      "y": "118"
+                                    },
+                                    {
+                                      "x": "426",
+                                      "y": "67"
+                                    }
+                                  ]
+                                },
+                                "text": "Yamaha",
+                                "confidence": 1,
+                                "languages": [
+                                  {
+                                    "languageCode": "hu",
+                                    "confidence": 1
+                                  }
+                                ],
+                                "entityIndex": "-1"
+                              },
+                              {
+                                "boundingBox": {
+                                  "vertices": [
+                                    {
+                                      "x": "443",
+                                      "y": "67"
+                                    },
+                                    {
+                                      "x": "443",
+                                      "y": "117"
+                                    },
+                                    {
+                                      "x": "539",
+                                      "y": "117"
+                                    },
+                                    {
+                                      "x": "539",
+                                      "y": "67"
+                                    }
+                                  ]
+                                },
+                                "text": "61N",
+                                "confidence": 1,
+                                "languages": [
+                                  {
+                                    "languageCode": "hu",
+                                    "confidence": 1
+                                  }
+                                ],
+                                "entityIndex": "-1"
+                              }
+                            ],
+                            "confidence": 1
+                          },
+                          {
+                            "boundingBox": {
+                              "vertices": [
+                                {
+                                  "x": "135",
+                                  "y": "74"
+                                },
+                                {
+                                  "x": "135",
+                                  "y": "111"
+                                },
+                                {
+                                  "x": "563",
+                                  "y": "111"
+                                },
+                                {
+                                  "x": "563",
+                                  "y": "74"
+                                }
+                              ]
+                            },
+                            "words": [
+                              {
+                                "boundingBox": {
+                                  "vertices": [
+                                    {
+                                      "x": "135",
+                                      "y": "68"
+                                    },
+                                    {
+                                      "x": "135",
+                                      "y": "119"
+                                    },
+                                    {
+                                      "x": "417",
+                                      "y": "119"
+                                    },
+                                    {
+                                      "x": "417",
+                                      "y": "68"
+                                    }
+                                  ]
+                                },
+                                "text": "Yamaha",
+                                "confidence": 1,
+                                "languages": [
+                                  {
+                                    "languageCode": "hu",
+                                    "confidence": 1
+                                  }
+                                ],
+                                "entityIndex": "-1"
+                              },
+                              {
+                                "boundingBox": {
+                                  "vertices": [
+                                    {
+                                      "x": "441",
+                                      "y": "67"
+                                    },
+                                    {
+                                      "x": "441",
+                                      "y": "117"
+                                    },
+                                    {
+                                      "x": "563",
+                                      "y": "117"
+                                    },
+                                    {
+                                      "x": "563",
+                                      "y": "67"
+                                    }
+                                  ]
+                                },
+                                "text": "61N",
+                                "confidence": 1,
+                                "languages": [
+                                  {
+                                    "languageCode": "hu",
+                                    "confidence": 1
+                                  }
+                                ],
+                                "entityIndex": "-1"
+                              }
+                            ],
+                            "confidence": 1
+                          }
+                        ]
+                      },
+                      {
+                        "boundingBox": {
+                          "vertices": [
+                            {
+                              "x": "46",
+                              "y": "196"
+                            },
+                            {
+                              "x": "46",
+                              "y": "233"
+                            },
+                            {
+                              "x": "370",
+                              "y": "233"
+                            },
+                            {
+                              "x": "370",
+                              "y": "196"
+                            }
+                          ]
+                        },
+                        "lines": [
+                          {
+                            "boundingBox": {
+                              "vertices": [
+                                {
+                                  "x": "49",
+                                  "y": "196"
+                                },
+                                {
+                                  "x": "49",
+                                  "y": "233"
+                                },
+                                {
+                                  "x": "357",
+                                  "y": "233"
+                                },
+                                {
+                                  "x": "357",
+                                  "y": "196"
+                                }
+                              ]
+                            },
+                            "words": [
+                              {
+                                "boundingBox": {
+                                  "vertices": [
+                                    {
+                                      "x": "49",
+                                      "y": "188"
+                                    },
+                                    {
+                                      "x": "49",
+                                      "y": "241"
+                                    },
+                                    {
+                                      "x": "196",
+                                      "y": "241"
+                                    },
+                                    {
+                                      "x": "196",
+                                      "y": "188"
+                                    }
+                                  ]
+                                },
+                                "text": "采购价",
+                                "confidence": 1,
+                                "languages": [
+                                  {
+                                    "languageCode": "zh",
+                                    "confidence": 1
+                                  }
+                                ],
+                                "entityIndex": "-1"
+                              },
+                              {
+                                "boundingBox": {
+                                  "vertices": [
+                                    {
+                                      "x": "213",
+                                      "y": "189"
+                                    },
+                                    {
+                                      "x": "213",
+                                      "y": "241"
+                                    },
+                                    {
+                                      "x": "291",
+                                      "y": "241"
+                                    },
+                                    {
+                                      "x": "291",
+                                      "y": "189"
+                                    }
+                                  ]
+                                },
+                                "text": "32",
+                                "confidence": 1,
+                                "languages": [
+                                  {
+                                    "languageCode": "zh",
+                                    "confidence": 1
+                                  }
+                                ],
+                                "entityIndex": "-1"
+                              },
+                              {
+                                "boundingBox": {
+                                  "vertices": [
+                                    {
+                                      "x": "318",
+                                      "y": "189"
+                                    },
+                                    {
+                                      "x": "318",
+                                      "y": "242"
+                                    },
+                                    {
+                                      "x": "357",
+                                      "y": "242"
+                                    },
+                                    {
+                                      "x": "357",
+                                      "y": "189"
+                                    }
+                                  ]
+                                },
+                                "text": "元",
+                                "confidence": 1,
+                                "languages": [
+                                  {
+                                    "languageCode": "zh",
+                                    "confidence": 1
+                                  }
+                                ],
+                                "entityIndex": "-1"
+                              }
+                            ],
+                            "confidence": 1
+                          },
+                          {
+                            "boundingBox": {
+                              "vertices": [
+                                {
+                                  "x": "46",
+                                  "y": "196"
+                                },
+                                {
+                                  "x": "46",
+                                  "y": "233"
+                                },
+                                {
+                                  "x": "370",
+                                  "y": "233"
+                                },
+                                {
+                                  "x": "370",
+                                  "y": "196"
+                                }
+                              ]
+                            },
+                            "words": [
+                              {
+                                "boundingBox": {
+                                  "vertices": [
+                                    {
+                                      "x": "46",
+                                      "y": "188"
+                                    },
+                                    {
+                                      "x": "46",
+                                      "y": "241"
+                                    },
+                                    {
+                                      "x": "285",
+                                      "y": "241"
+                                    },
+                                    {
+                                      "x": "285",
+                                      "y": "188"
+                                    }
+                                  ]
+                                },
+                                "text": "32",
+                                "confidence": 1,
+                                "languages": [
+                                  {
+                                    "languageCode": "zh",
+                                    "confidence": 1
+                                  }
+                                ],
+                                "entityIndex": "-1"
+                              },
+                              {
+                                "boundingBox": {
+                                  "vertices": [
+                                    {
+                                      "x": "305",
+                                      "y": "189"
+                                    },
+                                    {
+                                      "x": "305",
+                                      "y": "242"
+                                    },
+                                    {
+                                      "x": "370",
+                                      "y": "242"
+                                    },
+                                    {
+                                      "x": "370",
+                                      "y": "189"
+                                    }
+                                  ]
+                                },
+                                "text": "П",
+                                "confidence": 1,
+                                "languages": [
+                                  {
+                                    "languageCode": "zh",
+                                    "confidence": 1
+                                  }
+                                ],
+                                "entityIndex": "-1"
+                              }
+                            ],
+                            "confidence": 1
+                          }
+                        ]
+                      },
+                      {
+                        "boundingBox": {
+                          "vertices": [
+                            {
+                              "x": "47",
+                              "y": "314"
+                            },
+                            {
+                              "x": "47",
+                              "y": "348"
+                            },
+                            {
+                              "x": "466",
+                              "y": "348"
+                            },
+                            {
+                              "x": "466",
+                              "y": "314"
+                            }
+                          ]
+                        },
+                        "lines": [
+                          {
+                            "boundingBox": {
+                              "vertices": [
+                                {
+                                  "x": "53",
+                                  "y": "314"
+                                },
+                                {
+                                  "x": "53",
+                                  "y": "348"
+                                },
+                                {
+                                  "x": "445",
+                                  "y": "348"
+                                },
+                                {
+                                  "x": "445",
+                                  "y": "314"
+                                }
+                              ]
+                            },
+                            "words": [
+                              {
+                                "boundingBox": {
+                                  "vertices": [
+                                    {
+                                      "x": "53",
+                                      "y": "307"
+                                    },
+                                    {
+                                      "x": "53",
+                                      "y": "356"
+                                    },
+                                    {
+                                      "x": "157",
+                                      "y": "356"
+                                    },
+                                    {
+                                      "x": "157",
+                                      "y": "307"
+                                    }
+                                  ]
+                                },
+                                "text": "OCR",
+                                "confidence": 1,
+                                "languages": [
+                                  {
+                                    "languageCode": "en",
+                                    "confidence": 1
+                                  }
+                                ],
+                                "entityIndex": "-1"
+                              },
+                              {
+                                "boundingBox": {
+                                  "vertices": [
+                                    {
+                                      "x": "182",
+                                      "y": "307"
+                                    },
+                                    {
+                                      "x": "182",
+                                      "y": "356"
+                                    },
+                                    {
+                                      "x": "294",
+                                      "y": "356"
+                                    },
+                                    {
+                                      "x": "294",
+                                      "y": "307"
+                                    }
+                                  ]
+                                },
+                                "text": "TEST",
+                                "confidence": 1,
+                                "languages": [
+                                  {
+                                    "languageCode": "en",
+                                    "confidence": 1
+                                  }
+                                ],
+                                "entityIndex": "-1"
+                              },
+                              {
+                                "boundingBox": {
+                                  "vertices": [
+                                    {
+                                      "x": "310",
+                                      "y": "307"
+                                    },
+                                    {
+                                      "x": "310",
+                                      "y": "356"
+                                    },
+                                    {
+                                      "x": "445",
+                                      "y": "356"
+                                    },
+                                    {
+                                      "x": "445",
+                                      "y": "307"
+                                    }
+                                  ]
+                                },
+                                "text": "2026",
+                                "confidence": 1,
+                                "languages": [
+                                  {
+                                    "languageCode": "en",
+                                    "confidence": 1
+                                  }
+                                ],
+                                "entityIndex": "-1"
+                              }
+                            ],
+                            "confidence": 1
+                          },
+                          {
+                            "boundingBox": {
+                              "vertices": [
+                                {
+                                  "x": "47",
+                                  "y": "314"
+                                },
+                                {
+                                  "x": "47",
+                                  "y": "348"
+                                },
+                                {
+                                  "x": "466",
+                                  "y": "348"
+                                },
+                                {
+                                  "x": "466",
+                                  "y": "314"
+                                }
+                              ]
+                            },
+                            "words": [
+                              {
+                                "boundingBox": {
+                                  "vertices": [
+                                    {
+                                      "x": "47",
+                                      "y": "307"
+                                    },
+                                    {
+                                      "x": "47",
+                                      "y": "356"
+                                    },
+                                    {
+                                      "x": "166",
+                                      "y": "356"
+                                    },
+                                    {
+                                      "x": "166",
+                                      "y": "307"
+                                    }
+                                  ]
+                                },
+                                "text": "OCR",
+                                "confidence": 1,
+                                "languages": [
+                                  {
+                                    "languageCode": "en",
+                                    "confidence": 1
+                                  }
+                                ],
+                                "entityIndex": "-1"
+                              },
+                              {
+                                "boundingBox": {
+                                  "vertices": [
+                                    {
+                                      "x": "179",
+                                      "y": "307"
+                                    },
+                                    {
+                                      "x": "179",
+                                      "y": "356"
+                                    },
+                                    {
+                                      "x": "305",
+                                      "y": "356"
+                                    },
+                                    {
+                                      "x": "305",
+                                      "y": "307"
+                                    }
+                                  ]
+                                },
+                                "text": "TEST",
+                                "confidence": 1,
+                                "languages": [
+                                  {
+                                    "languageCode": "en",
+                                    "confidence": 1
+                                  }
+                                ],
+                                "entityIndex": "-1"
+                              },
+                              {
+                                "boundingBox": {
+                                  "vertices": [
+                                    {
+                                      "x": "317",
+                                      "y": "307"
+                                    },
+                                    {
+                                      "x": "317",
+                                      "y": "356"
+                                    },
+                                    {
+                                      "x": "466",
+                                      "y": "356"
+                                    },
+                                    {
+                                      "x": "466",
+                                      "y": "307"
+                                    }
+                                  ]
+                                },
+                                "text": "2026",
+                                "confidence": 1,
+                                "languages": [
+                                  {
+                                    "languageCode": "en",
+                                    "confidence": 1
+                                  }
+                                ],
+                                "entityIndex": "-1"
+                              }
+                            ],
+                            "confidence": 1
+                          }
+                        ]
+                      }
+                    ]
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      ]
+    }
+  },
+  "businessCandidates": {
+    "translate": "俄语商品文案初稿与术语统一，Kimi终审后才能上线",
+    "stt": "配音内容回读、供应商语音与售后语音工单转写",
+    "visionOcr": "无隐私采购凭证、标签与参数图识别；敏感信息不得上传"
+  },
+  "productionChanges": false,
+  "note": "Translate、OggOpus STT与Vision OCR均通过真实API验收；未重复调用Translate/STT"
+}

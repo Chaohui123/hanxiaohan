@@ -1,0 +1,36 @@
+{
+  "status": "PASS",
+  "httpStatus": 200,
+  "route": "/api/yandex-cloud/wordstat/top",
+  "request": {
+    "phrase": "ремень вариатора снегоход",
+    "regions": [
+      225
+    ],
+    "devices": "all",
+    "limit": 1
+  },
+  "response": {
+    "success": true,
+    "source": "Yandex Cloud Search API v2",
+    "request": {
+      "phrase": "ремень вариатора снегоход",
+      "regions": [
+        225
+      ],
+      "devices": "all",
+      "limit": 1
+    },
+    "intentVerificationRequired": true,
+    "note": "关键词热度不自动等于目标购买需求；必须核验购买意图，未知字段不按0处理",
+    "data": {
+      "totalCount": "3396",
+      "results": [
+        {
+          "phrase": "ремень вариатора на снегоход",
+          "count": "1776"
+        }
+      ]
+    }
+  }
+}

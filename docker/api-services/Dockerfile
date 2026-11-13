@@ -41,6 +41,7 @@ COPY packages/embedding/package.json packages/embedding/tsconfig.json packages/e
 COPY packages/feishu-bot/package.json packages/feishu-bot/tsconfig.json packages/feishu-bot/
 COPY packages/cache/package.json packages/cache/tsconfig.json packages/cache/
 COPY packages/logistics/package.json packages/logistics/tsconfig.json packages/logistics/
+COPY packages/yandex-cloud/package.json packages/yandex-cloud/tsconfig.json packages/yandex-cloud/
 COPY apps/api-services/package.json apps/api-services/tsconfig.json apps/api-services/
 
 # Step 2: Install deps (includes devDeps for TS compilation)
@@ -60,7 +61,7 @@ COPY apps/ apps/
 # Step 4: Compile TypeScript with toleration for existing type warnings
 # Run all packages first (dependencies), then api-services
 RUN for pkg in logger shared-types ozon-api-wrapper ai scraper validator ozon-order \
-      price-monitor cache logistics embedding; do \
+      price-monitor cache logistics embedding yandex-cloud; do \
       echo \"=== Compiling $pkg ===\"; \
       ./node_modules/.bin/tsc -p packages/$pkg/tsconfig.json --noEmitOnError false 2>&1 | head -3 || true; \
       ls packages/$pkg/dist/index.js 2>/dev/null && echo \"  OK: $pkg\" || echo \"  NO_DIST: $pkg\"; \
