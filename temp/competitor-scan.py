@@ -1,16 +1,10 @@
 # -*- coding: utf-8 -*-
-"""
-竞品链接精准监控抓取（本机 WebBridge 两段式，服务器 IP 被 Ozon 前台拦截，只能本机跑）
+"""已停用的本机 WebBridge 竞品扫描，仅保留历史参考，禁止用于生产采集。
 
-流程：服务器 GET /api/promo/competitor-links → WebBridge 逐个打开竞品页 →
-页面内 JS 提取价格/评分/评论数 → 按我方 offerId 分组 POST /api/promo/competitor-snapshots 回传。
-
-用法：
-  python temp/competitor-scan.py              # 全量抓取（34 条约 8-10 分钟）
-  python temp/competitor-scan.py MAR-YAM-67F-01  # 只抓某我方商品
-前提：WebBridge daemon 运行 + Chrome 扩展已连接（127.0.0.1:10086）。
-调度建议：每日 2 次（快照新鲜度 12h 内 competitor-watch 才会消费）。
+当前使用服务器轻量容器 tools/ozon-mcp-server/src/competitor-scan.js，
+通过已验证的第三方 JSON 通道每日抓取一次，不在本机运行。
 """
+
 import json, os, sys, time, random, urllib.request, urllib.error, io
 sys.stdout.reconfigure(encoding="utf-8")
 
@@ -113,7 +107,7 @@ def ensure_webbridge():
 
 
 def main():
-    ensure_webbridge()
+    raise SystemExit("本机竞品扫描已停用，请使用服务器 tools/ozon-mcp-server/run-competitor-scan.sh")
     only = sys.argv[1] if len(sys.argv) > 1 else None
     links = api("GET", "/api/promo/competitor-links" + (f"?offerId={only}" if only else ""))["items"]
     if not links:

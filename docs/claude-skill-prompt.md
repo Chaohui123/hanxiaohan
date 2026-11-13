@@ -1,4 +1,6 @@
-# Claude Skill Prompts — 场景集合
+# Claude Skill Prompts — 场景集合（历史模板）
+
+> **历史边界**：这是早期提示词示例，不是当前模型路由、API 端点或生产操作规范。示例中的 Phase 1、端点和重试参数不得直接用于生产；开发订单模块应以 `packages/ozon-order/README.md`、源码、测试及 `AGENTS.md` 为准。
 
 ## 场景 6：`packages/ozon-order` — 订单模块专用提示词
 

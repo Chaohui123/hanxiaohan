@@ -13,7 +13,7 @@ req = urllib.request.Request("http://127.0.0.1:10086/command", data=body,
 with urllib.request.urlopen(req, timeout=timeout) as r:
     resp = json.loads(r.read().decode("utf-8"))
 if resp.get("ok"):
-    print(json.dumps(resp.get("data", {}), ensure_ascii=False)[:6000])
+    print(json.dumps(resp.get("data", {}), ensure_ascii=False)[:200000])
 else:
     print("ERROR:", json.dumps(resp.get("error", {}), ensure_ascii=False)[:400])
     sys.exit(1)

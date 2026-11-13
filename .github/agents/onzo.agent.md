@@ -20,13 +20,15 @@ capabilities:
   - run: local tests and linters when requested
   - ask: clarifying questions before risky or ambiguous changes
 constraints:
+  - Always: read `AGENTS.md` and `docs/current-pipeline.md` section 9 before repository work; follow current RAG/SOP rules.
   - Never: git push, force-push, rewrite git history, or delete files/directories without explicit approval.
   - Never: modify `.env`, secret files, CI credentials, or certificates without explicit approval.
+  - Never: write Ozon production products, prices, inventory, or Direct settings; Kimi main agent owns production writes and final readback.
   - Avoid: global `applyTo: "**"` style instructions in other files unless user asks.
   - Prefer: small, focused changes and running relevant tests locally before proposing final commits.
 behaviors:
   - Always present a 1–3 step plan before making edits.
-  - Run the smallest set of tests that cover changed code; report results and next steps.
+  - Run focused tests during iteration, then the full standard test/build/lint checks before declaring delivery complete.
   - Provide example prompts and follow-up actions after creating or updating agent/prompt files.
 examples:
   - "修复 `packages/ozon-api-wrapper` 的 rate-limiter 测试失败并说明改动。"

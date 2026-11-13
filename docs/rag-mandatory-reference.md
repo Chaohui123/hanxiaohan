@@ -20,8 +20,8 @@
 ### 技术栈
 | 组件 | 技术选型 | 说明 |
 |------|---------|------|
-| 向量存储 | PostgreSQL + pgvector / SQLite 双实现 | 替代 Qdrant；生产单机（standalone）用 SQLite 向量存储（`services/rag-v2`），PG pgvector 保留用于多店扩展 |
-| Embedding 模型 | 智谱 embedding-3 | 2048 维，通过 `packages/embedding` 调用 |
+| 向量存储 | PostgreSQL + pgvector / SQLite 双实现 | 替代 Qdrant；standalone 用 SQLite，production 单机同样使用 PostgreSQL + pgvector |
+| Embedding 模型 | 智谱 embedding-3 | 维度必须与 `EMBEDDING_DIMENSIONS` 和表结构一致；当前 PG 为 `vector(1024)`，调用显式传 1024，变更须同步迁移 |
 | 相似度算法 | 余弦相似度（cosine） | `<=>` 操作符，1 - distance = score |
 | 索引策略 | IVFFlat | 数据量 >10万条时自动启用 |
 
@@ -93,6 +93,12 @@
 | 方法 | 端点 | 用途 |
 |------|------|------|
 | GET | `/rag/stats` | 知识库统计（各表记录数） |
+
+**现行维护规则**：
+- 复用服务器 `knowledge-janitor` 每周清理 TTL、低质、语义重复及经确认的明确取代关系；清理前必须备份知识记录与相关 SOP。
+- 替代条目不存在时禁止删除；历史实证标日期与“当时/历史”，不得把未修、待部署或旧任务留成当前规则。
+- 新知识走 `knowledgeGate + persistToPlaybook`；SOP 由 Kimi 对照真实代码和回读后更新，禁止手写 SQL 或让模型自行删除知识。
+- 每周同步复核项目自有 Markdown：根目录、`.claude/`、`.github/`、`docs/`、`docker/`、`packages/`、在用工具说明及 `temp/` 中仍承担现行说明的文件；`temp/` 历史调研和第三方安装/许可证文档不当作 SOP。
 
 ---
 
@@ -255,11 +261,11 @@ async function writeRagKnowledge(
 |--------|--------|------|
 | `EMBEDDING_PROVIDER` | `zhipu` | Embedding 提供商 |
 | `EMBEDDING_MODEL` | `embedding-3` | 模型名称 |
-| `EMBEDDING_DIMENSIONS` | `2048` | 向量维度 |
+| `EMBEDDING_DIMENSIONS` | `1024` | 当前 PG `vector(1024)` 必须显式一致；旧 2048 不得直接沿用 |
 | `EMBEDDING_API_KEY` | `${GLM_API_KEY}` | API 密钥 |
 | `EMBEDDING_BASE_URL` | `https://open.bigmodel.cn/api/paas/v4` | API 地址 |
 | `EMBEDDING_BATCH_SIZE` | `16` | 批量向量化大小 |
-| `RAG_INDEX_INTERVAL_MINUTES` | `60` | 索引调度间隔（分钟） |
+| `RAG_INDEX_INTERVAL_MINUTES` | `360` | 索引调度间隔（分钟），与当前代码默认 6 小时一致 |
 | `RAG_SIMILARITY_THRESHOLD` | `0.7` | 相似度阈值 |
 
 ---

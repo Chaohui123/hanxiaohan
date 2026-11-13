@@ -1,0 +1,53 @@
+{
+  "capturedAt": "2026-11-08T19:00:00Z",
+  "result": "GOOGLE_CLOUD_OK_OZON_SELLER_BLOCKED",
+  "account": {
+    "authenticatedInUserChrome": true,
+    "accountType": "完整账号",
+    "projectId": "gen-lang-client-0609764800",
+    "projectName": "Default Gemini Project",
+    "projectNumber": 1037963368713,
+    "billingStatus": "有效",
+    "past30DaysSpendUsd": 11,
+    "displayedCreditTotalUsd": 310,
+    "displayedCreditUsedUsd": 9,
+    "creditBalanceNotInferred": true
+  },
+  "cloudSdk": {
+    "cloudShellStarted": true,
+    "officialCloudShellApiAuthorizationCompleted": true,
+    "gcloudProjectsListSucceeded": true,
+    "projects": [
+      "gen-lang-client-0609764800",
+      "project-0a171877-e014-41bc-953"
+    ]
+  },
+  "apis": {
+    "computeEngine": "not_enabled_enable_button_available",
+    "cloudRunAdmin": "not_enabled_enable_button_available"
+  },
+  "ozonAccessFromCloudShell": {
+    "curlInitialStatus": 307,
+    "curlFollowRedirect": "50 redirects followed, __rr increments; not a usable data endpoint",
+    "standardChromiumStatus": 403,
+    "standardChromiumTitle": "Похоже, нет соединения",
+    "result": "Same Seller access-control failure as the existing server; no captcha or access-control bypass attempted"
+  },
+  "cloudShellTestSetup": {
+    "paidVmCreated": false,
+    "persistentCloudRunDeploymentCreated": false,
+    "playwrightInstalledOnlyInEphemeralCloudShell": true,
+    "temporaryDirectory": "/tmp/ozon-pw"
+  },
+  "conclusion": {
+    "googleCloudAccountUsable": true,
+    "googleCloudCanHostGeneralWorkloads": true,
+    "ozonSearchQueryCollectionValidated": false,
+    "remainingBlockers": [
+      "Seller UI access control returns 403 even in standard Chromium",
+      "Official /v1/search-queries/top and /v1/search-queries/text require Premium Pro",
+      "No authenticated Seller session validated in the cloud environment"
+    ]
+  },
+  "productionChanges": false
+}

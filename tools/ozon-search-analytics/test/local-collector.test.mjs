@@ -1,6 +1,6 @@
 import test from "node:test";
 import assert from "node:assert/strict";
-import { parseArgs, normalizePage, validateBatch, isClosedSessionError } from "../src/local-collector.mjs";
+import { parseArgs, normalizePage, validateBatch, isClosedSessionError, assertExpectedCompany, sellerSessionAction, ensureSellerSession } from "../src/local-collector.mjs";
 
 function envelope(query = "телефон", offset = "0", total = "1") {
   const request = { text: "", limit: "50", offset, sort_by: "count", sort_dir: "desc", period: "days_7" };
@@ -42,4 +42,75 @@ test("collector recognizes only closed task tabs as recoverable", () => {
   assert.equal(isClosedSessionError(new Error('session "ozon-search" tab was closed')), true);
   assert.equal(isClosedSessionError(new Error("extension_not_connected")), false);
   assert.equal(isClosedSessionError(new Error("Seller login required")), false);
+});
+
+test("collector accepts only the authorized Seller company", () => {
+  assert.equal(assertExpectedCompany("5140601", "5140601"), "5140601");
+  assert.throws(() => assertExpectedCompany("9999999", "5140601"), error => error.code === "SELLER_WRONG_ACCOUNT" && /5140601/.test(error.message) && /9999999/.test(error.message));
+});
+
+test("collector requires a configured numeric Seller company", () => {
+  for (const expected of ["", "unknown", "5140601 extra"]) {
+    assert.throws(() => assertExpectedCompany("5140601", expected), error => error.code === "SELLER_ACCOUNT_UNVERIFIED");
+  }
+});
+
+test("seller session selects login and the authorized account before reading the table", () => {
+  assert.deepEqual(sellerSessionAction({ loginSelector: "#login", accountCandidates: [] }), { action: "click_login", selector: "#login" });
+  const state = {
+    accountChoiceVisible: true,
+    accountCandidates: [{ selector: "#other", text: "Другой аккаунт" }, { selector: "#main", text: "ТехноМир CH" }],
+  };
+  assert.deepEqual(sellerSessionAction(state, "ТехноМир", true, false), { action: "click_account", selector: "#main" });
+  assert.deepEqual(sellerSessionAction({ accountChoiceVisible: true, accountCandidates: [{ selector: "#only", text: "Saved account" }] }, "ТехноМир", true, false), { action: "click_account", selector: "#only" });
+  assert.deepEqual(sellerSessionAction({ tableReady: true }, "ТехноМир", true, true), { action: "ready" });
+});
+
+test("seller session rejects ambiguous accounts and human verification", () => {
+  const ambiguous = sellerSessionAction({ accountChoiceVisible: true, accountCandidates: [{ selector: "#a", text: "A" }, { selector: "#b", text: "B" }] });
+  assert.equal(ambiguous.code, "SELLER_ACCOUNT_CHOICE_REQUIRED");
+  const verification = sellerSessionAction({ authInteractionRequired: true, loginSelector: "#login" });
+  assert.equal(verification.code, "SELLER_AUTH_INTERACTION_REQUIRED");
+});
+
+test("seller session clicks login and account through WebBridge before collection", async t => {
+  const states = [
+    { tableReady: false, authInteractionRequired: false, accountChoiceVisible: false, loginSelector: "#login", accountCandidates: [], text: "login" },
+    { tableReady: false, authInteractionRequired: false, accountChoiceVisible: true, loginSelector: null, accountCandidates: [{ selector: "#account", text: "ТехноМир CH" }], text: "choose" },
+    { tableReady: true, authInteractionRequired: false, accountChoiceVisible: false, loginSelector: null, accountCandidates: [], text: "table" },
+  ];
+  let stateIndex = 0;
+  const clicks = [];
+  t.mock.method(globalThis, "fetch", async (_url, options) => {
+    const request = JSON.parse(options.body);
+    let data;
+    if (request.action === "evaluate") data = { type: "object", value: states[Math.min(stateIndex++, states.length - 1)] };
+    else if (request.action === "mouse_click") {
+      clicks.push(request.args.selector);
+      data = { success: true };
+    } else if (request.action === "cdp") data = {};
+    else throw new Error(`Unexpected action ${request.action}`);
+    return new Response(JSON.stringify({ ok: true, data }), { status: 200, headers: { "Content-Type": "application/json" } });
+  });
+  const result = await ensureSellerSession("http://127.0.0.1:10086/command", "account-flow-test", { timeoutMs: 100, pollIntervalMs: 1 });
+  assert.deepEqual(result, { loginButtonUsed: true, accountChoiceUsed: true });
+  assert.deepEqual(clicks, ["#login", "#account"]);
+});
+
+test("seller session never guesses between multiple unlabelled accounts", async t => {
+  const clicks = [];
+  t.mock.method(globalThis, "fetch", async (_url, options) => {
+    const request = JSON.parse(options.body);
+    if (request.action === "mouse_click") clicks.push(request.args.selector);
+    const data = request.action === "evaluate" ? {
+      type: "object",
+      value: { tableReady: false, authInteractionRequired: false, accountChoiceVisible: true, loginSelector: null, accountCandidates: [{ selector: "#a", text: "A" }, { selector: "#b", text: "B" }] },
+    } : {};
+    return new Response(JSON.stringify({ ok: true, data }), { status: 200, headers: { "Content-Type": "application/json" } });
+  });
+  await assert.rejects(
+    ensureSellerSession("http://127.0.0.1:10086/command", "account-flow-test", { timeoutMs: 100, pollIntervalMs: 1 }),
+    error => error.code === "SELLER_ACCOUNT_CHOICE_REQUIRED",
+  );
+  assert.equal(clicks.length, 0);
 });

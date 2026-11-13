@@ -377,7 +377,7 @@ Start-ScheduledTask -TaskName "ONZO Ozon Search Analytics"
 Get-ScheduledTaskInfo -TaskName "ONZO Ozon Search Analytics"
 ```
 
-用户环境必须提供 `SEARCH_ANALYTICS_API_URL` 和 `SEARCH_ANALYTICS_INGEST_KEY`。登录失效、扩展断开、403、验证码、窗口或店铺不一致、漏页、重复页、哈希不符均停止并非零退出；旧成功数据保留，`last-attempt` 与 `last-success` 分开，服务端发出 `SEARCH_ANALYTICS_FAILED` 告警。不能把脚本启动或 HTTP 200 当作整批成功，也不承诺本机无人值守云端采集。
+用户环境必须提供 `SEARCH_ANALYTICS_API_URL`、`SEARCH_ANALYTICS_INGEST_KEY` 和授权店铺的数字公司ID `SEARCH_ANALYTICS_COMPANY_ID`。登录失效、扩展断开、403、验证码、窗口或店铺不一致、漏页、重复页、哈希不符均停止并非零退出；旧成功数据保留，`last-attempt` 与 `last-success` 分开，服务端发出 `SEARCH_ANALYTICS_FAILED` 告警。不能把脚本启动或 HTTP 200 当作整批成功，也不承诺本机无人值守云端采集。
 
 ### 9.5 已完成的隔离验收
 
@@ -415,3 +415,132 @@ pnpm exec vitest run apps/api-services/tests/search-analytics.test.ts apps/api-s
 - 日志由 `run-local.mjs` 使用 Node 直接追加 UTF-8；PowerShell 只负责启动和传递退出码。若旧日志含混合编码或 NUL 字节，先重命名为带时间戳的 `.legacy` 文件保留原始证据，再建立新 UTF-8 日志，不重造历史文本。可用 `node tools/ozon-search-analytics/src/run-local.mjs --log-self-test` 单独检查日志，不产生业务批次。
 - 修复后通过真实 Windows 定时任务完整执行并发布 `2026-11-10T15-02-05-470Z`：199 页、9,945 条，`LastTaskResult=0`，下一次回读为 **2026-11-11 13:47**。生产 PostgreSQL、原始回执、逐行哈希、API、趋势与 CSV/XLSX 全部通过；正式页面不再显示“最近一次采集失败：extension_error”。
 - 工具测试 6 项通过，PowerShell 语法检查通过。证据：`temp/ops-exec/search-tab-recovery-task-20261110.json`、`temp/ops-exec/search-tab-recovery-production-validation-20261110.json`、`data/search-analytics/last-success.json`、`data/search-analytics/scheduled.log`。商品价格、库存、广告及 `PROMO_AUTO_DECISION=false` 未因此改变。
+
+### 9.8 登录会话恢复与错账户发布闸门（2026-11-11）
+
+- 当任务停在“Вход и регистрация”时，先保留失败运行与旧成功数据，不要把登录页当成查询为0。使用本机真实Chrome重新打开并激活 `https://seller.ozon.ru/app/analytics/what-to-sell/all-queries`；必须看到本店ТехноМир和真实表格，才可补采。不要注册新账户、选择不明账户或绕过验证码/MFA。
+- 正式补采继续使用 `Start-ScheduledTask -TaskName "ONZO Ozon Search Analytics"`，并同时回读 `LastTaskResult=0`、`data/search-analytics/last-attempt.json`、`last-success.json`、生产 `/api/search-analytics/runs` 与正式页面。本次运行 `2026-11-11T14-38-14-659Z` 为199页、9,948条，公司5140601，内容SHA-256为 `20c12aa2050290ca1aa27d9ada83c8695311c5ce339d6146fa43185bc6e45dce`。
+- `SEARCH_ANALYTICS_COMPANY_ID` 现在是正式任务必填的用户环境变量，当前授权公司为 `5140601`。采集器只在正常翻页取得原生请求上下文后核对 `x-o3-company-id`；不符时报 `SELLER_WRONG_ACCOUNT`，未配置或不是数字公司ID时报 `SELLER_ACCOUNT_UNVERIFIED`，两种情况都不得上传。`run-local.ps1` 会在启动时拒绝缺失或无效配置。
+- 可用隔离目录验证闸门，不发布样本、不改变正式成功状态：
+  ```powershell
+  $env:SEARCH_ANALYTICS_COMPANY_ID=[Environment]::GetEnvironmentVariable("SEARCH_ANALYTICS_COMPANY_ID", "User")
+  node tools/ozon-search-analytics/src/local-collector.mjs --max-pages=1 --output=temp/ops-exec/search-login-recovery-20261111/account-guard-sample
+  ```
+  本次正确公司样本为1页50行、`SAMPLE_VALIDATED`；将进程内预期公司临时设为9999999作反向测试时，实际5140601被明确拒绝且没有上传。不要把该预期值写回用户环境。
+- 全量生产回读已用50个API页面逐行对照9,948条 `rawMetrics` 与原始回执；趋势、CSV/XLSX通过，页面显示新runId、199/199页、9,948行和SHA-256，失败告警消失。证据目录 `temp/ops-exec/search-login-recovery-20261111/`，终验 `production-validation.json`，正式页面截图 `dashboard.png`，正反闸门证据在各自 `runs/` 清单。自建28天仍为7/28、`insufficient_history`，相邻滚动周不相加。
+- 工具8项、全项目81文件786项测试、build及PowerShell语法通过。知识条目 `pb_ozon_search_account_guard_20261111` 已通过正式门禁，精确回读一致，服务器与本机检索均命中第一；回执 `knowledge-gate-result.log`，替换前备份在服务器 `/app/data/backups/knowledge-before-search-account-guard-20261111.json`。经营数据、商品价格、库存、Direct及 `PROMO_AUTO_DECISION=false` 未改。
+
+### 9.9 Ozon 账户选择验证自动处理（2026-11-11）
+
+- 遇到“Вход и регистрация”时，采集器不再只等待表格：先定位可见且启用的“Войти/登录/选择账户”等明确登录控件，以真实指针点击一次；随后从账户候选中选择 `SEARCH_ANALYTICS_ACCOUNT_LABEL` 指定的店铺，默认 `ТехноМир`。`run-local.ps1` 会传递该可选用户环境变量。
+- 没有店名时，只在页面明确显示账户选择且候选唯一的情况下尝试该候选；有多个不明候选报 `SELLER_ACCOUNT_CHOICE_REQUIRED`，绝不逐个尝试。出现验证码或人工校验报 `SELLER_AUTH_INTERACTION_REQUIRED`，点击后超时仍无表格报 `SELLER_ACCOUNT_SIGN_IN_TIMEOUT`。注册、手机验证码、Cookie导出和绕过风控均不属于自动流程。
+- 到表格不代表结束：仍须正常翻页取得原生请求上下文，并由 `assertExpectedCompany` 核对 `x-o3-company-id=5140601`，才能继续采集与发布。本地清单的 `accountSelection.loginButtonUsed/accountChoiceUsed` 记录本轮是否实际点击，不把等待恢复写成点击成功。
+- 验证证据：`fixture-validation.json` 是本地仿真DOM在真实Chrome中依次点击login→account:ТехноМир的通过回执，不是Ozon真实登录页；`live-sample/runs/2026-11-11T15-18-20-232Z-sample/manifest.json` 是当前有效Ozon会话的一页50行回归，两个动作均为false、公司正确、未上传。当前真实账户选择页未复现，下一次自然出现时必须回读动作标记与公司ID；不得为制造测试而退出登录。
+- 工具12项、全项目81文件786项测试、build及PowerShell语法通过。证据目录 `temp/ops-exec/search-account-choice-20261111/`。定时任务保持每日13:47，样本不改正式last-success或经营数据。
+
+---
+
+## 十、跨会话每周经营复盘（2026-11-11 实证）
+
+### 10.1 调度边界
+
+服务器每周一 **03:28 UTC** 只读生成 `/home/ubuntu/onzo/data/weekly-reviews/latest.json`。本机 Windows 任务 **`ONZO Weekly Review`** 每周一 **14:41（本地时间）** 以当前用户 S4U 执行 `scripts/run-weekly-review.ps1`，不再依赖 Kimi 会话或会话 Cron。2026-11-11 系统任务实跑成功后，旧会话任务 `01M735EZ33KK15Q9E5ATQHNG75` 已删除，不再按旧 Cron 补建或双跑。
+
+该任务仍依赖本机开机、已有模型授权及所需代理服务，不是云端无人值守承诺；不得把本机 OAuth、模型密钥或 Chrome 登录态复制到服务器。自 2026-11-13 起，Astra、Gemini 4 Carbon、Argon 与 Kimi API 的实际模型、档位和用量以各次回执为准，失败不得以其他模型冒充；Opus 因地区限制退出当前调度。任务只读，不改 Ozon 商品、价格、库存、促销、Direct、广告或评价。
+
+```powershell
+# 注册或恢复正常周任务（不带恢复目录）
+powershell -NoProfile -ExecutionPolicy Bypass -File scripts/register-weekly-review-task.ps1
+
+Get-ScheduledTask -TaskName "ONZO Weekly Review"
+Get-ScheduledTaskInfo -TaskName "ONZO Weekly Review"
+
+# 手动开始一轮全新复盘；不使用 --resume
+Start-ScheduledTask -TaskName "ONZO Weekly Review"
+```
+
+### 10.2 文件、锁与失败语义
+
+- `scripts/weekly-review-core.mjs` 负责输入校验、原子写入和单实例锁；PowerShell 另有本机互斥锁。不要强行删除仍属活跃进程的 `runner.lock`。
+- 每轮原始输入、共享提示词、各模型回执、Kimi 原文和报告保存在 `data/weekly-reviews/runs/<runId>/`。Kimi 返回后先保存 `rawContent`、实际模型和 usage，再解析 JSON；格式无效写 `INVALID_INTEGRATION_JSON`，不修补成虚构报告。
+- 根目录 `last-run.json` 是最近一次尝试，`latest-review.json` 是最近发布的结构校验通过报告，`last-success.json` 是其指针与哈希。这里的 success 可包含已声明的模型或数据缺口，不代表全部模型成功或数据新鲜。
+- 失败发出 `WEEKLY_REVIEW_FAILED`，保留上一份成功报告；不得用旧报告冒充本轮完成。系统任务 `LastTaskResult=0` 还必须与 `last-run.json`、runId、完成时间和报告内容交叉回读。
+- 共享提示词通过 `--competitor-last-run` 显式绑定冻结目录的 `competitor-last-run.json`。除独立回执存在外，还校验最老直接可比快照、完成时间、未来时间、过滤/子集、失败计数和待对账项；失败计数不是“回执不存在”。
+
+### 10.3 只恢复最终整合
+
+```bash
+node --import tsx scripts/weekly-review-runner.mjs --resume data/weekly-reviews/runs/<existing-runId>
+```
+
+`--resume` 只接受当前存储 `runs` 下的已有目录，复用原始输入、提示词及已保存的模型文件，不重新抓取输入，也不调用 Astra、Carbon 或 Argon。缺失的 Astra 原文标 `ASTRA_RAW_OUTPUT_MISSING`，已有失败回执不自动重试；只允许重新执行 Kimi 最终整合。自 2026-11-13 起新运行使用 `carbon.json`，旧 `opus.json` 只按历史 Opus 证据恢复，不改名或冒充 Carbon。`scripts/run-weekly-review.ps1 -Resume <目录>` 是相同能力的系统包装。若临时给系统任务添加恢复参数，完成后必须立即还原为不带 `-Resume` 的正常动作，防止下周重复处理旧目录。
+
+### 10.4 本次恢复验收与检查
+
+首次任务 `weekly-2026-11-10T17-01-04-268Z` 曾因 Kimi JSON 解析失败而退出 1；当时未保存原始响应，不能事后断定是截断。修复后由真实 Windows 任务恢复同一目录，2026-11-11 01:16:29 启动，`LastTaskResult=0`，最终状态 `COMPLETED_WITH_DECLARED_GAPS`，报告 SHA-256 为 `aae57e44833955834199a6be481065b1645b043835f39844118d764eb32d8eb8`。正常任务下一次触发为 **2026-11-16 14:41**，动作中不含 `--resume`。
+
+本次 Argon 原文与哈希复用成功，实际档位未返回；Opus 因地区资格失败且 0 token，Astra 原始文本缺失。源快照超过 36 小时，竞品存在 7 条直接可比抓取失败与 1 条直接可比缺必填，不能称为全量健康或当前最新经营数据。报告中的最多 3 项行动均为待办，不表示已执行。
+
+```bash
+pnpm exec vitest run apps/api-services/tests/weekly-review-core.test.ts
+python -m unittest scripts.test_weekly_report_validation
+pnpm test
+pnpm build
+pnpm lint
+```
+
+本机与文档修改前备份位于 `data/backups/weekly-review-cross-session-20261111/`。知识更新必须走正式 `knowledgeGate + persistToPlaybook`，不得手写 SQL 绕过。
+
+### 10.5 Astra 运行时与 Opus 代理排查（2026-11-11 实证）
+
+- S4U 不继承当前 Git Bash 会话额外注入的 PATH。首次 Astra 原文缺失的直接环境原因是裸 `bash` 解析失败：同 S4U 探针返回 `spawnSync bash ENOENT`，没有启动 Codex。证据 `temp/ops-exec/weekly-astra-s4u-path-probe-20261111.json`。
+- `astraAdapter` 现使用 `C:\Program Files\Git\bin\bash.exe`，可通过 `GIT_BASH_PATH` 指定其他已验证路径。每轮将命令、prompt SHA-256、stdout、stderr、退出码和错误写入 `astra-process.json`；只有退出码 0 且 stdout 非空才生成 `astra.txt`。非零退出时的部分 stdout 只留在进程证据中，不能当成成功评审。实际模型、档位和 session ID 从本次 CLI 回执提取，不回读不到就保持未知。
+- 2026-11-11 正式任务 `weekly-2026-11-10T17-44-16-950Z` 已在 S4U 下完成真实 Astra 评审：`gpt-6-astra/high`、进程退出码 0、中文原文与报告 SHA-256 一致。任务退出码 0，stderr 为空；报告为 `COMPLETED_WITH_DECLARED_GAPS`，不是全量模型或当前数据健康证明。
+- Opus 代理对照必须保持相同提示词、模型、档位和沙箱。`ProxyEnable=0` 与临时开启为 1 时均返回同一地区资格错误、0 turns、0 tokens；10808 显式代理出口实测为美国。因此不能把失败简单归因为未开系统代理，也不能从该错误进一步推断具体账户封禁、节点信誉或地区库原因。对照回执 `temp/ops-exec/opus-proxy-system-off-20261111.json`、`opus-proxy-system-on-20261111.json`。
+- 诊断后已恢复 `ProxyEnable=0`。不得为了消除该错误擅自切换账号、伪造地区、绕过资格限制或用 Terra 冒充 Opus；后续只能依据新的服务侧资格回执复核。本轮专项测试 11 项、全项目 785 项通过，构建通过，Lint 0 errors/215 个既有 warnings。
+- 本轮文档修改前备份位于 `data/backups/weekly-review-adapter-fix-20261111/`。旧恢复目录的 Astra 缺失仍作为历史事实保留；修复后的新证据在 `data/weekly-reviews/runs/weekly-2026-11-10T17-44-16-950Z/`。
+
+### 10.6 Gemini 4 Carbon Direct 规划与长输出恢复（2026-11-11 实证）
+
+完整全店推广方案位于 `temp/direct-carbon-20261111/plan.md`，模型原始续写回执为 `carbon-continued.json`，Kimi审核结构化版本为 `plan-reviewed.json`，19品额度/预算/身份校验为 `validation.json`。这些文件是分析和未授权草案，不是广告创建、启动或实际利润回执。
+
+```bash
+# 普通同步调用；先保存原文、实际模型和usage，再解析JSON
+python scripts/gemini-carbon-plan.py --prompt <prompt.txt> --output <result.json>
+
+# 长任务异步：保存真实operation；轮询中断后用同一operation恢复，不新建批次
+python scripts/gemini-carbon-batch-plan.py --prompt <prompt.txt> --output <batch.json>
+python scripts/gemini-carbon-batch-plan.py --prompt <prompt.txt> --output <batch.json> --operation <existing-operation>
+
+# 从已有operation或续写state恢复；contents必须与原prompt完全一致
+python scripts/gemini-carbon-continue.py --prompt <prompt.txt> --operation-file <operation.json> --output <continued.json>
+python scripts/gemini-carbon-continue.py --prompt <prompt.txt> --resume-state <continuation-state.json> --output <continued.json>
+```
+
+- 实际模型须为 `gemini-4-carbon`，请求HIGH不能冒充实际档位已回读。原始正文、实际模型、分段usage和状态分开保存，不用其他模型冒充。
+- `MAX_TOKENS` 或空正文不是成功方案。异步返回可能把 `inlinedResponses` 放在 `operation.response` 下，需按真实回执解析；续写token只在受控本地状态与原始证据保存，不在报告中展示。
+- 本次API明确返回累计 `max_output_tokens` 已耗尽时，可在同一续写令牌上提高累计额度并保留state；不要从头重新生成。续写最终必须达到可验证的结束状态，JSON与19品身份、利润和预算约束再次校验。
+- Carbon给出的季节性、旺季/淡季和需求推断必须由Kimi降级为待证假设；目标CPA不是实际CPA或已结算利润。所有新计划保持 `DRAFT_NOT_AUTHORIZED`，不得因模型输出自动创建、启动、改价或扩预算。
+- 本次33X14草案为3.5美元目标CPA、35美元周计划额度，仍缺具体写入授权、当前余额、广告法现状、Ozon集成、前台可售与审核回读；实际创建/启动均为0。现有715426752仅有待审批停损建议，未暂停。
+- Direct普通API当前仍不支持本店marketplace campaign管理；不得调用普通Campaigns.add伪造创建。生产创建须使用既有合规界面或正式支持通道，并逐项回读商品、地区、CPA、预算、归因与审核状态。
+- 本轮文档修改前备份为 `data/backups/direct-carbon-plan-20261111/`；全项目785项测试通过，未改生产商品、价格、库存、广告或评价。以下是方案生成时状态；用户随后明确授权执行，实际结果见10.7。
+
+### 10.7 Direct 实际执行与多 campaign 监测（2026-11-11）
+
+- 用户明确要求“按照完整方案逐步执行”并继续创建，授权范围仅为方案中的存量停损与33X14候选，不是任意扩品或追加预算。实际执行结果 `temp/direct-carbon-20261111/execution/execution-result.json`。
+- 现有 `715426752` 已停止，未设置定时恢复。读取状态变化、重新打开及列表“已停止”均留证；不得仅点击按钮就宣称完成。
+- 新campaign `716088179` 仅含 `GEN-BELT-33X14-01` / SKU `5900476661`，俄罗斯、自动受众、购买目标、CPA 3.5美元、周预算35美元、预算自动上浮关闭，既有Ozon Performance连接已回读。默认周预算5000美元与默认预算上浮4%均已显式纠正，不点击“全部推广”。
+- 地区自定义组件必须最终出现 `RegionsTreeTagGroup.tag.*.name=俄罗斯`，仅输入文字或DOM存在弹窗都不算成功；弹窗是否可见须看 computed visibility，不以元素是否存在判断。保存草稿后重新打开该ID，确认CPA/预算/地区等仍正确；启动后曾显示审核中，最新详情已变为活跃且审核中提示消失，不将此表述为订单或收入保证。
+- 买家前台已实际打开候选商品，本店、SKU、参数、购买入口、1671₽/1761₽银行渠道展示价与配送预估均已留证；银行价不等于卖家收入，配送时效是转化风险，不隐瞒。
+- 日报默认监测 `715426752,716088179`，可通过 `YANDEX_DIRECT_CAMPAIGN_IDS` 显式覆盖。`byCampaign` 按campaign分别计算，旧顶层窗口仅为主campaign兼容字段。`hasReportRows=false` 只表示当前无报表行，不能证明审核、投放或未来转化为0。
+- 正式任务 `ONZO Direct Daily Report` 于2026-11-11 15:14实跑返回0，下一次11-12 11:20；此前0x800710E0无对应脚本/API错误记录，原因不伪造。周复盘任务仍在11-16 14:41执行，不新建重复调度。
+- 7天或5单先到复盘，后续调整需重新核利润、真实CPA、库存和授权，不自动启停、不自动加预算。最新监测与启动不代表已出单或盈利。全项目786项测试、build通过，Lint 0 errors/215既有warnings。修改前备份为 `data/backups/direct-plan-execution-20261111/`。
+
+### 10.8 Gemini 4 Carbon 接替 Opus（2026-11-13）
+
+- Opus 因持续地区资格限制退出当前工作流。复杂跨文件审计、竞品证据、经营分析、分镜与经济交叉复核改由 Carbon；Hydrogen 仍负责日常代码、桌面任务分析和视觉理解，Astra、Argon、Luna 的既有职责不变。不自动重试 Opus、换区或把其他模型输出改名为 Opus。
+- 通用审查使用 `python scripts/gemini-carbon-review.py --prompt-file <文件> --output <JSON>`。执行器固定 `gemini-4-carbon`，保存 prompt SHA-256、实际模型、正文、finishReason 和 usage；仅实际模型一致、STOP 且过滤 thought 后正文非空才 SUCCESS。请求 HIGH 但 `actualThinkingLevel` 未返回时保持 NULL；MAX_TOKENS、空正文、HTTP/网络/密钥错误均保留脱敏失败回执，不换模或自动续写。
+- 周复盘第二席由 Opus 改为 Carbon，实际执行为 `python scripts/gemini-carbon-review.py --prompt-file <冻结prompt> --output <runDir>/carbon.json`。新运行先原子保存 `model-route.json`，标明第二席 Carbon 和精确模型；正式报告顺序为 Astra/Carbon/Gemini/Kimi。不得只凭系统任务返回0就宣称替换成功，必须回读 Carbon 证据与最终报告。
+- 恢复历史运行时，无新路由标记的目录继续读取旧 `opus.json`，保留 seat、旧模型、错误和字段；新路由目录读取并严格校验 `carbon.json`。新旧证据不得混名，失败/缺失分别保留 `CARBON_EXECUTION_FAILED`、`CARBON_EVIDENCE_INVALID`、`CARBON_RAW_OUTPUT_MISSING`。
+- 本次独立 Carbon 元数据与真实审查回执位于 `temp/ops-exec/carbon-replaces-opus-20261113/`：元数据为 `models/gemini-4-carbon`、支持 generateContent；最小真实审查返回 `CARBON_REVIEW_OK`，实际模型一致、STOP、268 total tokens，实际 HIGH 未返回。离线9项、周复盘专项17项、全项目81文件792项测试及build通过，独立复核无阻塞问题。
+- 正式 `ONZO Weekly Review` 已实跑 `weekly-2026-11-13T04-21-59-082Z`：12:21:58启动、12:27:53完成，`LastTaskResult=0`；Astra、Carbon、Argon、Kimi均SUCCESS。Carbon实际模型正确、STOP、正文9892字符、76,558 total tokens，报告SHA-256为 `1a0952e8202c31f4332f947fdd5cc972b08810a15ef88361c1103585e0211bec`。报告状态为 `COMPLETED_WITH_DECLARED_GAPS`，经营快照96.9小时且竞品存在runId不一致、fatal、陈旧直接快照与采集失败；这不是当前经营健康证明，未自动执行任何建议。下一次仍为11-16 14:41，未新增重复任务。综合校验 `routing-validation.json`，原始报告在对应运行目录。

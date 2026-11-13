@@ -135,7 +135,7 @@ def prep_assets():
     print("[assets] prepared ->", ASSETS)
 
 def A(name):
-    return Image.open(os.path.join(ASSETS, name)).convert("RGB")
+    return Image.open(name if os.sep in name or "/" in name else os.path.join(ASSETS, name)).convert("RGB")
 
 def fit_into(canvas, img, box, bg=WHITE, shadow=False):
     """把 img 等比放进 box (x0,y0,x1,y1)@超采样坐标, 白底, 不变形"""
@@ -240,7 +240,7 @@ def build_02():
                     T("2-тактный"), f_p, GRAY)
     # 照片卡
     x0 = 50 * S + 2 * (cw + gap)
-    fit_into(c, A("gasket_card.png"), (x0 + 12 * S, y0 + 12 * S, x0 + cw - 12 * S, y0 + ch - 66 * S))
+    fit_into(c, A("temp/listing-66t/split/part-01.jpg"), (x0 + 12 * S, y0 + 12 * S, x0 + cw - 12 * S, y0 + ch - 66 * S))
     d = ImageDraw.Draw(c)
     f_cap = font(False, 18 * S)
     for j, ln in enumerate(wrap(d, T("прокладка из комплекта"), f_cap, cw - 24 * S)[:2]):
@@ -268,12 +268,13 @@ def build_03():
     f_sub = font(False, 23 * S)
     text_center(d, W // 2, 46 * S + fh.size + 16 * S,
                 T("все детали для переборки карбюратора — в одном комплекте"), f_sub, GRAY)
+    SPLIT = "temp/listing-66t/split"
     cards = [
-        ("gasket.png", T("Прокладки")),
-        ("diaphragm.png", T("Мембрана")),
-        ("float.png", T("Поплавок")),
+        (SPLIT + "/part-01.jpg", T("Прокладки")),
+        (SPLIT + "/part-02.jpg", T("Мембрана")),
+        (SPLIT + "/part-03.jpg", T("Поплавок")),
         ("needle.png", T("Игольчатый клапан")),
-        ("screws.png", T("Винты и шайбы")),
+        (SPLIT + "/part-04.jpg", T("Винты и шайбы")),
         (None, None),
     ]
     gx, gy = 36 * S, 188 * S

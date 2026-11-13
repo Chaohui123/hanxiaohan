@@ -75,6 +75,17 @@ export function summarizeDirectRows(rows, { from, to } = {}) {
   };
 }
 
+export function parseDirectCampaignIds(value) {
+  const campaignIds = [...new Set(String(value || "").split(",").map(item => item.trim()).filter(Boolean))];
+  if (!campaignIds.length || campaignIds.some(item => !/^\d+$/.test(item))) throw new Error("Invalid Direct campaign ID list");
+  return campaignIds;
+}
+
+export function selectDirectCampaignRows(rows, campaignId) {
+  if (!/^\d+$/.test(campaignId)) throw new Error("Invalid Direct campaign ID");
+  return rows.filter(row => row.campaignId === campaignId);
+}
+
 export function directRetryDelayMs(value, now = Date.now()) {
   const numeric = Number(value);
   let delay = Number.isFinite(numeric) && value !== null && String(value).trim() !== "" ? numeric * 1000 : NaN;

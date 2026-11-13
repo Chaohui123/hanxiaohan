@@ -24,8 +24,8 @@
 | O6 | /v3/product/info/list 查单商品 400/空 | 该接口对单商品查询不友好 | 状态用 /v1/product/import/info{task_id} 或后台 |
 | O7 | 标题同义重复被拦（термокружка/чайник/кипятильник） | 标题堆砌同义词 | 标题去重：核心词 1 次+特性词，不超过 ~100 字符 |
 | O8 | 改类目被拒（description_category_has_no_description_type） | 跨大类目直接改不支持 | 新 offer_id 在正确类目重建，旧商品归档 |
-| O9 | v3/product/import 的 item.description 静默丢弃（task 无报错，Ozon 侧描述长度 0） | 部分类目描述不走 item.description 字段 | **描述必须走 attribute 4191（Аннотация）通道**（/v1/product/attributes/update）；建品后必查 /v1/product/info/description 长度 |
-| O10 | 4191 描述被拒（FB_ORIGINAL："卡片含正品销售表述"） | 副厂件文案用"оригинал*"字眼（即使"比原厂便宜"这类对比句也拦） | 副厂件文案**禁用 оригинал***，改用 штатный（штатная деталь）/аналог；标题用 аналог 不受影响（已实证） |
+| O9 | v3/product/import 的 item.description 静默丢弃（task 无报错，Ozon 侧描述长度 0） | 当时部分类目描述未走 item.description 字段 | **当时实证**：用 attribute 4191 补齐并回读长度。现行口径：API `description` 双通道均可能不写，完整描述由富内容承载，后台表单可单独维护；不得把“必须走 4191”当唯一通道 |
+| O10 | 4191 描述被拒（FB_ORIGINAL："卡片含正品销售表述"） | 副厂件文案用"оригинал*"字眼（即使"比原厂便宜"这类对比句也拦） | 副厂件文案**禁用 оригинал***；`аналог` 当时曾被放行，但**现行标题、标签和兼容件文案同样禁用**，仅允许具体 OE 件号与核对提示 |
 | O11 | 前台检查商品跳"товар закончился"误判为不可售/审核中 | 商品链接 slug 尾号用 product_id 构造（x-{product_id} 是假 slug，跳错误页） | **链接尾号用 sku**：/product/x-{sku}/；验证可见性优先搜索验证，直达链接用 sku 构造 |
 | O12 | 建品后标题/描述全空（文案 JSON 嵌套 sku_xxx 键，脚本按扁平键读全 undefined） | 建品脚本读文案前未核对 JSON 实际结构 | 建品前**先打印文案源 JSON 的 keys 核对字段路径**；提交后必查 name/description 实际值（/v1/product/info/description 长度） |
 | O13 | 双变体合并失败：9048 不同→double_without_merger（变体特征全同无法区分）；9048 相同→SPU_ALREADY_EXISTS（重复商品） | 该类目只有"颜色"一个变体维度，S/M 同色不同码无维度可区分 | **无尺码维度的类目接受双独立卡**（9048 保持不同值）；合并前先看该类目 aspect=true 的属性有几个 |
@@ -37,7 +37,7 @@
 | M2 | 上传图片 /images/{uuid}.jpg 返回 HTML（SPA） | Caddy HTTPS 缺 /images 路由 | Caddy 必配 /images/* 与 /tmp-images/* → api-services |
 | M3 | 富内容 JSON 三次被拒 | ①blockName/0.4 ②img 缺 srcMobile/宽高 ③multimedia- 相对路径 | 按官方 schema（assets/ozon-rich-schema.json，V03 widgetName/0.3）；img 全尺寸五字段；src 用完整可下载 URL（ir-*.ozonstatic.cn/s3/multimedia-*）；**提交前 `scripts/validate-rich-json.cjs` 本地预检** |
 | M4 | 后台删图/改图不生效 | 媒体 tab 操作后未点"保存商品" | 后台任何编辑后必须点"保存/保存商品"并确认 |
-| M5 | API 无图片删除端点 | pictures/import 只追加，v3 import 合并 | 删图只能卖家后台手动（媒体 tab） |
+| M5 | 误以为 pictures/import 只追加，导致顺序或图片数不符合预期 | pictures/import 按本次 URL 列表全量设置，主图取数组首位；v3 import 的 attributes/images 也可能整体替换 | 图片按最终顺序一次性提交，不反复单独补；删图或改顺序须同步最终完整列表，不能用“只追加”理解 |
 | M5b | 图片管线重建期 v4 images 返回瞬时值（0/部分），据此反复补传会触发更多重建越搞越乱 | 把重建中的瞬时 0 当成真实缺失反复 pictures/import | 补图后**等 ≥10 分钟管线稳定再判真实图数**；瞬时 0 ≠ 缺失；只一次性全量传，不单独反复补。**新品期 info/list.images 返回值 7→0→1 乱跳（66T 实证），根本不可用于判图数——以卖家后台媒体 tab/前台为准** |
 | M6 | 卖点信息图同模板同底图雷同，Ozon 去重+无竞争力 | 4 张信息图用同一模板+同一产品底图，视觉雷同被判重 | **信息图差异化**：同模板信息图 ≤2 张，其余用不同底图/真实场景/细节特写/使用图；模板只统一版式，底图必须多样 |
 
@@ -95,4 +95,4 @@
 3. **import 更新图片必须带全套**：price + weight(克) + 顶层 depth/width/height(mm，**平铺非嵌套 dimension 对象**！) + attributes 尺寸重量(4383/4497/7956/8416)。缺 dimension 报 missing_dimension 阻止整个导入（图片也不生效）。
 4. 图片传**公网 .jpg 直链**（Ozon 下载入库），URL 必须 Ozon 可访问；图片审核比属性慢（几分钟到几小时）。
 5. 品牌属性 85 必须显式传（无品牌也要传"Нет бренда"+dictionary_value_id）；部分类目（如打窝船）"无品牌"触发 BR_wrong_name 认证错误，需品牌证书或改类目。
-6. 货源映射要核对 1688 链接商品标题与品类一致（本次发现 3 个化油器链接错挂成叶轮/刀片/打窝船）。
+6. 货源映射要核对 1688 链接商品标题与品类一致。**当时曾误判 3 个链接错挂，后续已翻案**：映射本身正确，真根因是 WebBridge 批量抓取串页生成错误 manifest；详见 `current-pipeline.md` 的“货源映射错行真相”。

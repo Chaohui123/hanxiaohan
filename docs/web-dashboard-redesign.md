@@ -1,5 +1,6 @@
-# Web Dashboard 前端重构设计方案
+# Web Dashboard 前端重构设计方案（设计目标，非已交付清单）
 
+> **文档定位**：2026-09-04 的设计与调研记录，不代表全部功能已实现或已部署。实施前须按当前 `apps/web-dashboard` 源码、API 契约和生产权限重新核验；现行架构见 `docs/architecture.md`，不得按本文直接修改生产数据。
 > 版本：v2（2026-09-04）｜v1 依据：全量代码调研；v2 增补：竞品调研（店小秘/马帮/芒果店长/领星 + Shopify Admin/Polaris + Ozon Seller 后台 + Medusa/Saleor）
 > 原则：每一步可独立部署验证；不中断在用的业务链路；先修契约、再重组、后美化。
 

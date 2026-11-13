@@ -1,0 +1,103 @@
+{
+  "capturedAt": "2026-11-08T19:35:00Z",
+  "computeEngineValidation": {
+    "region": "europe-north1-a",
+    "machineType": "e2-micro",
+    "spot": true,
+    "bootDiskGb": 10,
+    "sshWorked": true,
+    "chromiumWorked": true,
+    "ozonSellerResult": 403,
+    "deleted": true
+  },
+  "cloudRunValidation": {
+    "region": "europe-north1",
+    "service": "onzo-ozon-probe",
+    "sourceDeploySucceeded": true,
+    "publicHealthCheckSucceeded": true,
+    "maxInstances": 1,
+    "memoryGb": 1,
+    "ozonSellerResult": 403,
+    "serviceDeleted": true,
+    "artifactRepositoryDeleted": true
+  },
+  "conclusion": {
+    "cloudInfrastructureUsable": true,
+    "ozonSearchQueryChannelUnblocked": false,
+    "noPersistentTestResources": true,
+    "apisLeftEnabled": [
+      "compute.googleapis.com",
+      "run.googleapis.com",
+      "cloudbuild.googleapis.com",
+      "artifactregistry.googleapis.com"
+    ]
+  },
+  "runtimeGuidance": {
+    "cloudShell": "仅管理、安装和短期验证；临时会话，不能承载每日生产调度",
+    "cloudRunJob": "优先用于无状态、可幂等重跑的每日/每周采集，由Cloud Scheduler触发；原始回执必须写数据库或对象存储，不能依赖本地文件",
+    "cloudRunService": "适合健康检查、只读API和按需浏览器探测；注意冷启动、请求超时和公开访问控制",
+    "computeEngine": "仅在需要长期Chromium、Xvfb、特殊系统包、常驻浏览器会话或长时间进程时考虑；必须限制服务账号、磁盘和生命周期",
+    "secrets": "使用Secret Manager；现有API/DB只通过认证ingest访问，不把PostgreSQL直接暴露公网"
+  },
+  "migrationCandidates": [
+    {
+      "task": "每日竞品公开商品扫描 run-competitor-scan.sh",
+      "recommendation": "需改造后可迁移Cloud Run Job",
+      "requirements": [
+        "把ONZO_API_BASE改为认证后的内网/公网HTTPS ingest",
+        "把172.28.0.1:10809私有代理依赖改为可部署的网络路径",
+        "保留pending-reconciliation、latest/last-run语义，不能改成单纯无状态文件覆盖",
+        "先单独验证公开Ozon composer和Google translate通道，Seller UI 403不证明公开composer不可用"
+      ]
+    },
+    {
+      "task": "每周真实经营快照 run-weekly-ops-collect.sh",
+      "recommendation": "较适合迁移Cloud Run Job",
+      "requirements": [
+        "把127.0.0.1:3000改为现有API的HTTPS地址",
+        "把latest.json及历史快照改存PostgreSQL或对象存储",
+        "将API_KEY和Performance凭据放Secret Manager",
+        "保持失败不写latest、旧成功不掩盖新失败"
+      ]
+    },
+    {
+      "task": "ONZO Direct Daily Report（当前Windows 11:20）",
+      "recommendation": "需改造后可迁移Cloud Run Job",
+      "requirements": [
+        "把Yandex Direct OAuth令牌从本机yd-code.txt迁到Secret Manager，禁止打印或上传给其他模型",
+        "验证Cloud Run到api.direct.yandex.com的连通与201/202轮询",
+        "去除127.0.0.1:10808和Windows PowerShell依赖",
+        "把报告写回共享存储，并同步修改weekly-model-prompt.py的latest.json读取方式"
+      ]
+    }
+  ],
+  "keepCurrent": [
+    {
+      "task": "Ozon Seller搜索查询采集",
+      "reason": "Cloud Shell、芬兰VM和Cloud Run均返回403，且官方搜索查询API要求Premium Pro；通道未通过前不部署"
+    },
+    {
+      "task": "Kimi每周模型复盘会话",
+      "reason": "依赖Kimi会话和模型编排，不是普通无状态容器任务"
+    },
+    {
+      "task": "本机WebBridge浏览器采集/生产上传",
+      "reason": "依赖用户Chrome登录态，且云端Seller访问验证失败；保留Kimi主Agent直跑"
+    },
+    {
+      "task": "deploy-watch及现有API/PostgreSQL/Redis/Caddy",
+      "reason": "属于持续生产控制面和状态基础设施，迁移需Cloud Build/Cloud SQL/Memorystore/负载均衡整体改造，不为单一采集功能搬动"
+    },
+    {
+      "task": "订单、采购、库存、调价、数据库备份",
+      "reason": "生产写入、状态一致性和回滚要求高，不与无状态只读采集混迁"
+    }
+  ],
+  "costBoundaries": {
+    "temporaryTestResourcesDeleted": true,
+    "e2Micro": "按需VM小规格约7美元/月量级，区域、Spot、磁盘和流量会改变价格，以结算页为准",
+    "cloudRun": "请求/任务驱动，闲置可缩到零；仍有CPU、内存、构建、镜像存储、日志与网络成本",
+    "cloudShell": "免费临时环境，不是长期免费VM",
+    "security": "不开放数据库公网端口，不把凭据放镜像、源码或日志；失败任务必须可清理并防重入"
+  }
+}

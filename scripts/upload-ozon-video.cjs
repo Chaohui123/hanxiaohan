@@ -21,7 +21,7 @@ const path = require("path");
 const cp = require("child_process");
 
 const WB = "http://127.0.0.1:10086/command";
-const SESSION = "onzo-assets";
+const SESSION = process.env.OZON_WB_SESSION || "onzo-ads";
 
 const argv = process.argv.slice(2);
 const offerIdx = argv.indexOf("--offer");
@@ -137,9 +137,12 @@ async function injectAndSave() {
   const ms = evalJs(markSave);
   if (String(ms).startsWith("no")) throw new Error("保存按钮未找到");
   wbCall("click", { selector: '[data-onzo-save="1"]' });
-  await sleep(10000);
-  const fin = JSON.parse(evalJs(`(function(){var t=(document.body.innerText||"").replace(/\\s+/g," ");return JSON.stringify({saved:t.indexOf("已保存")>=0||t.indexOf("Сохранено")>=0});})()`));
-  console.log(`\n✅ 上传完成 — 保存确认: ${fin.saved}`);
+  await sleep(25000); // 保存+服务端处理需时间（原 10s 太短常误判）
+  // 刷新验证视频持久（保存成功则视频仍在；未保存关页则丢）— 比 toast 检测可靠
+  evalJs(`(function(){location.reload();return 'ok';})()`);
+  await sleep(15000);
+  const fin = JSON.parse(evalJs(`(function(){var t=(document.body.innerText||"").replace(/\\s+/g," ");var v=t.indexOf("商品视频");return JSON.stringify({saved:v>=0});})()`));
+  console.log(`\n✅ 上传完成 — 保存确认(刷新后视频持久): ${fin.saved}`);
 }
 
 (async () => {

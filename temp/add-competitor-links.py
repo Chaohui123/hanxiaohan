@@ -61,6 +61,92 @@ DATA = {
         "https://www.ozon.ru/product/o094f-66t-w0093-00-remontnyy-komplekt-karbyuratora-podvesnye-detali-dlya-yamaha-40-hp-2t-1877913211/",
         "https://www.ozon.ru/product/q-p-j-b-komplekt-dlya-remonta-karbyuratora-66t-w0093-00-podvesnye-detali-40-2t-aksessuary-5076856943/",
     ],
+    "MAR-YAM-6E5-01": [
+        "https://www.ozon.ru/product/remkomplekt-karbyuratora-dlya-yamaha-115-225-6e5-w0093-06-00-5172747828/",
+        "https://www.ozon.ru/product/remkomplekt-karbyuratora-18-7002-dlya-lodochnogo-motora-yamaha-v4-v6-6e5-w0093-06-00-5371518572/",
+        "https://www.ozon.ru/product/remkomplekt-karbyuratora-18-7002-dlya-lodochnogo-motora-yamaha-v4-v6-6e5-w0093-06-00-4851329354/",
+        "https://www.ozon.ru/product/remkomplekt-karbyuratora-18-7002-dlya-lodochnogo-motora-yamaha-v4-v6-6e5-w0093-06-00-4602068587/",
+    ],
+    "MAR-PUMP-61N-01": [
+        "https://www.ozon.ru/product/remkomplekt-pompy-dlya-lodochnyh-motorov-yamaha-25-30-2t-61n-w0078-69p-w0078-5143851229/",
+        "https://www.ozon.ru/product/remkomplekt-pompy-dlya-yamaha-25-30-l-s-2t-61n-w0078-11-s-korpusom-2909195201/",
+        "https://www.ozon.ru/product/remkomplekt-pompy-ohlazhdeniya-yamaha-25-30-f25-30-61n-w0078-omax-2745679711/",
+    ],
+    # ZERK-T8P-L 瑞虎8Pro左加热镜片（2026-10-20）：同车型精准竞品（8ProMax同款+7ProMax强手+7Pro）
+    "ZERK-T8P-L": [
+        "https://www.ozon.ru/product/zerkalnyy-element-levyy-s-obogrevom-dlya-avtomobilya-chery-tiggo-8-pro-max-i-1-pokolenie-2021-2723843455/",
+        "https://www.ozon.ru/product/zerkalnyy-element-levyy-s-obogrevom-dlya-avtomobilya-chery-tiggo-7-pro-max-i-1-pokolenie-2022-1410921372/",
+        "https://www.ozon.ru/product/zerkalnyy-element-levyy-s-obogrevom-dlya-avtomobilya-chery-tiggo-7-pro-i-1-pokolenie-2019-1410912953/",
+    ],
+    # ZERK-T8P-R 瑞虎8Pro右加热镜片（2026-10-20）：右侧 Ergon 8Pro 专用 2 条+通用件价格锚 1 条
+    "ZERK-T8P-R": [
+        "https://www.ozon.ru/product/zerkalnyy-element-pravyy-chery-tiggo-8-pro-21-sfera-neytralnyy-s-obogrevom-1740736830/",
+        "https://www.ozon.ru/product/zerkalnyy-element-dlya-avtomobilya-chery-tiggo-8-pro-21-sfera-neytralnyy-s-obogrevom-pravaya-1750307920/",
+        "https://www.ozon.ru/product/zerkalnyy-element-levogo-zerkala-dlya-chery-tiggo-4-4-pro-7-pro-8-8-pro-8-pro-max-j68-8202110ba-2995668092/",
+    ],
+    # PZ30B 化油器（2026-09-19）：牵引车场景精准竞品（复核员验证）
+    "MOT-CARB-PZ30-01": [
+        "https://www.ozon.ru/product/karbyurator-pz30-na-mototsikl-motobuksirovshchik-200-250ss-pz-30-985504393/",
+        "https://www.ozon.ru/product/karbyurator-pz30-dlya-motobuksirovshchika-13-22-l-s-t3-3589642478/",
+    ],
+    # 188F 双燃料化油器（2026-09-26）：发电机改 LPG 场景精准竞品
+    "GEN-CARB-188F-02": [
+        "https://www.ozon.ru/product/karbyurator-gaz-i-benzin-dlya-generatora-elektrostantsiy-4-9kvt-188f-190f-192f-gx340-gx390-5845819034/",
+        "https://www.ozon.ru/product/karbyurator-gaz-benzin-dlya-generatora-elektrostantsiy-5-10-kvt-dvigatel-13-18ls-188f-190f-192f-1619983913/",
+        "https://www.ozon.ru/product/trehtoplivnyy-karbyurator-s-avtomaticheskoy-zaslonkoy-dlya-dvigateley-188f-190f-gx390-5756089169/",
+    ],
+    # 33x14-1120 雪地摩托 CVT 皮带（2026-09-27）：精准尺寸竞品（已排除 34.5/30 错尺寸；ozon-buyer MCP 撞验证码，改 WebSearch 验证）
+    "GEN-BELT-33X14-01": [
+        "https://www.ozon.ru/product/remen-variatora-33h14-1120-dlya-snegohoda-buran-rys-tayga-variatornyy-remen-dlya-motobuksirovshchika-1661575255/",  # Rubena ArctiCA 4728 评（类目王）
+        "https://www.ozon.ru/product/rubena-s-r-o-33h14-1120-remen-variatora-safari-dlya-snegohoda-buran-rys-tayga-dlya-vezdehoda-karakat-3555502128/",  # RUBENA s.r.o. ArctiCA 官方卡
+        "https://www.ozon.ru/product/toyopower-33x14-1120-remen-variatora-dlya-snegohoda-buran-rys-tayga-dlya-vezdehoda-karakat-5144394988/",  # TOYOPOWER 白牌价格竞品
+    ],
+    # 35x1126 雪地摩托 CVT 皮带（2026-09-27，Тайга Варяг 550 原配）：已后台提交实证
+    # 3560338482 被 Ozon 拒收（该SKU的商品未在Ozon上销售）→ 换 1887285378（前台实证在售，描述实证 1126*35мм+Тайга 550 SWT，5419₽）
+    "GEN-BELT-35X1126-01": [
+        "https://www.ozon.ru/product/remen-variatora-dlya-snegohoda-yamaha-tayga-1126-35-40g4340-8dn-17641-00-414617500-1887285378/",  # 实证在售 1126*35мм Тайга 550（替换被拒卡）
+        "https://www.ozon.ru/product/remen-variatora-tayga-varyag-550-1126-35mm-originalnoe-kachestvo-dlya-yamaha-viking-540-3415746292/",  # Тайга 550+Viking 540（已入库）
+        "https://www.ozon.ru/product/remen-variatora-dlya-snegohoda-tayga-varyag-550-i-yamaha-viking-540-razmer-1126-35mm-4843317615/",  # 双标卡（已入库）
+    ],
+    # 61N-26311-00 船外机油门拉线（2026-09-27）：трос газ реверс ямаха 族头部白牌卡（主 Agent 9/27 前台实证：CONTROL 593评/LODKA 1027评/winibo，价格带 1576-1637₽）
+    # ⚠️ SKU 短链形式：完整 slug 未留档，ozon-buyer MCP 撞验证码；Ozon 短链 /product/{sku}/ 官方 301 到完整 slug，表单若拒收由主 Agent 浏览器补 slug（见 temp/listing-61ncable/competitor-links.json）
+    "MAR-YAM-61N-CABLE-01": [
+        "https://www.ozon.ru/product/3321402268/",  # CONTROL трос газа/реверса 白牌头部卡 593 评
+        "https://www.ozon.ru/product/2307138629/",  # LODKA 白牌头部卡 1027 评
+        "https://www.ozon.ru/product/1846466398/",  # winibo 白牌卡
+    ],
+    # 66T-26311 船外机油门拉线 40HP（2026-09-27）：40HP 拉线主流带 1579-1651₽（winibo 339评，无品牌墙）
+    "MAR-YAM-66T-CABLE-01": [
+        "https://www.ozon.ru/product/1701884696/",  # winibo 1651₽ 339评（brief 前台实证）⚠️ SKU 短链同 61N-CABLE 口径
+        "https://www.ozon.ru/product/1701868489/",  # winibo 1579₽ 339评（brief 前台实证）⚠️ 同上
+        "https://www.ozon.ru/product/tros-gaza-dlya-yamaha-2t-40hp-40x-66t-26311-00-5564525515/",  # 66T-26311-00 精准件号卡（WebSearch 实证在售，完整 slug）
+    ],
+    # CN-AUTO-GRILLE-COVER-01 水箱保温罩（2026-09-27）：通用款主流带 1,057-1,715₽ 无品牌墙（brief 前台实证）⚠️ SKU 短链同 61N-CABLE 口径
+    "CN-AUTO-GRILLE-COVER-01": [
+        "https://www.ozon.ru/product/2484288549/",  # Jolion 专用卡（本土 Автостиль）1,909₽ 203评
+        "https://www.ozon.ru/product/1683067994/",  # 通用头部卡 1,669₽ 655-693评
+        "https://www.ozon.ru/product/5505223853/",  # DeliNight 1,057₽
+    ],
+    # MOT-MIK-VM34-KIT-01 Mikuni VM30/32/34 化油器修理包（2026-10-01）：主流带 604-773₽ 无品牌墙（2026-10-01 前台快照实证）
+    # ⚠️ SKU 短链形式：完整 slug 未留档，ozon-buyer MCP 撞 Antibot Captcha；短链 /product/{sku}/ 官方 301 到完整 slug，表单若拒收由主 Agent 浏览器补 slug
+    "MOT-MIK-VM34-KIT-01": [
+        "https://www.ozon.ru/product/2775779558/",  # LukiMotors 604₽ 56评（主流带下沿）
+        "https://www.ozon.ru/product/836356307/",  # SPI 773₽ 37评（主流带上沿）
+        "https://www.ozon.ru/product/2974211086/",  # speedpark 731₽ 4评
+    ],
+    # MOT-168F-CLUTCH-01 168F/170F 牵引车离合器碟片组（2026-10-01）：精准段 1,088-1,944₽（663₽ 为泛摩托聚合非直接对手）
+    # ⚠️ SKU 短链同 VM34-KIT 口径（ozon-buyer MCP 撞 Antibot）
+    "MOT-168F-CLUTCH-01": [
+        "https://www.ozon.ru/product/1541692260/",  # Lifan Motors 1,088₽ 176评（精准段下沿，非巨头）
+        "https://www.ozon.ru/product/1375010785/",  # RSMOTO 1,723₽ 35评
+        "https://www.ozon.ru/product/1262619571/",  # LukiMotors 1,944₽ 72评
+    ],
+    # CN-DASHCOVER-JOLION-01 仪表台避光垫（2026-10-08）：主流带 1,250-1,500₽ 头部 359评 无垄断墙（brief 前台实证）⚠️ SKU 短链同上
+    "CN-DASHCOVER-JOLION-01": [
+        "https://www.ozon.ru/product/999043637/",   # накидка на торпедо 头部卡 359评
+        "https://www.ozon.ru/product/3816066894/",  # 同型款（专版）仅 1评——本土覆盖慢实证
+        "https://www.ozon.ru/product/5934197149/",  # 欧缔兰 2,319₽ 高价锚
+    ],
 }
 
 def wb(action, args, timeout=90):

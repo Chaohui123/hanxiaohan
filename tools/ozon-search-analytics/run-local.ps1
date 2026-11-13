@@ -17,7 +17,10 @@ try {
   $env:SEARCH_ANALYTICS_API_URL = $url
   $env:SEARCH_ANALYTICS_INGEST_KEY = $key
   $companyId = [Environment]::GetEnvironmentVariable("SEARCH_ANALYTICS_COMPANY_ID", "User")
-  if ($companyId) { $env:SEARCH_ANALYTICS_COMPANY_ID = $companyId }
+  if (-not $companyId -or $companyId -notmatch '^\d{1,32}$') { throw "Configure SEARCH_ANALYTICS_COMPANY_ID as the numeric company ID of the authorized Seller account." }
+  $env:SEARCH_ANALYTICS_COMPANY_ID = $companyId
+  $accountLabel = [Environment]::GetEnvironmentVariable("SEARCH_ANALYTICS_ACCOUNT_LABEL", "User")
+  if ($accountLabel) { $env:SEARCH_ANALYTICS_ACCOUNT_LABEL = $accountLabel }
 
   $bridge = Test-NetConnection -ComputerName "127.0.0.1" -Port 10086 -InformationLevel Quiet -WarningAction SilentlyContinue
   if (-not $bridge) {

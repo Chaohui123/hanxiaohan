@@ -1,0 +1,31 @@
+services:
+  competitor-scraper:
+    build:
+      context: .
+      dockerfile: tools/ozon-mcp-server/Dockerfile
+    image: onzo-competitor-scraper:p4-followup-20261103
+    restart: "no"
+    environment:
+      API_KEY: ${API_KEY:?API_KEY is required}
+      ONZO_API_BASE: http://api-services:3000
+      OZONE_CHANNEL: translate
+      OZONE_TRANSLATE_PROXY_URL: ${OZONE_TRANSLATE_PROXY_URL:-http://172.28.0.1:10809}
+      COMPETITOR_SCAN_OUTPUT_DIR: /app/output
+    volumes:
+      - ./data/competitor-scans:/app/output
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "3"
+    networks:
+      - onzo-network
+
+networks:
+  onzo-network:
+    external: true
+    name: onzo_onzo-network

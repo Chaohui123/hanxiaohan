@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { directRetryDelayMs, parseDirectReportTsv, summarizeDirectRows, utcDayOffset } from "../../../scripts/direct-report-core.mjs";
+import { directRetryDelayMs, parseDirectCampaignIds, parseDirectReportTsv, selectDirectCampaignRows, summarizeDirectRows, utcDayOffset } from "../../../scripts/direct-report-core.mjs";
 
 const sample = `"ONZO report"
 Date\tCampaignId\tCampaignName\tImpressions\tClicks\tCtr\tAvgCpc\tCost\tConversions\tCostPerConversion
@@ -66,6 +66,17 @@ describe("Direct report parsing", () => {
       actualCpaUsd: null,
       daysWithActivity: 0,
     });
+  });
+
+  it("keeps multiple campaigns separate and validates configured IDs", () => {
+    const rows = parseDirectReportTsv(sample);
+    const candidate = rows.map(row => ({ ...row, campaignId: "716088179", costUsd: 2, conversions: 1 }));
+    const selected = selectDirectCampaignRows([...rows, ...candidate], "716088179");
+    expect(selected).toHaveLength(4);
+    expect(summarizeDirectRows(selected)).toMatchObject({ costUsd: 8, conversions: 4, actualCpaUsd: 2 });
+    expect(selectDirectCampaignRows(rows, "716088179")).toEqual([]);
+    expect(parseDirectCampaignIds("715426752, 716088179,715426752")).toEqual(["715426752", "716088179"]);
+    expect(() => parseDirectCampaignIds("715426752,bad")).toThrow("Invalid Direct campaign ID list");
   });
 
   it("handles UTC calendar offsets across month boundaries", () => {

@@ -129,7 +129,8 @@ def prep_assets():
     print("[assets] prepared ->", ASSETS)
 
 def A(name):
-    return Image.open(os.path.join(ASSETS, name)).convert("RGB")
+    # 支持绝对/相对路径（分割图直接给全路径）
+    return Image.open(name if os.sep in name or "/" in name else os.path.join(ASSETS, name)).convert("RGB")
 
 def fit_into(canvas, img, box, bg=WHITE, shadow=False):
     x0, y0, x1, y1 = box
@@ -220,7 +221,7 @@ def build_02():
         text_center(d, x0 + cw // 2, y0 + 96 * S + f_m.size + 16 * S, T(hp), f_p, INK)
         text_center(d, x0 + cw // 2, y0 + 96 * S + f_m.size + 46 * S, T("2 карбюратора"), f_p, GRAY)
     x0 = 50 * S + 2 * (cw + gap)
-    fit_into(c, A("gasket_card.png"), (x0 + 12 * S, y0 + 12 * S, x0 + cw - 12 * S, y0 + ch - 66 * S))
+    fit_into(c, A("temp/listing-6e5/split/part-01.jpg"), (x0 + 12 * S, y0 + 12 * S, x0 + cw - 12 * S, y0 + ch - 66 * S))
     d = ImageDraw.Draw(c)
     f_cap = font(False, 18 * S)
     for j, ln in enumerate(wrap(d, T("прокладка из комплекта"), f_cap, cw - 24 * S)[:2]):
@@ -247,11 +248,14 @@ def build_03():
     f_sub = font(False, 23 * S)
     text_center(d, W // 2, 46 * S + fh.size + 16 * S,
                 T("все детали для переборки карбюратора — в одном комплекте"), f_sub, GRAY)
+    # 细节图直接用连通域分割产物（单件+完整+居中），绕过 _assets 手估裁片
+    SPLIT = "temp/listing-6e5/split"
+    SPLIT3 = "temp/listing-6e5/split-img_03"
     cards = [
-        ("gasket.png", T("Прокладки")),
-        ("gasket_red.png", T("Прокладки камеры")),
-        ("jets.png", T("Жиклёры")),
-        ("needle.png", T("Игольчатый клапан")),
+        (SPLIT + "/part-01.jpg", T("Прокладки")),
+        (SPLIT + "/part-02.jpg", T("Прокладки камеры")),
+        (SPLIT3 + "/part-01.jpg", T("Жиклёры")),
+        (SPLIT3 + "/part-03.jpg", T("Игольчатый клапан")),
         ("orings.png", T("Уплотн. кольца")),
         (None, None),
     ]

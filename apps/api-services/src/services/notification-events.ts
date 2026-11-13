@@ -321,6 +321,14 @@ export const NOTIFICATION_EVENTS: NotificationEvent[] = [
     force: false,
     rateLimit: 5,
   },
+  {
+    key: "WEEKLY_REVIEW_FAILED",
+    level: "error",
+    label: "每周复盘执行失败",
+    template: "每周复盘执行失败，运行 {{runId}}：{{error}}。上一份成功报告保留，请核查数据与模型通道。",
+    force: false,
+    rateLimit: 3,
+  },
 ];
 
 // ---- Event Emitter ----

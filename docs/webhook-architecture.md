@@ -1,9 +1,9 @@
 # Ozon 对接模块 — Webhook 事件驱动架构
 
-> 架构：**Webhook 事件驱动为主 + API v3 定时兜底**
+> 架构：**Webhook 事件驱动为主 + API 定时兜底**
 > 接收器只做：seller_id 校验（有签名时验签）→ 原始请求落库 → 立即 200。全部业务逻辑由 drain job 异步消费。
 > **2026-08 实测修正**：Ozon 推送**不带 X-Ozon-Signature 头**，报文字段为 `message_type`/`order_number`/`uuid`（非早期假设的 event_type/posting_number/event_id）；伪造防护 = seller_id 白名单 + 可选 OZON_WEBHOOK_IPS。
-> 队列限流：ozon-api-wrapper 令牌桶 + 熔断 + 指数退避（遵守 rules.md 禁 Redis/MQ 约束，不使用 BullMQ）。
+> 队列限流：ozon-api-wrapper 令牌桶 + 熔断 + 指数退避；生产 Redis 用于缓存与调度协调，本 Webhook 接收链路不依赖 BullMQ。
 
 ## 一、目录结构
 
@@ -21,10 +21,10 @@ apps/api-services/src/
 │   ├── schema.ts                 # ozon_webhook_log DDL（PG）
 │   └── migrations.ts             # 同上（迁移执行）
 packages/
-├── ozon-api-wrapper/             # 统一 v3 客户端（令牌桶限流/熔断/退避/请求日志/零硬编码）
+├── ozon-api-wrapper/             # 统一客户端（令牌桶限流/熔断/退避/请求日志/零硬编码）
 └── ozon-order/
-    ├── webhook.ts                # 验签(HMAC-SHA256+timingSafeEqual) + event_id 幂等
-    └── sync.ts                   # /v3/posting/fbs|fbo/list 兜底拉取
+    ├── webhook.ts                # 有签名时验签 + uuid/event_id 兼容幂等
+    └── sync.ts                   # FBS/FBO cursor 分页兜底拉取
 docker/caddy/Caddyfile            # HTTPS 终止 + /ozon/webhook 转发
 ```
 

@@ -159,6 +159,96 @@ async function closeOwnedTabs(endpoint, session) {
   }
 }
 
+export function sellerSessionAction(state, accountLabel = "ТехноМир", loginClicked = false, accountClicked = false) {
+  if (state?.tableReady) return { action: "ready" };
+  if (state?.authInteractionRequired) {
+    return { action: "error", code: "SELLER_AUTH_INTERACTION_REQUIRED", message: "Ozon requires a captcha or verification code; automatic collection must stop" };
+  }
+  if (!accountClicked) {
+    const normalize = value => String(value || "").replace(/\s+/g, " ").trim().toLocaleLowerCase();
+    const expected = normalize(accountLabel);
+    const candidates = Array.isArray(state?.accountCandidates) ? state.accountCandidates : [];
+    const labelled = expected ? candidates.filter(candidate => normalize(candidate.text).includes(expected)) : [];
+    if (labelled.length === 1) return { action: "click_account", selector: labelled[0].selector };
+    if (labelled.length > 1) {
+      return { action: "error", code: "SELLER_ACCOUNT_CHOICE_REQUIRED", message: "More than one Ozon account matches the authorized store label" };
+    }
+    if (state?.accountChoiceVisible && candidates.length === 1) return { action: "click_account", selector: candidates[0].selector };
+    if (state?.accountChoiceVisible && candidates.length > 1) {
+      return { action: "error", code: "SELLER_ACCOUNT_CHOICE_REQUIRED", message: "Ozon account choice is ambiguous and does not contain the authorized store label" };
+    }
+  }
+  if (!loginClicked && state?.loginSelector) return { action: "click_login", selector: state.loginSelector };
+  return { action: "wait" };
+}
+
+export function sellerSessionSnapshotSource(accountLabel) {
+  return `(() => {
+    const expectedLabel = ${JSON.stringify(accountLabel)};
+    const visible = element => !!(element.offsetWidth || element.offsetHeight || element.getClientRects().length);
+    const normalize = value => String(value || '').replace(/\\s+/g, ' ').trim();
+    const mask = value => normalize(value).replace(/[\\w.+-]+@[\\w.-]+\\.[A-Za-z]{2,}/g, '[email]').replace(/\\+?\\d[\\d\\s()-]{7,}\\d/g, '[phone]');
+    const controls = [...document.querySelectorAll('button,[role="button"],a[href]')].filter(element => {
+      if (!visible(element) || element.disabled || element.getAttribute('aria-disabled') === 'true') return false;
+      return !element.parentElement?.closest('button,[role="button"],a[href]');
+    });
+    const login = controls.find(element => /^(?:Войти|Выбрать аккаунт|登录|选择账户|选择账号|选择账户登录|Log in|Sign in|Choose account)$/i.test(normalize(element.innerText || element.getAttribute('aria-label'))));
+    if (login) login.setAttribute('data-onzo-search-login', 'true');
+    const excluded = /^(?:Зарегистрироваться|Регистрация|注册|Sign up|Помощь|帮助|Help|Условия обработки персональных данных|Условия|条款|Далее|Next|Продолжить|Continue|继续|Отправить код|Send code|Сменить аккаунт|Другой аккаунт|Добавить аккаунт|Use another account|使用其他账户|其他账户|Выбрать другой аккаунт)$/i;
+    const accountCandidates = [];
+    for (const element of controls) {
+      if (element === login) continue;
+      const text = normalize(element.innerText || element.getAttribute('aria-label'));
+      if (!text || excluded.test(text)) continue;
+      element.setAttribute('data-onzo-search-account', String(accountCandidates.length));
+      accountCandidates.push({ selector: '[data-onzo-search-account="' + accountCandidates.length + '"]', text });
+    }
+    const text = document.body?.innerText || '';
+    return {
+      tableReady: document.querySelectorAll('table tbody tr td a').length > 0,
+      authInteractionRequired: !!document.querySelector('iframe[src*="captcha" i]') || /captcha|Введите код|проверочный код|验证码|Докажите, что вы не робот|Подтвердите, что вы не робот/i.test(text),
+      accountChoiceVisible: /Выберите аккаунт|Выбор аккаунта|Choose an account|Choose account|选择账户|选择账号|选择登录账户/i.test(text),
+      loginSelector: login ? '[data-onzo-search-login="true"]' : null,
+      accountCandidates,
+      accountLabelPresent: expectedLabel && text.toLocaleLowerCase().includes(expectedLabel.toLocaleLowerCase()),
+      text: mask(text).slice(0, 500),
+    };
+  })()`;
+}
+
+export async function ensureSellerSession(endpoint, session, options = {}) {
+  const accountLabel = options.accountLabel || "ТехноМир";
+  const timeoutMs = options.timeoutMs ?? 60_000;
+  const pollIntervalMs = options.pollIntervalMs ?? 500;
+  const deadline = Date.now() + timeoutMs;
+  let loginClicked = false;
+  let accountClicked = false;
+  let lastState = null;
+  while (Date.now() < deadline) {
+    lastState = await evaluate(endpoint, session, sellerSessionSnapshotSource(accountLabel));
+    const decision = sellerSessionAction(lastState, accountLabel, loginClicked, accountClicked);
+    if (decision.action === "ready") return { loginButtonUsed: loginClicked, accountChoiceUsed: accountClicked };
+    if (decision.action === "error") {
+      const error = new Error(decision.message);
+      error.code = decision.code;
+      throw error;
+    }
+    if (decision.action === "click_login" || decision.action === "click_account") {
+      await webbridge(endpoint, session, "mouse_click", { selector: decision.selector, focus_emulation: true });
+      if (decision.action === "click_login") loginClicked = true;
+      else accountClicked = true;
+      await activate(endpoint, session);
+    }
+    await new Promise(resolve => setTimeout(resolve, pollIntervalMs));
+  }
+  const accountFlow = loginClicked || accountClicked || lastState?.accountChoiceVisible;
+  const error = new Error(accountFlow
+    ? `Ozon account sign-in did not reach the query table: ${lastState?.text || "empty page"}`
+    : `Seller table did not load; activate Chrome and check the session: ${lastState?.text || "empty page"}`);
+  error.code = accountFlow ? "SELLER_ACCOUNT_SIGN_IN_TIMEOUT" : "SELLER_SESSION_OR_TAB_NOT_READY";
+  throw error;
+}
+
 async function preparePage(endpoint, session) {
   await closeOwnedTabs(endpoint, session);
   await webbridge(endpoint, session, "navigate", { url: SELLER_URL, newTab: true, group_title: "搜索查询本机采集" });
@@ -166,19 +256,9 @@ async function preparePage(endpoint, session) {
   const current = await evaluate(endpoint, session, "location.href");
   if (current !== SELLER_URL) await webbridge(endpoint, session, "navigate", { url: SELLER_URL });
   await activate(endpoint, session);
-  const ready = await evaluate(endpoint, session, `(async () => {
-    const deadline = Date.now() + 60000;
-    while (Date.now() < deadline) {
-      if (document.querySelectorAll('table tbody tr td a').length) return { ok: true };
-      await new Promise(resolve => setTimeout(resolve, 500));
-    }
-    return { ok: false, url: location.href, text: (document.body.innerText || '').slice(0, 500) };
-  })()`);
-  if (!ready?.ok) {
-    const error = new Error(`Seller table did not load; activate Chrome and check the session: ${ready?.text || "empty page"}`);
-    error.code = "SELLER_SESSION_OR_TAB_NOT_READY";
-    throw error;
-  }
+  const accountSelection = await ensureSellerSession(endpoint, session, {
+    accountLabel: process.env.SEARCH_ANALYTICS_ACCOUNT_LABEL || "ТехноМир",
+  });
   const installed = await evaluate(endpoint, session, instrumentationSource());
   if (!installed) throw new Error("Could not install the readonly request observer");
   await activate(endpoint, session);
@@ -214,7 +294,7 @@ async function preparePage(endpoint, session) {
     return null;
   })()`);
   if (!template?.companyId || !template.period) throw new Error("Could not establish the native 7-day request context from normal pagination");
-  return template;
+  return { ...template, accountSelection };
 }
 
 async function fetchPage(endpoint, session, offset) {
@@ -237,6 +317,22 @@ async function fetchPage(endpoint, session, offset) {
   return envelope;
 }
 
+export function assertExpectedCompany(actualCompanyId, expectedCompanyId) {
+  const actual = String(actualCompanyId ?? "").trim();
+  const expected = String(expectedCompanyId ?? "").trim();
+  if (!/^\d{1,32}$/.test(expected)) {
+    const error = new Error("SEARCH_ANALYTICS_COMPANY_ID must be the numeric company ID of the authorized Seller account");
+    error.code = "SELLER_ACCOUNT_UNVERIFIED";
+    throw error;
+  }
+  if (actual !== expected) {
+    const error = new Error(`Seller account mismatch: expected company ${expected}, received ${actual || "unknown"}; refusing to collect or publish`);
+    error.code = "SELLER_WRONG_ACCOUNT";
+    throw error;
+  }
+  return actual;
+}
+
 export async function collect(options) {
   const endpoint = process.env.WEBBRIDGE_URL || "http://127.0.0.1:10086/command";
   const startedAt = new Date().toISOString();
@@ -250,6 +346,7 @@ export async function collect(options) {
   await atomicJson(pendingFile, pending);
   try {
     const context = await preparePage(endpoint, options.session);
+    assertExpectedCompany(context.companyId, process.env.SEARCH_ANALYTICS_COMPANY_ID);
     const firstEnvelope = await fetchPage(endpoint, options.session, 0);
     const first = normalizePage(firstEnvelope);
     const total = Number(first.body.total);
@@ -281,6 +378,7 @@ export async function collect(options) {
       startedAt, finishedAt: new Date().toISOString(), status: complete ? "COLLECTED" : "SAMPLE_VALIDATED",
       complete, sourceType: "ozon_seller_ui_native_query_report", sourceDependency: "LOCAL_CHROME_ACTIVE_TAB_AND_LOGIN",
       sourceUrl: SELLER_URL, endpoint: QUERY_PATH, companyId: context.companyId,
+      accountSelection: context.accountSelection,
       requestHeaderNames: context.headerNames, nativePeriod: { requested: "days_7", label: context.period, start: null, end: null, timezone: null, basis: "Ozon-relative-period-at-collection; no calendar dates returned by this endpoint" },
       filters: { text: "", sort_by: "count", sort_dir: "desc", period: "days_7" },
       expectedPages, pageCount, total: counts.total, rowCount: counts.rowCount,
