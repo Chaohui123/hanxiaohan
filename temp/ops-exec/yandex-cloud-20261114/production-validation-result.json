@@ -1,0 +1,25 @@
+{
+  "status": "PASS",
+  "source": "ONZO production api-services with deployed Yandex credential",
+  "wordstat": {
+    "phrase": "ремень вариатора снегоход",
+    "totalCount": "3396",
+    "rows": 1,
+    "first": {
+      "phrase": "ремень вариатора на снегоход",
+      "count": "1776"
+    }
+  },
+  "speechkit": {
+    "provider": "yandex",
+    "model": "speechkit-v3",
+    "voice": "marina",
+    "role": "friendly",
+    "chunks": 1,
+    "bytes": 250214,
+    "sha256": "cef1f946d6df9dbc13ba7647b5bdcd36e2eec4d41c737cbbb943aa5ebeb32283",
+    "audioPath": "/app/data/tmp-images/marina-production-smoke.wav"
+  },
+  "secretLogged": false,
+  "audioBase64Logged": false
+}
