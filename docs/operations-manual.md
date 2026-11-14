@@ -601,7 +601,7 @@ node scripts/yandex-wordstat.mjs --phrase "ремень вариатора сн�
 - **STT**：同步 v1 使用 OggOpus，**不支持 MP3**；`recognizeRussianOggOpus` 已回读配音原文。`POST /api/yandex-cloud/stt` 接收 `audioOggOpusBase64` 并要求 `confirmNoSensitiveData=true`，解码后不得超过 1 MB。首次音色验收或高风险文案可在 plan 设置 `main.voice.stt_verify=true`，临时 WAV 转 OggOpus 后回读，规范化文本与原文一致才替换正式音轨；默认不逐句计费复核，差异/失败不自动重发。真实回执 `pipeline-voice-stt-verified/vo1.speechkit.json` 为 PASS。供应商语音和售后转写仍须审查隐私并复核文本，不替代真实音频模型盲评。
 - **Translate 与辅助接口**：`POST /api/yandex-cloud/translate` 接收 `texts` 与可选 `sourceLanguageCode`，只返回待审草稿，不替代 DeepSeek/Luna/Kimi 终审。`POST /api/yandex-cloud/stt`、`POST /api/yandex-cloud/ocr` 均要求 `confirmNoSensitiveData=true`，缺少确认在调用上游前返回 400；真实三接口验收见 `auxiliary-api-smoke-result.json`。
 - **Vision OCR**：`POST /api/yandex-cloud/ocr` 接收 `imageBase64` 与可选 `languages`，要求 `text_detection_config` 并检查业务内层 `error`，不能只凭外层 HTTP 200 判成功。测试图中文、英文和数字均识别，但部分语言标签出现 `hu` 误判，故只按实际文字与业务证据使用，不盲信语言标签。订单、买家、卡号、地址等敏感截图不得上传，未确认不上传，不默认把采购截图交给 OCR。
-- Cloud Functions、Object Storage、Lockbox 的 `access=PASS, count=0` 仅为 11.1 当时盘点，**不代表后续状态**。后续已创建 Wordstat/Ozon 探针并归档脱敏回执，未创建 Scheduler 或生产定时采集，Lockbox 未使用；当前云端边界见 11.7。
+- Cloud Functions、Object Storage、Lockbox 的 `access=PASS, count=0` 仅为 11.1 当时盘点，**不代表后续状态**。后续已创建 Wordstat/Ozon 探针并归档脱敏回执，当时未创建 Scheduler 或生产定时采集，Lockbox 未使用；采集边界见 11.7，正式云端周报与 Timer 验收见 11.9。
 - Ozon Seller 原生搜索查询仍受会员与本机浏览器会话限制，Yandex Wordstat 不能替代其加购、独立买家和订单转化指标，也不证明此前云端 Chromium 403 已解决。
 
 ### 11.5 生产验收结果与后续轮换
@@ -625,9 +625,9 @@ node scripts/yandex-wordstat.mjs --phrase "ремень вариатора сн�
 
 ### 11.7 Cloud Functions 探针与采集迁移边界（2026-11-14）
 
-- 已创建 `onzo-cloud-probe` / `d4e6j2oe98r78gjeb5j9`，只用于只读可行性验证。函数通过运行中服务账号的 metadata 取得 IAM，真实调用 Wordstat `topRequests` 返回 HTTP 200；不需要把服务账号 JSON、OAuth token 或 Lockbox 秘密复制进函数。原始回执保存在 Object Storage，函数调用不返回 IAM token、Cookie 值或 Seller 凭据。`yc serverless trigger list` 为空，当前有 5 个探针版本，**未创建 Scheduler、未部署生产定时采集**。
+- 已创建 `onzo-cloud-probe` / `d4e6j2oe98r78gjeb5j9`，只用于只读可行性验证。函数通过运行中服务账号的 metadata 取得 IAM，真实调用 Wordstat `topRequests` 返回 HTTP 200；不需要把服务账号 JSON、OAuth token 或 Lockbox 秘密复制进函数。原始回执保存在 Object Storage，函数调用不返回 IAM token、Cookie 值或 Seller 凭据。`yc serverless trigger list` 当时为空，有 5 个探针版本，**当时未创建 Scheduler、未部署生产定时采集**；后续正式云端周报、ONZO 回读与固定 Timer 验收见 11.9。
 - Wordstat 属于可迁移的 API 采集，但上线前仍须实现：受审词表与批次上限、原始请求/响应及 SHA-256 版本化归档、ONZO 幂等 ingest、失败告警、对账与回滚。Timer 官方要求调用方具有 `functions.functionInvoker`；运行函数的服务账号与调用 Timer 的服务账号应按最小权限分开核验，不为图方便扩大现有账号权限。官方文档：<https://yandex.cloud/en/docs/functions/concepts/trigger/timer>。
-- Timer 支持失败重试与死信队列，因此必须在任何付费 API 请求前检查 `event_id + payload + 原始哈希` 的处理账本；结果不明的请求先对账，不能让 Timer 重试直接变成重复计费请求。调度配置、DLQ、重放与回读尚未实施，不能把一次函数 HTTP 200 写成定时生产验收。创建说明：<https://yandex.cloud/en/docs/functions/operations/trigger/timer-create>。
+- Timer 支持失败重试与死信队列，因此必须在任何付费 API 请求前检查 `event_id + payload + 原始哈希` 的处理账本；结果不明的请求先对账，不能让 Timer 重试直接变成重复计费请求。当时调度配置、DLQ、重放与回读尚未实施，不能把一次函数 HTTP 200 写成定时生产验收；当前正式调度与生产回读见11.9，DLQ仍未配置。创建说明：<https://yandex.cloud/en/docs/functions/operations/trigger/timer-create>。
 - Ozon 公开 composer 与 Seller 原生页最初均出现 `__rr=9 → __rr=1` 的 307 循环。后续用普通 `CookieJar`、最多 4 次重定向、无 Seller 登录态、无 Cookie 值导出再次验证，仍未收敛；本地探针以自定义 508 表示重定向上限，不是 Ozon 返回 508。普通 Cookie 会话不是解决方案，不再尝试指纹伪装、代理轮换、打码或绕过风控。**公开竞品不迁移到 Cloud Functions，Seller 原生查询继续现有本机真实 Chrome 自动降级，不改成人工导出，不上传 Seller Cookie/浏览器目录。**
 - 现有腾讯云竞品通道已直接下载 `last-run/latest` 并核对 SHA-256：`latest=2026-11-12T03-17-02-812Z` 上传 26 条，`last-run=2026-11-13T03-17-03-398Z` 因翻译通道 HTTP 429 中止且上传 0；runId 不一致、latest 超过 24h，均不得用于当前调价。待对账为 0 不等于最新抓取成功。证据：`temp/ops-exec/cloud-functions-selection-20261114/competitor-live-validation.json`。
 - 自建 28 天仍为 `insufficient_history / coverageDays=7`，相邻滚动 7 天报表不能直接相加。继续本机每日采集和现有 `selectWeeklyRuns`，只有四个连续不重叠原生周窗口才允许形成 28/28；不改成 Carbon 建议的人工导出，不盲加独立买家、去重卖家或均值。Wordstat 的 Top、关联词和搜索摘要只作候选发现与购买意图辅助，缺失月份和传输不明均不写成 0。
@@ -641,7 +641,7 @@ node scripts/yandex-wordstat.mjs --phrase "ремень вариатора сн�
 - Kimi 终审为 **2 个进入供货审核、5 个补证、1 个本季停止**：优先真空收纳袋与 160×200 防水床罩；厨房龙头和手机三脚架因变体/竞争未收敛先补证；万用表补 CAT/EN61010、保险丝和绝缘表笔，淋浴滤芯补固化无粉与真实滤效，按摩垫补商标/医械边界。女士冬季保暖内衣为 `FAIL_CURRENT_SEASON`，本季不采购不付费制作，不把等待 28 天或必然压库当数学事实，不自动复活。所有纺织合规、重量、包装、材质、价格与供应参数仍需真实证据，不能沿用模型估值。
 - Carbon 首轮 4 个 PASS 没有被机械照搬；终审同样区分需求成立、进入供货审核和可以上架。后续优先方向每候选最多 2 家货源+1 备选，须完成前台逐卡竞争、准确变体、关键参数、真实单元经济、8 图双视频与独立复核，才可能进入测品。当前 **0 新 SKU、0 采购、0 付费媒体、0 商品/价格/库存/广告改动**。
 - Carbon 的一次同步超时、一次提示词缺输入和两次 `MAX_TOKENS` 均保留原回执；缺输入导致的空候选不当作市场无机会。完整评审通过原 Batch continuation token 恢复，最终 `STOP`，实际模型与 prompt SHA-256 均可回读。原始与续写 usage 是累计口径，不重复相加，未虚构美元成本。
-- 完整方案：`temp/ops-exec/cloud-functions-selection-20261114/final-plan.md`，结构化终审：`evaluation.json`，原始模型回执、补验和购买意图证据均在同目录。云端生产 Scheduler 仍未创建，自建 28 天仍为 7/28，`PROMO_AUTO_DECISION=false` 不变。
+- 完整方案：`temp/ops-exec/cloud-functions-selection-20261114/final-plan.md`，结构化终审：`evaluation.json`，原始模型回执、补验和购买意图证据均在同目录。当时云端生产 Scheduler 仍未创建，自建 28 天仍为 7/28；后续正式云端周报、生产回读与固定 Timer 见11.9，`PROMO_AUTO_DECISION=false` 不变。
 
 ### 11.9 Wordstat 云端周报实施与验收（2026-11-14）
 
@@ -651,4 +651,5 @@ node scripts/yandex-wordstat.mjs --phrase "ремень вариатора сн�
 - 扩词仅取 `topRequests.results`，每种子最多3个、每报告最多20个；`associations` 仅留原始回执，不自动成为需求。现有 TPMS、已终止方向、品牌/平台词与非购买噪声不参与评分。分数只作观察排队，仍须 Seller 购买意图、竞争、供货、准确变体、真实经济、合规、8图双视频及独立复核；季节性只提示补证与内容准备，不是提前备货指令。
 - ONZO 使用 `wordstat_weekly_reports` 幂等入库，并实时读取 Seller 表计算原生批次和自建 7/28 天覆盖，不能沿用报告里的静态配置数。接口：`GET /api/yandex-cloud/wordstat/weekly/latest`、`POST .../preview`（不写库、不发通知）、`POST .../sync`（仅新报告发送一次，未知通知结果不自动重试）。前端路径 `/wordstat-weekly`。Compose 开关 `WORDSTAT_CLOUD_SYNC_ENABLED=true`，每10分钟回读对象存储；GitHub Actions 只允许手动离线测试，不承担生产调度。
 - 云端部署脚本为 `tools/yandex-wordstat-monitor/deploy/yc_deploy_and_bind_timer.sh`。必须提供 folder、桶、运行账号、Timer 调用账号和固定 `RELEASE_TAG`；默认不调用采集、不创建 Timer。存储探针需同时显式设置 `FUNCTION_ENTRYPOINT=src.storage_probe.handler` 与 `CONFIRM_WORDSTAT_PROBE=true`；真实周报需 `CONFIRM_WORDSTAT_LIVE_RUN=true`；生产 Timer 需 `CONFIRM_WORDSTAT_TIMER=true`，并确认生产读取、失败账本、ONZO 入库与通知幂等全部通过。
-- Timer v2 使用官方 CLI `help-action --invoke-function` 确认的 `invokeFunction` 和 `retryPolicy`，计划为 `0 1 ? * MON *`（UTC 每周一01:00，即北京时间09:00），固定 `weekly-20261114-v3`，不使用 `$latest`，不删除旧触发器。DLQ 未配置，不能宣称已有 DLQ；失败经函数报告与 ONZO 告警呈现。**当前 ONZO 生产回读与 Timer 创建尚待本次部署后验收，不能把云端单次成功写成定时上线完成。** 证据目录 `temp/ops-exec/wordstat-cloud-migration-20261114/`。Ozon 商品、价格、库存、广告与 `PROMO_AUTO_DECISION=false` 不变。
+- 生产预览已验证数据库0→0、未发送飞书，Seller 实时批次为200页9951条，自建28天仍为7/28。首次通知因卡片被重复封装为 `card.card` 返回11246；修复后增加真实结构回归测试，备份原失败状态后仅对明确拒绝的同一报告受控补发一次，飞书已接受并回读 `SENT`。重复同步保持1条记录且通知时间不变，后台 `wordstat-weekly-sync` 已于 `2026-11-14T07:53:37.051Z` 实际运行、0连续失败。生产备份为 `/home/ubuntu/onzo/data/backups/onzo-pre-wordstat-weekly-20261114-103950.sql.gz`，通知前状态另存 `/app/data/backups/wordstat-weekly-notification-before-reconcile-20261114.json`。前端 `/wordstat-weekly` 的真实表格与dry-run弹窗均已目检。
+- Timer v2 使用官方 CLI `help-action --invoke-function` 确认的 `invokeFunction` 和 `retryPolicy`，已创建 `onzo-wordstat-weekly-0900` / `a1s5d6fu9ofj0730ebpn`，状态ACTIVE，时间为 `0 1 ? * MON *`（UTC 每周一01:00，即北京时间09:00），固定 `weekly-20261114-v3`，不使用 `$latest`，不删除旧触发器。`BIND_EXISTING_VERSION_ONLY=true` 可只绑定已验收版本，已实测未重建函数版本。DLQ 未配置，不能宣称已有 DLQ；失败经函数报告与 ONZO 告警呈现。尚未到下一次周一触发，不能把配置ACTIVE写成未来运行已成功。证据目录 `temp/ops-exec/wordstat-cloud-migration-20261114/`。知识门禁新增 `pb_wordstat_cloud_weekly_production_20261114` 并同步两条旧条目，精确回读与检索第一通过，库藏367→368。Ozon 商品、价格、库存、广告与 `PROMO_AUTO_DECISION=false` 不变。
