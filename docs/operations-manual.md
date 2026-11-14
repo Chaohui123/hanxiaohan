@@ -643,7 +643,7 @@ node scripts/yandex-wordstat.mjs --phrase "ремень вариатора сн�
 - Carbon 的一次同步超时、一次提示词缺输入和两次 `MAX_TOKENS` 均保留原回执；缺输入导致的空候选不当作市场无机会。完整评审通过原 Batch continuation token 恢复，最终 `STOP`，实际模型与 prompt SHA-256 均可回读。原始与续写 usage 是累计口径，不重复相加，未虚构美元成本。
 - 完整方案：`temp/ops-exec/cloud-functions-selection-20261114/final-plan.md`，结构化终审：`evaluation.json`，原始模型回执、补验和购买意图证据均在同目录。当时云端生产 Scheduler 仍未创建，自建 28 天仍为 7/28；后续正式云端周报、生产回读与固定 Timer 见11.9，`PROMO_AUTO_DECISION=false` 不变。
 
-### 11.9 Wordstat 云端周报实施与验收（2026-11-14）
+### 11.9 Wordstat 云端周报基础链路（2026-11-14，当时v3；当前水位补全见11.10）
 
 - 实际实现位于 `tools/yandex-wordstat-monitor/`。函数 `onzo-wordstat-weekly` / `d4e0m0ceusl5q48jbgbi` 使用运行账号 `onzo-wordstat-worker` / `aje3hkir5flhraps1u6k` 的 metadata IAM；不使用 `YANDEX_API_KEY`、静态 S3 密钥、Seller Cookie 或飞书秘密。对象存储桶 `onzo-wordstat-reports-20261114` 为私有；ONZO 既有 `onzo-yandex-api` 账号只增加 `storage.viewer`，飞书通知继续留在 ONZO 服务端。
 - 已先以 `storage-probe-20261114` 验证 `X-YaCloud-SubjectToken` 的 PUT/GET 和 SHA-256 回读，再由 ONZO 服务器真实读取同一对象。正式 `weekly-20261114-v3` 报告为 `run_2026-11-14_794bb43d`，62 份原始回执、164625 字节，SHA-256 为 `6e92ca641db27662e9ff6663e7e4d348466bb5b053551ea98a6c02b06e4f0580`。同成功事件重放返回 `skippedDuplicateEvent=true`、`upstreamRequestsSent=false`，不得用新事件掩盖不明结果。
@@ -653,3 +653,13 @@ node scripts/yandex-wordstat.mjs --phrase "ремень вариатора сн�
 - 云端部署脚本为 `tools/yandex-wordstat-monitor/deploy/yc_deploy_and_bind_timer.sh`。必须提供 folder、桶、运行账号、Timer 调用账号和固定 `RELEASE_TAG`；默认不调用采集、不创建 Timer。存储探针需同时显式设置 `FUNCTION_ENTRYPOINT=src.storage_probe.handler` 与 `CONFIRM_WORDSTAT_PROBE=true`；真实周报需 `CONFIRM_WORDSTAT_LIVE_RUN=true`；生产 Timer 需 `CONFIRM_WORDSTAT_TIMER=true`，并确认生产读取、失败账本、ONZO 入库与通知幂等全部通过。
 - 生产预览已验证数据库0→0、未发送飞书，Seller 实时批次为200页9951条，自建28天仍为7/28。首次通知因卡片被重复封装为 `card.card` 返回11246；修复后增加真实结构回归测试，备份原失败状态后仅对明确拒绝的同一报告受控补发一次，飞书已接受并回读 `SENT`。重复同步保持1条记录且通知时间不变，后台 `wordstat-weekly-sync` 已于 `2026-11-14T07:53:37.051Z` 实际运行、0连续失败。生产备份为 `/home/ubuntu/onzo/data/backups/onzo-pre-wordstat-weekly-20261114-103950.sql.gz`，通知前状态另存 `/app/data/backups/wordstat-weekly-notification-before-reconcile-20261114.json`。前端 `/wordstat-weekly` 的真实表格与dry-run弹窗均已目检。
 - Timer v2 使用官方 CLI `help-action --invoke-function` 确认的 `invokeFunction` 和 `retryPolicy`，已创建 `onzo-wordstat-weekly-0900` / `a1s5d6fu9ofj0730ebpn`，状态ACTIVE，时间为 `0 1 ? * MON *`（UTC 每周一01:00，即北京时间09:00），固定 `weekly-20261114-v3`，不使用 `$latest`，不删除旧触发器。`BIND_EXISTING_VERSION_ONLY=true` 可只绑定已验收版本，已实测未重建函数版本。DLQ 未配置，不能宣称已有 DLQ；失败经函数报告与 ONZO 告警呈现。尚未到下一次周一触发，不能把配置ACTIVE写成未来运行已成功。证据目录 `temp/ops-exec/wordstat-cloud-migration-20261114/`。知识门禁新增 `pb_wordstat_cloud_weekly_production_20261114` 并同步两条旧条目，精确回读与检索第一通过，库藏367→368。Ozon 商品、价格、库存、广告与 `PROMO_AUTO_DECISION=false` 不变。
+
+### 11.10 每日水位检查与 daily 补全（2026-11-14，生产验收）
+
+- **口径与真实水位**：官方 AI 助手引用的[官方说明](https://aistudio.yandex.ru/ru/docs/search-api/concepts/wordstat)写明2026-10-07之后无统计，但实际 daily 在10-08和10-09仍返回数据；10-01至10-30窗口返回9点，末点10-09。不得写死官方日期，应以实际返回为准。当前 weekly 截止2026-09-28，daily补全截止2026-10-09，均非当前日实时数据。
+- **daily补全**：`src/daily_gap.py` 从最后完整周结束后的下一天开始，单段最多30天，保存实际日点、实际末点、目标截止日及缺失天数；不与 weekly 周量混算、不补0。两个低频词的400标记 `stage=daily_gap`，不得因此把有效主序列误判为整批失败。当前报告 `run_2026-11-14_9851f63f`，86份原始回执，SHA-256 `e31a9a4a42fd59799f986edbbdae84b7fcc1e656722b37582eea95ab34102e71`。
+- **每日单基准词探针**：`src/watermark.py` 通过 `force_refresh=true` 检查最新完整周，但既有 `OUTCOME_UNKNOWN` 不得因此重发。每次记录 `sourceAsOf`、`lastCheckedAt`、原始响应SHA-256和回执键；无变化返回 `NO_UPSTREAM_CHANGE`，实际只请求1次基准词，不全量、不重复通知。水位前进或同水位原始响应修订才生成新快照，历史报告不可变。
+- **版本与历史**：`pipelineVersion` 与数据修订键分开；程序升级可生成新结构快照，但相同数据水位下不能借升级无限全量。原始报告、修复前失败报告及正确报告均保留，生产当前3条历史记录。预览不写库不发通知，真实卡片为SENT，重复同步幂等且通知时间不变。生产备份 `/home/ubuntu/onzo/data/backups/onzo-pre-wordstat-watermark-20261114-123019.sql.gz`。
+- **页面与业务主次**：`/wordstat-weekly` 已目检 weekly/daily截止、最近检查时间、响应哈希和缺失天数。近期需求以 Seller 原生7天与四个不重叠周窗口的自建28天为主，Wordstat仅长期趋势与季节性参考，不用于“本周飙升”。
+- **Timer**：Monday `onzo-wordstat-weekly-0900` / `a1s5d6fu9ofj0730ebpn` 已通过 `update replace-actions` 原地固定 `weekly-20261114-v4c`，未删除旧Timer；每日 `onzo-wordstat-watermark-0930` / `a1s81iapc5uucuofjb46` 为ACTIVE，cron `30 1 * * ? *`（北京时间09:30）。二者均使用同一验收函数版本，不绑定 `$latest`，不与GitHub Actions双跑。DLQ仍未配置，未来触发须按实际回执验收。
+- **验证**：Python21项、全项目85文件821项测试通过，build及前端Vite构建通过，Lint 0 errors/215既有warnings。构建曾因 `registry.npmmirror.com` 的Corepack网络错误失败，随后只重建受影响的API与前端并通过 `/ready`，不当作代码故障。证据 `temp/ops-exec/wordstat-cloud-migration-20261114/`。知识沿既有 `pb_wordstat_cloud_weekly_production_20261114` 更新，不新增重复条目。
