@@ -23,6 +23,9 @@ wordstat:
   maxExpansionCandidatesPerSeed: 3
   weeklyLookbackWeeks: 53
   dailyStrictLookbackDays: 30
+  dailyGapFillEnabled: true
+  dailyGapChunkDays: 30
+  watermarkBenchmarkPhrase: "вакуумные пакеты для одежды"
   strictOperatorStrategy: "separate_daily_caliber"
 
 quotaAndRate:

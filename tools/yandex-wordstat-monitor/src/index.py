@@ -12,6 +12,7 @@ import httpx
 import yaml
 
 from src import ALGO_VERSION, SCHEMA_VERSION
+from src.daily_gap import fill_daily_gap
 from src.iam_metadata import MetadataIamTokenProvider, assert_no_forbidden_static_credentials
 from src.models import KeywordObservation, SellerValidationContext, WeeklyObservationReport
 from src.ozon_analyzer import OzonWordstatAnalyzer
@@ -56,6 +57,7 @@ def execute_weekly_pipeline(
     dry_run: bool = True,
     http_client: Optional[httpx.Client] = None,
     offline_fixture: bool = False,
+    revision_token: Optional[str] = None,
 ) -> Dict[str, Any]:
     assert_no_forbidden_static_credentials()
     existing_event = store.get_event_ledger(event_id)
@@ -77,7 +79,6 @@ def execute_weekly_pipeline(
     iso_year, iso_week, _ = run_dt.isocalendar()
     iso_week_str = f"{iso_year}-W{iso_week:02d}"
     cfg_hash = compute_config_hash(config)
-    idempotency_key = f"{iso_week_str}:{cfg_hash}:{ALGO_VERSION}"
     run_id = f"run_{run_date_str}_{hashlib.sha1(event_id.encode('utf-8')).hexdigest()[:8]}"
     now_iso = datetime.now(timezone.utc).replace(microsecond=0).isoformat()
     store.save_event_ledger(event_id, {
@@ -138,6 +139,7 @@ def execute_weekly_pipeline(
         top_resp = None
         dynamics_resp = None
         regions_resp = None
+        daily_gap_resp = None
         disposition, _ = analyzer._check_governance_disposition(phrase)
         if fetch_api and disposition == "eligible_observation":
             try:
@@ -159,6 +161,13 @@ def execute_weekly_pipeline(
                     daily_strict_lookback_days=int(ws_cfg.get("dailyStrictLookbackDays", 30)),
                 )
                 regions_resp = fetcher.getRegionsDistribution(phrase=phrase, region_type="cities", devices=devices)
+                if ws_cfg.get("dailyGapFillEnabled", False):
+                    daily_gap_resp = fill_daily_gap(
+                        fetcher=fetcher,
+                        weekly=dynamics_resp,
+                        run_date=run_date_str,
+                        chunk_days=int(ws_cfg.get("dailyGapChunkDays", 30)),
+                    )
             except OutcomeUnknownHaltedError:
                 halted_unknown = True
             except (QuotaBudgetExhaustedError, WordstatPermissionDeniedError):
@@ -176,6 +185,7 @@ def execute_weekly_pipeline(
             dynamics_resp=dynamics_resp,
             regions_resp=regions_resp,
         )
+        observation.dailyGapFill = daily_gap_resp
         return observation, top_resp
 
     seen_phrases = {" ".join(seed["phrase"].strip().lower().replace("ё", "е").split()) for seed in seeds}
@@ -234,10 +244,24 @@ def execute_weekly_pipeline(
     valid_as_of_dates = sorted(item.sourceAsOf for item in evaluated if item.sourceAsOf)
     global_as_of_min = valid_as_of_dates[0] if valid_as_of_dates else None
     global_as_of_max = valid_as_of_dates[-1] if valid_as_of_dates else None
+    daily_as_of_dates = sorted(
+        item.dailyGapFill.sourceAsOf
+        for item in evaluated
+        if item.dailyGapFill and item.dailyGapFill.sourceAsOf
+    )
+    latest_daily_as_of = daily_as_of_dates[-1] if daily_as_of_dates else None
+    revision_payload = {
+        "observations": [item.model_dump(mode="json") for item in evaluated],
+        "failures": [item.model_dump(mode="json") for item in fetcher.failed_diagnostics],
+    }
+    content_revision = hashlib.sha256(VerifiedWordstatStore.canonical_json_bytes(revision_payload)).hexdigest()
+    idempotency_key = f"{iso_week_str}:{cfg_hash}:{ALGO_VERSION}:{revision_token or content_revision}"
     scored_count = sum(1 for item in top10 if item.score.observationPriorityScore is not None)
-    if halted_by_critical or halted_unknown or (scored_count == 0 and fetcher.failed_diagnostics):
+    primary_failures = [item for item in fetcher.failed_diagnostics if item.stage != "daily_gap"]
+    daily_failures = [item for item in fetcher.failed_diagnostics if item.stage == "daily_gap"]
+    if halted_by_critical or halted_unknown or (scored_count == 0 and primary_failures):
         overall_status = "failed_alert_only"
-    elif fetcher.failed_diagnostics or scored_count < len(top10):
+    elif primary_failures or daily_failures or scored_count < len(top10):
         overall_status = "degraded_partial"
     else:
         overall_status = "success"
@@ -264,6 +288,8 @@ def execute_weekly_pipeline(
         "观察阈值不自动删除需求；高搜索量不自动等于竞争激烈，低搜索量不自动等于蓝海。",
         "扩词仅取topRequests结果并受总量、单种子、治理与预算约束；associations只留原始回执，不自动扩展为需求或评分。",
         "季节性仅提示补证、供货评估与内容准备，不是提前备货指令。",
+        "daily只补入实际返回的日粒度点，不与weekly周量混算；检查时间不等于数据截止时间，缺失不补0。",
+        "近1-3天需求以Ozon Seller原生7天及自建28天为主；Wordstat只作长期趋势和季节性参考，不用于本周飙升结论。",
         "只读分析，不抓Seller网页、不创建商品、不改价、不改库存、不开广告、不采购，PROMO_AUTO_DECISION=false。",
     ]
     if offline_fixture:
@@ -280,6 +306,7 @@ def execute_weekly_pipeline(
         overallStatus=overall_status,
         globalSourceAsOfMax=global_as_of_max,
         globalSourceAsOfMin=global_as_of_min,
+        latestDailySourceAsOf=latest_daily_as_of,
         budgetUsedToday=store.get_daily_budget_used(run_date_str),
         budgetLimitDaily=int(quota_cfg.get("dailyRequestBudget", 600)),
         top10Observations=top10,
@@ -341,6 +368,7 @@ def execute_weekly_pipeline(
         "latestAttemptManifest": latest_attempt_key,
         "latestValidManifest": latest_valid_key,
         "sourceAsOf": global_as_of_max,
+        "dailySourceAsOf": latest_daily_as_of,
         "scoredCount": scored_count,
         "upstreamRequestCount": store.get_daily_budget_used(run_date_str),
     }
@@ -369,6 +397,15 @@ class OfflineFixtureClient:
         if url.endswith("/topRequests"):
             return OfflineResponse({"totalCount": "1000", "results": [{"phrase": json["phrase"], "count": "1000"}], "associations": []})
         if url.endswith("/dynamics"):
+            if json.get("period") == "PERIOD_DAILY":
+                start = date.fromisoformat(json["fromDate"][:10])
+                end = date.fromisoformat(json["toDate"][:10])
+                daily_points = []
+                current = start
+                while current <= end:
+                    daily_points.append({"date": current.isoformat(), "count": "100", "share": 0.001})
+                    current += timedelta(days=1)
+                return OfflineResponse({"results": daily_points})
             return OfflineResponse({"results": self.points})
         if url.endswith("/regions"):
             return OfflineResponse({"results": [
@@ -383,6 +420,10 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     logging.basicConfig(level=os.environ.get("LOG_LEVEL", "INFO"))
     assert_no_forbidden_static_credentials()
     messages = (event or {}).get("messages") or []
+    payload = (event or {}).get("payload") or (messages[0].get("payload") if messages else None)
+    if payload in ("wordstat-weekly", "wordstat-watermark"):
+        from src.watermark import handler as watermark_handler
+        return watermark_handler(event, context)
     event_meta = (event or {}).get("event_metadata") or (messages[0].get("event_metadata") if messages else {}) or {}
     event_id = str(event_meta.get("event_id") or getattr(context, "request_id", None) or "manual-event")
     run_date = os.environ.get("WORDSTAT_OVERRIDE_RUN_DATE") or datetime.now(timezone.utc).date().isoformat()

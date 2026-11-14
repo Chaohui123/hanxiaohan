@@ -141,6 +141,22 @@ class SeasonalityHint(BaseModel):
     prohibitedActions: List[str] = Field(default_factory=list)
 
 
+class DailyGapFill(BaseModel):
+    status: Literal["not_needed", "complete", "partial", "no_data", "request_failed", "no_weekly_baseline"]
+    requestedFromDate: Optional[str] = None
+    requestedToDate: Optional[str] = None
+    targetThroughDate: Optional[str] = None
+    sourceAsOf: Optional[str] = None
+    coveredThroughDate: Optional[str] = None
+    missingFromDate: Optional[str] = None
+    missingCalendarDays: Optional[int] = None
+    returnedPointsCount: int = 0
+    lastCheckedAt: Optional[str] = None
+    requestFailed: bool = False
+    points: List[WordstatDynamicsPoint] = Field(default_factory=list)
+    note: str
+
+
 class KeywordObservation(BaseModel):
     phrase: str
     zhDraft: str
@@ -173,6 +189,7 @@ class KeywordObservation(BaseModel):
     yandexSearchUrl: str
     ozonSearchUrl: str
     warnings: List[str] = Field(default_factory=list)
+    dailyGapFill: Optional[DailyGapFill] = None
 
 
 class SellerValidationContext(BaseModel):
@@ -191,6 +208,7 @@ class FailedRequestDiagnostic(BaseModel):
     endpoint: str
     errorType: Literal["RATE_LIMIT_429", "UNAVAILABLE_503", "PERMISSION_403", "OUTCOME_UNKNOWN", "BUDGET_EXHAUSTED", "OTHER_HTTP_ERROR"]
     httpStatus: Optional[int] = None
+    stage: Literal["primary", "daily_gap", "watermark"] = "primary"
     message: str
     occurredAt: str
 
@@ -207,6 +225,7 @@ class WeeklyObservationReport(BaseModel):
     overallStatus: Literal["success", "degraded_partial", "failed_alert_only"]
     globalSourceAsOfMax: Optional[str] = None
     globalSourceAsOfMin: Optional[str] = None
+    latestDailySourceAsOf: Optional[str] = None
     budgetUsedToday: int
     budgetLimitDaily: int
     top10Observations: List[KeywordObservation] = Field(default_factory=list)

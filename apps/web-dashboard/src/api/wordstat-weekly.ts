@@ -13,6 +13,14 @@ export type WeeklyObservation = {
   referenceCities: Array<{ nameZh: string; rawShare: number | null; affinityIndex: number | null }>;
   seasonality: { status: string; uncertaintyNote: string; estimatedDaysBand?: number[] | null };
   warnings: string[];
+  dailyGapFill?: {
+    status: string;
+    sourceAsOf: string | null;
+    returnedPointsCount: number;
+    missingCalendarDays: number | null;
+    targetThroughDate: string | null;
+    note: string;
+  } | null;
   yandexSearchUrl: string;
   ozonSearchUrl: string;
 };
@@ -23,6 +31,16 @@ export type WordstatWeeklyReport = {
   runDate: string;
   generatedAt: string;
   globalSourceAsOfMax: string | null;
+  latestDailySourceAsOf?: string | null;
+  wordstatWatermark?: {
+    sourceAsOf: string | null;
+    observedSourceAsOf: string | null;
+    lastCheckedAt: string;
+    responseHash: string;
+    status: string;
+    triggerReason: string;
+    lastFullReportId: string | null;
+  } | null;
   top10Observations: WeeklyObservation[];
   failedRequests: Array<{ phrase: string; errorType: string; httpStatus: number | null; message: string }>;
   sellerValidationContext: {

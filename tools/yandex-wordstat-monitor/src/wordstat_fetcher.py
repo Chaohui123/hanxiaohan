@@ -191,9 +191,10 @@ class WordstatFetcher:
         cache_fingerprint: str,
         request_body: Dict[str, Any],
         source_as_of_extractor: Callable[[Dict[str, Any]], Optional[str]],
+        force_refresh: bool = False,
     ) -> Dict[str, Any]:
         existing_state = self.store.get_request_state(cache_fingerprint)
-        if existing_state and existing_state.get("status") == "SUCCEEDED":
+        if not force_refresh and existing_state and existing_state.get("status") == "SUCCEEDED":
             raw_rel_key = existing_state.get("rawRelativeKey")
             if raw_rel_key:
                 cached_envelope = self.store.read_json(raw_rel_key)
@@ -439,6 +440,7 @@ class WordstatFetcher:
         devices: Optional[List[str]] = None,
         strict_operator_strategy: str = "separate_daily_caliber",
         daily_strict_lookback_days: int = 30,
+        force_refresh: bool = False,
     ) -> WordstatDynamicsResponseNormalized:
         target_regions = regions if regions is not None else [225]
         target_devices = devices if devices is not None else ["all"]
@@ -502,6 +504,7 @@ class WordstatFetcher:
             cache_fingerprint=fp,
             request_body=body,
             source_as_of_extractor=_extract_last_date,
+            force_refresh=force_refresh,
         )
         raw_rows = raw.get("results") or []
         points: List[WordstatDynamicsPoint] = []

@@ -580,5 +580,181 @@ def test_top_result_expansion_respects_governance_and_never_expands_associations
     assert expanded[0]["seedStatus"] == "top_result_expansion_requires_seller_verification"
     assert [item["phrase"] for item in report["blockedOrExcludedItems"]] == ["датчик давления в шинах", "вакуумные пакеты ikea"]
     assert not any(call["body"]["phrase"] == "когтеточка для кошек" for call in client.calls)
-    assert result["upstreamRequestCount"] == 5
-    assert len(report["rawReceiptKeys"]) == 5
+    assert result["upstreamRequestCount"] == 7
+    assert len(report["rawReceiptKeys"]) == 7
+
+
+def test_daily_gap_fill_preserves_actual_watermark_and_missing_dates(tmp_path: Path) -> None:
+    from src.daily_gap import fill_daily_gap
+    from src.models import WordstatDynamicsPoint, WordstatDynamicsResponseNormalized
+
+    weekly = WordstatDynamicsResponseNormalized(
+        phrase="вакуумные пакеты для одежды",
+        caliber="weekly_plus_only",
+        period="weekly",
+        operatorMode="plus_only_weekly",
+        regions=[225],
+        devices=["all"],
+        fromDate="2025-11-03",
+        toDate="2026-11-08",
+        capturedAt="2026-11-14T00:00:00+00:00",
+        sourceAsOf="2026-09-28",
+        results=[WordstatDynamicsPoint(date="2026-09-28", count=1457)],
+    )
+    daily_points = [
+        {"date": f"2026-10-{day:02d}T00:00:00Z", "count": "200", "share": 0.001}
+        for day in range(5, 10)
+    ]
+    requests: List[Dict[str, Any]] = []
+
+    def daily_api(request: httpx.Request) -> httpx.Response:
+        requests.append(json.loads(request.content.decode("utf-8")))
+        return httpx.Response(200, json={"results": daily_points})
+
+    fetcher = WordstatFetcher(
+        folder_id="b1gtestfolder",
+        token_getter=lambda: "offline-not-a-credential",
+        store=VerifiedWordstatStore(LocalDirectoryStorageBackend(tmp_path)),
+        run_id="daily-gap-test",
+        run_date="2026-11-14",
+        http_client=httpx.Client(transport=httpx.MockTransport(daily_api)),
+        sleeper=lambda _: None,
+    )
+    result = fill_daily_gap(fetcher, weekly, "2026-11-14")
+    assert result.sourceAsOf == "2026-10-09"
+    assert result.returnedPointsCount == 5
+    assert result.targetThroughDate == "2026-11-13"
+    assert result.missingFromDate == "2026-10-10"
+    assert result.missingCalendarDays == 35
+    assert result.status == "partial"
+    assert requests[0]["fromDate"] == "2026-10-05T00:00:00Z"
+    assert requests[0]["toDate"] == "2026-11-03T00:00:00Z"
+    assert weekly.results[0].count == 1457
+
+
+def test_daily_gap_rejection_does_not_fill_zero_or_retry(tmp_path: Path) -> None:
+    from src.daily_gap import fill_daily_gap
+    from src.models import WordstatDynamicsPoint, WordstatDynamicsResponseNormalized
+
+    weekly = WordstatDynamicsResponseNormalized(
+        phrase="вакуумные пакеты для одежды",
+        caliber="weekly_plus_only",
+        period="weekly",
+        operatorMode="plus_only_weekly",
+        regions=[225],
+        devices=["all"],
+        fromDate="2025-11-03",
+        toDate="2026-11-08",
+        capturedAt="2026-11-14T00:00:00+00:00",
+        sourceAsOf="2026-09-28",
+        results=[WordstatDynamicsPoint(date="2026-09-28", count=1457)],
+    )
+    calls = {"count": 0}
+
+    def reject(_request: httpx.Request) -> httpx.Response:
+        calls["count"] += 1
+        return httpx.Response(400, json={"message": "Bad Request"})
+
+    fetcher = WordstatFetcher(
+        folder_id="b1gtestfolder",
+        token_getter=lambda: "offline-not-a-credential",
+        store=VerifiedWordstatStore(LocalDirectoryStorageBackend(tmp_path)),
+        run_id="daily-gap-reject",
+        run_date="2026-11-14",
+        http_client=httpx.Client(transport=httpx.MockTransport(reject)),
+        sleeper=lambda _: None,
+    )
+    result = fill_daily_gap(fetcher, weekly, "2026-11-14")
+    assert result.status == "request_failed"
+    assert result.sourceAsOf is None
+    assert result.returnedPointsCount == 0
+    assert result.missingCalendarDays == 40
+    assert result.requestFailed is True
+    assert calls["count"] == 1
+
+
+def test_watermark_daily_probe_skips_duplicates_and_preserves_revision_history(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    from src.index import OfflineFixtureClient, handler
+
+    class CountingFixture(OfflineFixtureClient):
+        def __init__(self, run_date: str):
+            super().__init__(run_date)
+            self.calls = 0
+
+        def post(self, url: str, json: Dict[str, Any], headers: Dict[str, str]):
+            self.calls += 1
+            return super().post(url, json, headers)
+
+    monkeypatch.setenv("WORDSTAT_STORAGE_BACKEND", "local")
+    monkeypatch.setenv("WORDSTAT_LOCAL_STORAGE_DIR", str(tmp_path))
+    monkeypatch.setenv("YANDEX_CLOUD_FOLDER_ID", "b1gtestfolder")
+    monkeypatch.setenv("WORDSTAT_OVERRIDE_RUN_DATE", "2026-11-14")
+    client = CountingFixture("2026-11-14")
+    context = {"offlineHttpClient": client}
+    monkeypatch.setattr("src.watermark.MetadataIamTokenProvider.get_token", lambda self: "offline-not-a-credential")
+
+    def invoke(event_id: str):
+        return handler({"messages": [{"event_metadata": {"event_id": event_id}, "payload": "wordstat-watermark"}]}, context)
+
+    first = invoke("watermark-first")
+    assert first["status"] == "FULL_REPORT_GENERATED"
+    assert first["sourceAsOf"] == "2026-11-02"
+    assert len(first["responseHash"]) == 64
+    store = VerifiedWordstatStore(LocalDirectoryStorageBackend(tmp_path))
+    first_watermark = store.read_json("watermark/latest.json")
+    first_report = store.read_json(first_watermark["lastReportStorageKey"].removeprefix("wordstat-weekly/"))
+    assert first_report["latestDailySourceAsOf"] == "2026-11-13"
+    assert first_report["allEvaluatedObservations"][0]["dailyGapFill"]["status"] == "complete"
+    calls_after_first = client.calls
+
+    duplicate = invoke("watermark-first")
+    assert duplicate["skippedDuplicateEvent"] is True
+    assert duplicate["upstreamRequestsSent"] is False
+    assert client.calls == calls_after_first
+
+    unchanged = invoke("watermark-unchanged")
+    assert unchanged["status"] == "NO_UPSTREAM_CHANGE"
+    assert unchanged["fullReport"] is None
+    assert client.calls == calls_after_first + 1
+
+    client.points[-1]["count"] = "9999"
+    revised = invoke("watermark-revised")
+    assert revised["status"] == "FULL_REPORT_GENERATED"
+    assert revised["triggerReason"] == "historical_revision"
+    revised_watermark = store.read_json("watermark/latest.json")
+    revised_report = store.read_json(revised_watermark["lastReportStorageKey"].removeprefix("wordstat-weekly/"))
+    assert revised_report["idempotencyKey"] != first_report["idempotencyKey"]
+    assert store.read_json(first_watermark["lastReportStorageKey"].removeprefix("wordstat-weekly/")) == first_report
+
+
+def test_daily_gap_failure_does_not_fail_valid_primary_weekly_receipt(tmp_path: Path) -> None:
+    config = dict(DEFAULT_CONFIG)
+    config["seedPhrases"] = [DEFAULT_CONFIG["seedPhrases"][0]]
+
+    def api(request: httpx.Request) -> httpx.Response:
+        body = json.loads(request.content.decode("utf-8"))
+        if str(request.url).endswith("/topRequests"):
+            return httpx.Response(200, json={"totalCount": "1000", "results": [{"phrase": body["phrase"], "count": "1000"}], "associations": []})
+        if str(request.url).endswith("/regions"):
+            return httpx.Response(200, json={"results": []})
+        if body.get("period") == "PERIOD_DAILY":
+            return httpx.Response(400, json={"message": "Bad Request"})
+        return httpx.Response(200, json={"results": _build_weekly_points("2026-09-28", weeks=48)})
+
+    store = VerifiedWordstatStore(LocalDirectoryStorageBackend(tmp_path))
+    result = execute_weekly_pipeline(
+        config=config,
+        store=store,
+        folder_id="b1gtestfolder",
+        token_getter=lambda: "offline-not-a-credential",
+        event_id="daily-gap-is-partial",
+        run_date_str="2026-11-14",
+        http_client=httpx.Client(transport=httpx.MockTransport(api)),
+    )
+    assert result["statusCode"] == 200
+    assert result["overallStatus"] == "degraded_partial"
+    saved = store.read_json(result["reportStorageKey"].removeprefix("wordstat-weekly/"))
+    assert saved["failedRequests"][0]["stage"] == "daily_gap"
+    assert saved["allEvaluatedObservations"][0]["score"]["observationPriorityScore"] is None
+    assert saved["allEvaluatedObservations"][0]["dailyGapFill"]["sourceAsOf"] is None
+    assert store.get_event_ledger("daily-gap-is-partial")["status"] == "COMPLETED"

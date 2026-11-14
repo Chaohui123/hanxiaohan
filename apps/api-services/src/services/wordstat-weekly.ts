@@ -87,6 +87,30 @@ async function existingReport(db: DbAdapter, report: WeeklyReport): Promise<Reco
   return rows[0];
 }
 
+export async function readWordstatWatermark(client: ObjectReader, bucket: string): Promise<Record<string, unknown> | null> {
+  const raw = await client.getObject(bucket, "wordstat-weekly/watermark/latest.json");
+  if (!raw) return null;
+  const value = JSON.parse(raw.toString("utf8")) as Record<string, unknown>;
+  const checkedAt = requiredText(value.lastCheckedAt, "lastCheckedAt");
+  if (!Number.isFinite(Date.parse(checkedAt)) || Date.parse(checkedAt) > Date.now() + 300_000) throw new Error("Watermark lastCheckedAt is invalid or in the future");
+  for (const field of ["sourceAsOf", "observedSourceAsOf"]) {
+    const date = value[field];
+    if (date !== null && date !== undefined && (!/^\d{4}-\d{2}-\d{2}$/.test(String(date)) || !Number.isFinite(Date.parse(String(date))))) throw new Error(`Watermark ${field} is invalid`);
+  }
+  const responseHash = requiredText(value.responseHash, "responseHash", 64);
+  if (!/^[a-f0-9]{64}$/.test(responseHash)) throw new Error("Watermark responseHash is invalid");
+  return {
+    sourceAsOf: value.sourceAsOf ?? null,
+    observedSourceAsOf: value.observedSourceAsOf ?? null,
+    lastCheckedAt: checkedAt,
+    responseHash,
+    status: requiredText(value.status, "watermark status"),
+    triggerReason: requiredText(value.triggerReason, "triggerReason"),
+    lastFullReportId: typeof value.lastFullReportId === "string" ? value.lastFullReportId : null,
+    rawReceiptKey: requiredText(value.rawReceiptKey, "rawReceiptKey", 1024),
+  };
+}
+
 export async function syncWordstatWeekly(options: SyncOptions): Promise<Record<string, unknown>> {
   const bucket = options.bucket || process.env.WORDSTAT_CLOUD_BUCKET;
   if (!bucket) throw new Error("WORDSTAT_CLOUD_BUCKET is required for Wordstat cloud sync");
@@ -105,7 +129,8 @@ export async function syncWordstatWeekly(options: SyncOptions): Promise<Record<s
   const actualSha256 = createHash("sha256").update(raw).digest("hex");
   if (raw.length !== expectedLength || actualSha256 !== expectedSha256) throw new Error("Report readback byte length or SHA-256 mismatch");
   const report = await withLiveSellerContext(options.db, validateWeeklyReport(JSON.parse(raw.toString("utf8"))));
-  if (options.dryRun) return { status: "DRY_RUN", reportId: report.reportId, sourceAsOf: report.globalSourceAsOfMax, sellerValidationContext: report.sellerValidationContext, card: buildWordstatWeeklyCard(report), databaseWritten: false, notificationSent: false };
+  const watermark = await readWordstatWatermark(options.client, bucket);
+  if (options.dryRun) return { status: "DRY_RUN", reportId: report.reportId, sourceAsOf: report.globalSourceAsOfMax, dailySourceAsOf: report.latestDailySourceAsOf ?? null, sellerValidationContext: report.sellerValidationContext, wordstatWatermark: watermark, card: buildWordstatWeeklyCard(report), databaseWritten: false, notificationSent: false };
   const existing = await existingReport(options.db, report);
   if (existing) {
     if (existing.raw_sha256 !== actualSha256) throw new Error("Existing report hash differs from the new object");
@@ -143,13 +168,15 @@ export async function syncWordstatWeekly(options: SyncOptions): Promise<Record<s
   return { status: report.overallStatus, reportId: report.reportId, idempotent: false, notificationStatus, sourceAsOf: report.globalSourceAsOfMax, rawSha256: actualSha256 };
 }
 
-export async function latestWordstatWeekly(db: DbAdapter): Promise<Record<string, unknown> | null> {
+export async function latestWordstatWeekly(db: DbAdapter, client?: ObjectReader): Promise<Record<string, unknown> | null> {
   const rows = await db.all<Record<string, unknown>>("SELECT * FROM wordstat_weekly_reports ORDER BY created_at DESC LIMIT 1");
   if (!rows.length) return null;
   const row = rows[0];
+  const watermark = client ? await readWordstatWatermark(client, process.env.WORDSTAT_CLOUD_BUCKET || "") : null;
   const report = await withLiveSellerContext(db, validateWeeklyReport(JSON.parse(String(row.report_json))));
   return {
     ...report,
+    wordstatWatermark: watermark,
     storage: { bucket: row.storage_bucket, key: row.storage_key, sha256: row.raw_sha256 },
     notification: { status: row.notification_status, error: row.notification_error, notifiedAt: row.notified_at },
     persistedAt: row.created_at,

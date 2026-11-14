@@ -156,6 +156,32 @@ describe("Wordstat weekly cloud sync", () => {
     expect(SEARCH_ANALYTICS_DDL).toContain("CREATE TABLE IF NOT EXISTS wordstat_weekly_reports");
     expect(SEARCH_ANALYTICS_DDL).toContain("idempotency_key TEXT UNIQUE NOT NULL");
   });
+
+  it("reads actual watermark dates and preserves daily caliber in the card", async () => {
+    const { readWordstatWatermark, latestWordstatWeekly } = await import("../src/services/wordstat-weekly.js");
+    const watermark = {
+      sourceAsOf: "2026-09-28",
+      observedSourceAsOf: "2026-09-28",
+      lastCheckedAt: new Date().toISOString(),
+      responseHash: "a".repeat(64),
+      status: "NO_UPSTREAM_CHANGE",
+      triggerReason: "same_source_and_raw_response_hash",
+      lastFullReportId: "run-weekly-test",
+      rawReceiptKey: "wordstat-weekly/raw/benchmark.json",
+    };
+    const client = { getObject: async () => Buffer.from(JSON.stringify(watermark)) };
+    await expect(readWordstatWatermark(client, "onzo-test-bucket")).resolves.toMatchObject({ sourceAsOf: "2026-09-28", status: "NO_UPSTREAM_CHANGE" });
+    const db = new FakeDb();
+    const input = report() as Record<string, unknown>;
+    input.latestDailySourceAsOf = "2026-10-09";
+    (input.top10Observations as Array<Record<string, unknown>>)[0].dailyGapFill = { sourceAsOf: "2026-10-09", status: "partial", missingCalendarDays: 35 };
+    db.rows.push({ report_json: JSON.stringify(input), storage_bucket: "onzo-test-bucket", storage_key: "report.json", raw_sha256: "a".repeat(64), notification_status: "SENT", notification_error: null, notified_at: null, created_at: new Date().toISOString() });
+    const latest = await latestWordstatWeekly(db as never, client);
+    expect(latest?.wordstatWatermark).toMatchObject({ sourceAsOf: "2026-09-28", status: "NO_UPSTREAM_CHANGE" });
+    const card = buildWordstatWeeklyCard(validateWeeklyReport(latest));
+    expect(JSON.stringify(card)).toContain("2026-10-09");
+    expect(JSON.stringify(card)).toContain("不用于本周飙升");
+  });
 });
 
 describe("Feishu interactive card delivery", () => {

@@ -21,7 +21,7 @@ export function createWordstatWeeklyRouter(options: WordstatWeeklyRouterOptions 
 
   router.get("/yandex-cloud/wordstat/weekly/latest", async (_req, res) => {
     try {
-      res.json({ success: true, data: await latestWordstatWeekly(await resolveDb()) });
+      res.json({ success: true, data: await latestWordstatWeekly(await resolveDb(), client) });
     } catch (error) { sendError(res, error); }
   });
 

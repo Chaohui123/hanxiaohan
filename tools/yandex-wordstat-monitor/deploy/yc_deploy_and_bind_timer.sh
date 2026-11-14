@@ -9,7 +9,8 @@ set -euo pipefail
 
 FUNCTION_NAME="${FUNCTION_NAME:-onzo-wordstat-weekly}"
 TIMER_NAME="${TIMER_NAME:-onzo-wordstat-weekly-0900}"
-CRON_EXPRESSION="0 1 ? * MON *"
+CRON_EXPRESSION="${TIMER_CRON_EXPRESSION:-0 1 ? * MON *}"
+TIMER_PAYLOAD="${TIMER_PAYLOAD:-wordstat-weekly}"
 if [[ "${RELEASE_TAG}" == "\$latest" || "${RELEASE_TAG}" == "latest" ]]; then
   echo "严禁将生产 Timer 直接绑定到未经验证的 \$latest 标签" >&2
   exit 1
@@ -104,10 +105,14 @@ if [[ "${CONFIRM_WORDSTAT_TIMER:-false}" != "true" ]]; then
   echo "函数版本已保留；CONFIRM_WORDSTAT_TIMER未开启，不创建Timer"
   exit 0
 fi
+TIMER_EXISTS=false
 if yc serverless trigger v2 get --name "${TIMER_NAME}" --folder-id "${YANDEX_CLOUD_FOLDER_ID}" >/dev/null 2>&1; then
-  echo "Timer已存在，不删除、不覆盖；请回读现有版本标签后再决定是否需要迁移"
-  yc serverless trigger v2 get --name "${TIMER_NAME}" --folder-id "${YANDEX_CLOUD_FOLDER_ID}" --format=yaml
-  exit 0
+  if [[ "${CONFIRM_WORDSTAT_TIMER_UPDATE:-false}" != "true" ]]; then
+    echo "Timer已存在，不删除、不覆盖；请回读现有版本标签后再决定是否需要迁移"
+    yc serverless trigger v2 get --name "${TIMER_NAME}" --folder-id "${YANDEX_CLOUD_FOLDER_ID}" --format=yaml
+    exit 0
+  fi
+  TIMER_EXISTS=true
 fi
 TIMER_ACTION="$(python3 - "${FUNCTION_ID}" "${RELEASE_TAG}" "${TIMER_INVOKER_SA_ID}" "${DLQ_QUEUE_ID:-}" "${DLQ_SERVICE_ACCOUNT_ID:-}" <<'PY'
 import json
@@ -124,11 +129,18 @@ if dlq_queue:
 print(json.dumps(action, separators=(",", ":")))
 PY
 )"
-yc serverless trigger v2 create timer \
-  --name "${TIMER_NAME}" \
-  --folder-id "${YANDEX_CLOUD_FOLDER_ID}" \
-  --cron-expression "${CRON_EXPRESSION}" \
-  --payload "wordstat-weekly" \
-  --action "${TIMER_ACTION}" \
-  --format=yaml
+if [[ "${TIMER_EXISTS}" == "true" ]]; then
+  yc serverless trigger v2 update replace-actions "${TIMER_NAME}" \
+    --folder-id "${YANDEX_CLOUD_FOLDER_ID}" \
+    --action "${TIMER_ACTION}" \
+    --format=yaml
+else
+  yc serverless trigger v2 create timer \
+    --name "${TIMER_NAME}" \
+    --folder-id "${YANDEX_CLOUD_FOLDER_ID}" \
+    --cron-expression "${CRON_EXPRESSION}" \
+    --payload "${TIMER_PAYLOAD}" \
+    --action "${TIMER_ACTION}" \
+    --format=yaml
+fi
 yc serverless trigger v2 get --name "${TIMER_NAME}" --folder-id "${YANDEX_CLOUD_FOLDER_ID}" --format=yaml
