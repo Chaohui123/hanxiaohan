@@ -398,6 +398,19 @@ def test_malformed_wordstat_receipt_is_uncertain_not_zero(tmp_path):
     assert meta["error"]
 
 
+def test_cli_defaults_to_reviewed_overrides_and_explicit_path_wins(tmp_path):
+    parser = analyzer.build_parser()
+    default_args = parser.parse_args(["--input", "input.csv"])
+    assert Path(default_args.translation_overrides) == analyzer.DEFAULT_TRANSLATION_OVERRIDES
+    assert analyzer.DEFAULT_TRANSLATION_OVERRIDES.is_file()
+    explicit = tmp_path / "explicit.yaml"
+    explicit.write_text("queries: {}\n", encoding="utf-8")
+    explicit_args = parser.parse_args([
+        "--input", "input.csv", "--translation-overrides", str(explicit)
+    ])
+    assert Path(explicit_args.translation_overrides) == explicit
+
+
 def test_translation_overrides_remain_draft_and_urls_use_quote_plus():
     frame = pd.DataFrame({"query": ["пакеты для одежды"]})
     result = analyzer.generate_links_and_draft_placeholders(

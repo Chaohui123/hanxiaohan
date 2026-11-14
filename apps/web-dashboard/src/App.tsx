@@ -70,7 +70,7 @@ const menuItems: MenuProps["items"] = [
     children: [
       { key: "/", icon: <DashboardOutlined />, label: <Link to="/">工作台</Link> },
       { key: "/market", icon: <LineChartOutlined />, label: <Link to="/market">大盘分析</Link> },
-      { key: "/search-analytics", icon: <LineChartOutlined />, label: <Link to="/search-analytics">搜索查询分析</Link> },
+      { key: "/search-analytics", icon: <LineChartOutlined />, label: <Link to="/search-analytics">搜索查询与选品</Link> },
       { key: "/wordstat-weekly", icon: <LineChartOutlined />, label: <Link to="/wordstat-weekly">Wordstat云端观察</Link> },
     ],
   },

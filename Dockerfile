@@ -46,6 +46,7 @@ FROM node:22-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
+ENV SEARCH_SELECTION_CONFIG_ROOT=/app/tools
 ENV PLAYWRIGHT_SKIP_BROWSER_DOWNLOAD=1
 
 # Install runtime system dependencies
@@ -69,6 +70,10 @@ COPY --from=builder /app/package.json /app/pnpm-workspace.yaml /app/pnpm-lock.ya
 COPY --from=builder /app/node_modules ./node_modules
 COPY --from=builder /app/apps ./apps
 COPY --from=builder /app/packages ./packages
+COPY tools/yandex-wordstat-monitor/config.yaml /app/tools/yandex-wordstat-monitor/config.yaml
+COPY tools/ozon-search-analyzer/config.yaml /app/tools/ozon-search-analyzer/config.yaml
+COPY tools/ozon-search-analyzer/blacklist.txt /app/tools/ozon-search-analyzer/blacklist.txt
+COPY tools/ozon-search-analyzer/review-overrides.yaml /app/tools/ozon-search-analyzer/review-overrides.yaml
 
 # Create runtime directories
 RUN mkdir -p /app/data/backups /app/data/browser /app/logs /app/uploads /app/dead-letter /app/data/tmp-images

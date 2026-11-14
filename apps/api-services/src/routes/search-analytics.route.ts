@@ -6,6 +6,8 @@ import { getDb, type DbAdapter } from "../db/connection.js";
 import { SearchBatchError } from "../services/search-analytics/batch.js";
 import { SEARCH_METRICS, SEARCH_METRIC_DEFINITION_VERSION } from "../services/search-analytics/metric-definitions.js";
 import { getSearchTrend, listSearchRuns, publishSearchBatch, querySearchSnapshots, type QueryOptions } from "../services/search-analytics/store.js";
+import { analyzeSearchSelection, SelectionAnalysisError, toSelectionResponse } from "../services/search-analytics/selection-analyzer.js";
+import { buildSelectionWorkbook } from "../services/search-analytics/selection-export.js";
 import { emitEvent } from "../services/notification-events.js";
 
 function validIngestKey(provided: string): boolean {
@@ -148,6 +150,37 @@ export function createSearchAnalyticsRouter(): Router {
       const days = req.query.days === undefined ? 90 : Number(req.query.days);
       res.json(await getSearchTrend(db, String(req.query.query || ""), req.query.companyId ? String(req.query.companyId) : undefined, days));
     } catch (error) { res.status(error instanceof SearchBatchError ? 400 : 500).json({ success: false, error: (error as Error).message }); }
+  });
+  router.get("/search-analytics/selection", async (req, res) => {
+    try {
+      const db = await getDb();
+      if (!db) { res.status(503).json({ success: false, error: "DB unavailable" }); return; }
+      const runId = req.query.runId ? String(req.query.runId) : undefined;
+      const analysis = await analyzeSearchSelection(db, { runId });
+      res.json(toSelectionResponse(analysis));
+    } catch (error) {
+      const status = error instanceof SelectionAnalysisError ? error.statusCode : 500;
+      res.status(status).json({ success: false, error: (error as Error).message, code: error instanceof SelectionAnalysisError ? error.code : "SELECTION_ANALYSIS_FAILED" });
+    }
+  });
+  router.get("/search-analytics/selection/export", async (req, res) => {
+    try {
+      const db = await getDb();
+      if (!db) { res.status(503).json({ success: false, error: "DB unavailable" }); return; }
+      const runId = req.query.runId ? String(req.query.runId) : undefined;
+      const analysis = await analyzeSearchSelection(db, { runId });
+      const workbook = await buildSelectionWorkbook(analysis);
+      const safeRunId = String(analysis.manifest.runId).replace(/[^\w.-]/g, "_");
+      res.setHeader("Content-Type", "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet");
+      res.setHeader("Content-Disposition", `attachment; filename="ozon-selection-${safeRunId}.xlsx"`);
+      res.setHeader("X-Search-Selection-Run-Id", String(analysis.manifest.runId));
+      res.send(workbook);
+    } catch (error) {
+      if (!res.headersSent) {
+        const status = error instanceof SelectionAnalysisError ? error.statusCode : 500;
+        res.status(status).json({ success: false, error: (error as Error).message, code: error instanceof SelectionAnalysisError ? error.code : "SELECTION_ANALYSIS_FAILED" });
+      }
+    }
   });
   router.get("/search-analytics/queries", async (req, res) => {
     try {

@@ -83,6 +83,7 @@ RUN sed -i 's|dl-cdn.alpinelinux.org|mirrors.tuna.tsinghua.edu.cn|g' /etc/apk/re
 WORKDIR /app
 
 ENV NODE_ENV=production
+ENV SEARCH_SELECTION_CONFIG_ROOT=/app/tools
 
 # Alpine Chromium (musl native, no glibc compat issues) + Playwright system deps + runtime utils
 # NOTE: Do NOT use "npx playwright install chromium" — it downloads glibc binaries
@@ -101,6 +102,10 @@ COPY --from=builder /app/packages ./packages
 COPY --from=builder /app/apps ./apps
 COPY --from=builder /app/package.json ./package.json
 COPY --from=builder /app/pnpm-workspace.yaml ./
+COPY tools/yandex-wordstat-monitor/config.yaml /app/tools/yandex-wordstat-monitor/config.yaml
+COPY tools/ozon-search-analyzer/config.yaml /app/tools/ozon-search-analyzer/config.yaml
+COPY tools/ozon-search-analyzer/blacklist.txt /app/tools/ozon-search-analyzer/blacklist.txt
+COPY tools/ozon-search-analyzer/review-overrides.yaml /app/tools/ozon-search-analyzer/review-overrides.yaml
 
 # Runtime directories (all persisted via Docker volumes)
 RUN mkdir -p /app/data/backups /app/data/browser /app/logs \

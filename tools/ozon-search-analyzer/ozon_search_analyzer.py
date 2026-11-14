@@ -34,6 +34,7 @@ BASE_DIR = Path(__file__).resolve().parent
 DEFAULT_CONFIG = BASE_DIR / "config.yaml"
 DEFAULT_BLACKLIST = BASE_DIR / "blacklist.txt"
 DEFAULT_GOVERNANCE_CONFIG = BASE_DIR.parent / "yandex-wordstat-monitor" / "config.yaml"
+DEFAULT_TRANSLATION_OVERRIDES = BASE_DIR / "review-overrides.yaml"
 OUTPUT_EXCEL = "ozon_selection_report.xlsx"
 OUTPUT_BRIEF = "ozon_selection_brief.md"
 OUTPUT_MANIFEST = "run_manifest.json"
@@ -1951,7 +1952,10 @@ def build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--governance-config", default=str(DEFAULT_GOVERNANCE_CONFIG), help="中央governanceRules YAML"
     )
-    parser.add_argument("--translation-overrides", help="可选翻译覆盖YAML，输出仍为待审草稿")
+    parser.add_argument(
+        "--translation-overrides", default=str(DEFAULT_TRANSLATION_OVERRIDES),
+        help="通用查询审阅YAML；默认review-overrides.yaml，显式参数可覆盖，输出仍为待审草稿",
+    )
     parser.add_argument("--wordstat-receipt", help="可选真实Wordstat receipt JSON；只读，不请求网络")
     parser.add_argument("--output-dir", default=str(BASE_DIR / "output"), help="报告输出目录")
     return parser

@@ -1,10 +1,11 @@
 import { useState } from "react";
 import { Alert, Button, Card, Input, Segmented, Select, Space, Table, Tag, Tooltip, Typography, message } from "antd";
-import { DownloadOutlined, LineChartOutlined, ReloadOutlined } from "@ant-design/icons";
+import { DownloadOutlined, LineChartOutlined, ReloadOutlined, RocketOutlined } from "@ant-design/icons";
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip as ChartTooltip, ResponsiveContainer } from "recharts";
 import dayjs from "dayjs";
 import PageContainer from "../components/PageContainer";
 import QueryState from "../components/QueryState";
+import SelectionCandidates from "./SelectionCandidates";
 import {
   searchAnalyticsApi, useSearchQueries, useSearchRuns, useSearchTrend,
   type DerivedQueryRow, type SearchQueryRow,
@@ -105,8 +106,8 @@ export default function SearchAnalytics() {
 
   return (
     <PageContainer
-      title="搜索查询分析"
-      subTitle="Seller原生市场查询：热度、竞争、转化与异常搜索；不等于本店SKU订单漏斗"
+      title="搜索查询与选品"
+      subTitle="Seller原生市场查询与待核选品候选；不等于本店SKU订单漏斗，不构成上架授权"
       updatedAt={result.dataUpdatedAt}
       extra={
         <Space wrap>
@@ -121,12 +122,13 @@ export default function SearchAnalytics() {
         {runs.data?.stale && <Alert type="warning" showIcon message="最近成功数据已超过30小时或尚未成功采集" description="旧数据继续保留，但不会伪装成今日成功。请检查本机Chrome登录态和定时任务。" />}
         {lastAttempt?.status === "failed" && <Alert type="error" showIcon message={`最近一次采集失败：${lastAttempt.errorCode || "未知错误"}`} description={`${lastAttempt.error || "请检查采集日志"}；最近成功运行：${lastSuccess?.runId || "暂无"}`} />}
         <Alert type="info" showIcon message="原生7天与自建28天分开" description="每日滚动7天重叠6天，不能直接相加。28天只使用四个不重叠的周窗口；独立买家不去重相加，未确认口径的指标保留分周原值。接口未返回自然日边界和时区，因此不伪称官方自然日28天。" />
-        <Space wrap>
+        {tab !== "selection" && <Space wrap>
           <Segmented value={window} onChange={value => { setWindow(value as "7" | "28"); setPage(1); }} options={[{ value: "7", label: "原生7天" }, { value: "28", label: "自建28天" }]} />
           <Input.Search value={input} onChange={event => setInput(event.target.value)} onSearch={value => { setQuery(value.trim()); setPage(1); }} placeholder="输入俄语查询词，按原文检索" allowClear style={{ width: 320 }} />
           <Button onClick={() => setTab(tab === "trend" ? "queries" : "trend")} icon={<LineChartOutlined />}>{tab === "trend" ? "返回查询表" : "历史趋势"}</Button>
-        </Space>
-        {tab === "trend" ? (
+          <Button type="primary" onClick={() => setTab("selection")} icon={<RocketOutlined />}>选品候选</Button>
+        </Space>}
+        {tab === "selection" ? <SelectionCandidates onBack={() => setTab("queries")} /> : tab === "trend" ? (
           <Card title={selectedQuery ? `历史趋势：${selectedQuery}` : "历史趋势"} extra={selectedQuery && <Select value={trendMetric} onChange={setTrendMetric} style={{ width: 180 }} options={metrics.filter(([field]) => !["dynamic28", "dynamic7"].includes(field)).map(([field, label]) => ({ value: field, label }))} />}>
             {!selectedQuery ? <Typography.Text type="secondary">点击查询表中的趋势按钮，选择一个搜索词。</Typography.Text> : (
               <QueryState query={trend} emptyText="该词在已有快照中没有数据">

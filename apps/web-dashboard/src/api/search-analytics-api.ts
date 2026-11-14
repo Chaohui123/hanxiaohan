@@ -66,6 +66,50 @@ export type SearchRunsResponse = {
   note: string;
 };
 
+export type SelectionCandidate = {
+  rank_in_batch: number;
+  query: string;
+  cn_gloss_draft: string;
+  form_hypothesis_draft: string;
+  manual_review_flags: string;
+  primary_quadrant: string;
+  all_matched_quadrants: string;
+  Opportunity_Score: number | null;
+  score_status: string;
+  data_quality_status: string;
+  risk_flags: string;
+  count: number | null;
+  usersWithoutInterectionShare: number | null;
+  ca: number | null;
+  ord: number | null;
+  searchUsersToOrdUsers: number | null;
+  avgCaRub: number | null;
+  uniqSellers: number | null;
+  zrShare: number | null;
+  ozon_search_url: string;
+  yandex_search_url: string;
+  wordstat_url: string;
+  mandatory_pending_actions: string;
+};
+
+export type SelectionResponse = {
+  algorithmVersion: string;
+  runId: string;
+  anchorAt: string | null;
+  hash: string;
+  run: { runId: string; anchorAt: string | null; pageCount: number | null; expectedPages: number | null; rowCount: number; contentSha256: string };
+  configHash: string;
+  filterFunnel: {
+    rawRows: number; invalidRows: number; exactDuplicatesRemoved: number; governanceFiltered: number;
+    deduplicatedRows: number; eligibleRows: number; top30Actual: number; conservedRows: number;
+  };
+  quadrantCounts: Record<string, number>;
+  top30: SelectionCandidate[];
+  wordstat: { status: "NOT_REQUESTED" };
+  note: string;
+  mandatoryPendingActions: string;
+};
+
 export type SearchParams = {
   window: "7" | "28";
   query: string;
@@ -85,6 +129,8 @@ export const searchAnalyticsApi = {
   runs: () => api.get("/api/search-analytics/runs") as unknown as Promise<SearchRunsResponse>,
   trend: (query: string) => api.get("/api/search-analytics/queries/trend", { params: { query, days: 90 } }) as unknown as Promise<TrendResponse>,
   exportFile: (params: SearchParams, format: "csv" | "xlsx") => api.get("/api/search-analytics/export", { params: { ...params, format }, responseType: "blob" }) as unknown as Promise<Blob>,
+  selection: (runId?: string) => api.get("/api/search-analytics/selection", { params: runId ? { runId } : {} }) as unknown as Promise<SelectionResponse>,
+  selectionExport: (runId: string) => api.get("/api/search-analytics/selection/export", { params: { runId }, responseType: "blob" }) as unknown as Promise<Blob>,
 };
 
 export function useSearchQueries(params: SearchParams) {
@@ -101,4 +147,12 @@ export function useSearchRuns() {
 
 export function useSearchTrend(query: string) {
   return useQuery({ queryKey: ["search-analytics", "trend", query], queryFn: () => searchAnalyticsApi.trend(query), enabled: Boolean(query) });
+}
+
+export function useSelectionCandidates(enabled: boolean, runId?: string) {
+  return useQuery({
+    queryKey: ["search-analytics", "selection", runId || "current"],
+    queryFn: () => searchAnalyticsApi.selection(runId),
+    enabled,
+  });
 }
