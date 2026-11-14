@@ -13,6 +13,7 @@ import {
   scaleRobust, SelectionAnalysisError, type RuntimeSelectionConfig,
 } from "../src/services/search-analytics/selection-analyzer.js";
 import { createSearchAnalyticsRouter } from "../src/routes/search-analytics.route.js";
+import { buildSelectionWorkbook } from "../src/services/search-analytics/selection-export.js";
 
 vi.mock("../src/db/connection.js", () => ({ getDb: async () => context.adapter, getAdapterType: () => "sqlite" }));
 vi.mock("../src/services/notification-events.js", () => ({ emitEvent: vi.fn(async () => {}) }));
@@ -257,6 +258,37 @@ describe("selection DB and HTTP integration", () => {
     expect(response.body).not.toHaveProperty("detail");
     expect(response.body).not.toHaveProperty("pages");
     expect(JSON.stringify(response.body)).not.toContain("companyId");
+  });
+
+  it("exports a 200-page run summary without expanding page receipts into Excel cells", async () => {
+    const pages = Array.from({ length: 200 }, (_, index) => ({
+      page: index + 1, offset: index * 50, rows: index === 199 ? 1 : 50,
+      serverDate: "2026-11-14T13:47:02.800+08:00", responseSha256: sha256(`page-${index + 1}`),
+    }));
+    expect(JSON.stringify(pages).length).toBeGreaterThan(32767);
+    const analysis = analyzeSelectionRows([searchRow("200页批次")], config, {
+      runId: "export-200-pages", anchorAt: "2026-11-14T05:47:02.800Z", hash: "b".repeat(64),
+      pages, pageCount: 200, expectedPages: 200, rowCount: 1,
+    });
+    expect(analysis.manifest).not.toHaveProperty("pages");
+    expect(analysis.manifest.run).toMatchObject({
+      runId: "export-200-pages", pageCount: 200, expectedPages: 200, rowCount: 1, contentSha256: "b".repeat(64),
+    });
+    const buffer = await buildSelectionWorkbook(analysis);
+    const XLSX = await import("xlsx");
+    const workbook = XLSX.read(buffer, { type: "buffer" });
+    expect(workbook.SheetNames).toHaveLength(5);
+    for (const sheet of Object.values(workbook.Sheets)) {
+      for (const [address, cell] of Object.entries(sheet)) {
+        if (!address.startsWith("!") && typeof cell.v === "string") expect(cell.v.length, `${sheet["!ref"]}:${address}`).toBeLessThanOrEqual(32767);
+      }
+    }
+    const metadata = XLSX.utils.sheet_to_json<Record<string, unknown>>(workbook.Sheets["00_批次口径与回执元数据"], { range: 1 });
+    expect(metadata.some(row => row.key === "pages" || String(row.key).startsWith("pages."))).toBe(false);
+    expect(metadata.find(row => row.key === "run.pageCount")?.value).toBe(200);
+    expect(metadata.find(row => row.key === "run.expectedPages")?.value).toBe(200);
+    expect(metadata.find(row => row.key === "run.rowCount")?.value).toBe(1);
+    expect(metadata.find(row => row.key === "run.contentSha256")?.value).toBe("b".repeat(64));
   });
 
   it("exports all five sheets from the same run with safe formulas, raw percents, N/A and hyperlinks", async () => {

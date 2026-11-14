@@ -629,7 +629,7 @@ export function analyzeSelectionRows(rows: Array<Record<string, unknown>>, confi
     toolVersion: "1.0.0-python-reference", algorithmVersion: SELECTION_ALGORITHM_VERSION, runtime: "NODE_TYPESCRIPT",
     analysisMode: "DB_READONLY", profile: SELECTION_PROFILE, runId: run.runId, anchorAt: run.anchorAt, nativePeriod: "days_7",
     nativePeriodDescription: "Ozon Seller原生相对7天市场查询口径；日历起止与时区未知；非月搜索量、非本店SKU漏斗、count不可跨词累加",
-    run: safeRun, pages: run.pages || [], hash: run.hash,
+    run: safeRun, hash: run.hash,
     metricSemantics: {
       itemsViews: "展示商品数量（shown_items_count），不是商品浏览量或平均浏览商品数",
       ord: "下单独立买家，不是订单数或商品件数",
