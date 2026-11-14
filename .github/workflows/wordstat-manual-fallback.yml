@@ -1,0 +1,16 @@
+name: Wordstat monitor offline validation
+
+on:
+  workflow_dispatch:
+
+jobs:
+  offline-validation:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+      - run: python -m pip install -r tools/yandex-wordstat-monitor/requirements-dev.txt
+      - run: python -m pytest tools/yandex-wordstat-monitor/tests -q
+      - run: python tools/yandex-wordstat-monitor/main.py --dry-run --local-store "$RUNNER_TEMP/wordstat-local" --output-json "$RUNNER_TEMP/wordstat-dry-run.json"

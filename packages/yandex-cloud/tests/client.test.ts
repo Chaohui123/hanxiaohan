@@ -109,4 +109,25 @@ describe("Yandex Cloud client", () => {
     expect(result.rawXml).toBe(rawXml);
     expect(result.results).toEqual([{ position: 1, title: "Ремень & комплект", url: "https://www.ozon.ru/product/123", domain: "www.ozon.ru", snippet: "Купить <online>" }]);
   });
+
+  it("reads Object Storage with the runtime IAM subject token", async () => {
+    let headers: Record<string, string> = {};
+    const fetchImpl = async (url: string | URL | Request, init?: { headers?: Record<string, string> }) => {
+      if (String(url).includes("/iam/")) return response({ iamToken: "iam-token", expiresAt: "2026-11-14T12:00:00Z" });
+      headers = init?.headers || {};
+      return { status: 200, arrayBuffer: async () => Buffer.from('{"verified":true}') } as never;
+    };
+    const client = new YandexCloudClient({ fetchImpl: fetchImpl as never });
+    const result = await client.getObject("onzo-wordstat", "wordstat-weekly/report final.json");
+    expect(result?.toString()).toBe('{"verified":true}');
+    expect(headers["X-YaCloud-SubjectToken"]).toBe("iam-token");
+  });
+
+  it("returns null for an absent object without treating it as empty data", async () => {
+    const fetchImpl = async (url: string | URL | Request) => String(url).includes("/iam/")
+      ? response({ iamToken: "iam-token", expiresAt: "2026-11-14T12:00:00Z" })
+      : { status: 404, text: async () => "not found" } as never;
+    const client = new YandexCloudClient({ fetchImpl: fetchImpl as never });
+    await expect(client.getObject("onzo-wordstat", "wordstat-weekly/missing.json")).resolves.toBeNull();
+  });
 });

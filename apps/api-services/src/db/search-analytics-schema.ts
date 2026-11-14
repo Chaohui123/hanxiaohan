@@ -91,4 +91,21 @@ export const SEARCH_ANALYTICS_DDL = `
     UNIQUE(company_id, anchor_at, algorithm_version, query_text)
   );
   CREATE INDEX IF NOT EXISTS idx_search_derived_anchor ON ozon_search_derived_windows(company_id, anchor_at DESC, query_text);
+
+  CREATE TABLE IF NOT EXISTS wordstat_weekly_reports (
+    report_id TEXT PRIMARY KEY,
+    idempotency_key TEXT UNIQUE NOT NULL,
+    overall_status TEXT NOT NULL,
+    source_as_of TEXT,
+    generated_at TEXT NOT NULL,
+    raw_sha256 TEXT NOT NULL,
+    storage_bucket TEXT NOT NULL,
+    storage_key TEXT NOT NULL,
+    report_json TEXT NOT NULL,
+    notification_status TEXT NOT NULL DEFAULT 'pending',
+    notification_error TEXT,
+    notified_at TEXT,
+    created_at TIMESTAMP DEFAULT (NOW())
+  );
+  CREATE INDEX IF NOT EXISTS idx_wordstat_weekly_status ON wordstat_weekly_reports(overall_status, generated_at DESC);
 `;

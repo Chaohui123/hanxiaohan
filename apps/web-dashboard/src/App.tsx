@@ -29,6 +29,7 @@ const RagKnowledge = lazy(() => import("./pages/RagKnowledge"));
 const PurchasePay = lazy(() => import("./pages/PurchasePay"));
 const MarketAnalysis = lazy(() => import("./pages/MarketAnalysis"));
 const SearchAnalytics = lazy(() => import("./pages/SearchAnalytics"));
+const WordstatWeekly = lazy(() => import("./pages/WordstatWeekly"));
 const PromoCenter = lazy(() => import("./pages/promo/PromoCenter"));
 const TasksCenter = lazy(() => import("./pages/tasks/TasksCenter"));
 const SettingsCenter = lazy(() => import("./pages/settings/SettingsCenter"));
@@ -70,6 +71,7 @@ const menuItems: MenuProps["items"] = [
       { key: "/", icon: <DashboardOutlined />, label: <Link to="/">工作台</Link> },
       { key: "/market", icon: <LineChartOutlined />, label: <Link to="/market">大盘分析</Link> },
       { key: "/search-analytics", icon: <LineChartOutlined />, label: <Link to="/search-analytics">搜索查询分析</Link> },
+      { key: "/wordstat-weekly", icon: <LineChartOutlined />, label: <Link to="/wordstat-weekly">Wordstat云端观察</Link> },
     ],
   },
   {
@@ -170,6 +172,7 @@ function AppLayout() {
                 <Route path="/" element={<Dashboard />} />
                 <Route path="/market" element={<MarketAnalysis />} />
                 <Route path="/search-analytics" element={<SearchAnalytics />} />
+                <Route path="/wordstat-weekly" element={<WordstatWeekly />} />
                 <Route path="/listing" element={<Listing />} />
                 <Route path="/inventory" element={<Inventory />} />
                 <Route path="/competitor" element={<Competitor />} />

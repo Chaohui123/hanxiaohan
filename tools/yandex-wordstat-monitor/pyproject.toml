@@ -1,0 +1,17 @@
+[build-system]
+requires = ["setuptools>=68.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "onzo-yandex-wordstat-monitor"
+version = "1.0.0"
+requires-python = ">=3.11"
+dependencies = ["httpx==0.27.2", "PyYAML==6.0.2", "pydantic==2.9.2"]
+
+[project.optional-dependencies]
+test = ["pytest==8.3.3"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
+testpaths = ["tests"]
+addopts = "-q --disable-warnings"

@@ -278,4 +278,23 @@ export class YandexCloudClient {
     if (typeof parsed.result !== "string") throw new YandexCloudError("SpeechKit STT returned no result", 200, "SpeechKit STT");
     return parsed as Record<string, unknown>;
   }
+
+  async getObject(bucket: string, key: string): Promise<Buffer | null> {
+    if (!/^[a-z0-9][a-z0-9.-]{1,62}$/.test(bucket)) throw new Error("Object Storage bucket name is invalid");
+    if (!key || key.startsWith("/") || key.length > 1024 || key.split("/").some(part => !part || part === "." || part === "..")) throw new Error("Object Storage key is invalid");
+    const token = await getIamToken({ keyFile: this.keyFile, proxyUrl: this.proxyUrl, fetchImpl: this.fetchImpl });
+    const dispatcher = this.proxyUrl ? new ProxyAgent(this.proxyUrl) : undefined;
+    const encodedKey = key.split("/").map(encodeURIComponent).join("/");
+    const response = await this.fetchImpl(`https://storage.yandexcloud.net/${bucket}/${encodedKey}`, {
+      headers: { "X-YaCloud-SubjectToken": token },
+      signal: AbortSignal.timeout(60_000),
+      ...(dispatcher ? { dispatcher } : {}),
+    } as RequestInit);
+    if (response.status === 404) return null;
+    if (response.status !== 200) {
+      const responseText = await response.text();
+      throw new YandexCloudError(`Object Storage returned HTTP ${response.status}: ${responseText.slice(0, 800)}`, response.status, "Object Storage");
+    }
+    return Buffer.from(await response.arrayBuffer());
+  }
 }

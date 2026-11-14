@@ -163,6 +163,30 @@ export class Notifier {
     return !!(FEISHU_WEBHOOK || WECHAT_WEBHOOK || (TELEGRAM_BOT && TELEGRAM_CHAT));
   }
 
+  /** Send an already reviewed interactive card once; do not retry an uncertain webhook outcome. */
+  async sendFeishuCard(card: Record<string, unknown>, correlationId: string): Promise<boolean> {
+    if (!FEISHU_WEBHOOK) {
+      logger.warn({ correlationId }, "Feishu webhook is not configured");
+      return false;
+    }
+    const body: Record<string, unknown> = { msg_type: "interactive", card };
+    if (FEISHU_SECRET) {
+      const timestamp = Math.floor(Date.now() / 1000).toString();
+      body.timestamp = timestamp;
+      body.sign = crypto.createHmac("sha256", `${timestamp}\n${FEISHU_SECRET}`).update("").digest("base64");
+    }
+    const response = await fetch(FEISHU_WEBHOOK, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+      signal: AbortSignal.timeout(10_000),
+    });
+    const data = await response.json() as { code?: number; StatusCode?: number };
+    const accepted = response.ok && (data.code === 0 || data.StatusCode === 0);
+    if (!accepted) logger.warn({ correlationId, code: data.code, statusCode: data.StatusCode }, "Feishu interactive card was not accepted");
+    return accepted;
+  }
+
   // ---- Private ----
 
   /** Exponential backoff retry (max 3 attempts) */

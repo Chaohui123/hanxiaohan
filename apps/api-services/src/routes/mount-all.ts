@@ -200,6 +200,9 @@ export async function mountAllRoutes(app: express.Express, deps: RouteDeps): Pro
   const { createYandexCloudRouter } = await import("./yandex-cloud.route.js");
   mountApi("", createYandexCloudRouter());
 
+  const { createWordstatWeeklyRouter } = await import("./wordstat-weekly.route.js");
+  mountApi("", createWordstatWeeklyRouter());
+
   // ---- Direct listing (AI translate + Ozon API) ----
   const { createDirectListRouter } = await import("./direct-list.route.js");
   mountApi("", createDirectListRouter());

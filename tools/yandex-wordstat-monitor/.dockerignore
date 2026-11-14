@@ -1,0 +1,9 @@
+.env
+.env.*
+**/__pycache__
+*.pyc
+.local_wordstat_store
+.pytest_cache
+.git
+tests
+deploy

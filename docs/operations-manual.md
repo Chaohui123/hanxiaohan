@@ -642,3 +642,13 @@ node scripts/yandex-wordstat.mjs --phrase "ремень вариатора сн�
 - Carbon 首轮 4 个 PASS 没有被机械照搬；终审同样区分需求成立、进入供货审核和可以上架。后续优先方向每候选最多 2 家货源+1 备选，须完成前台逐卡竞争、准确变体、关键参数、真实单元经济、8 图双视频与独立复核，才可能进入测品。当前 **0 新 SKU、0 采购、0 付费媒体、0 商品/价格/库存/广告改动**。
 - Carbon 的一次同步超时、一次提示词缺输入和两次 `MAX_TOKENS` 均保留原回执；缺输入导致的空候选不当作市场无机会。完整评审通过原 Batch continuation token 恢复，最终 `STOP`，实际模型与 prompt SHA-256 均可回读。原始与续写 usage 是累计口径，不重复相加，未虚构美元成本。
 - 完整方案：`temp/ops-exec/cloud-functions-selection-20261114/final-plan.md`，结构化终审：`evaluation.json`，原始模型回执、补验和购买意图证据均在同目录。云端生产 Scheduler 仍未创建，自建 28 天仍为 7/28，`PROMO_AUTO_DECISION=false` 不变。
+
+### 11.9 Wordstat 云端周报实施与验收（2026-11-14）
+
+- 实际实现位于 `tools/yandex-wordstat-monitor/`。函数 `onzo-wordstat-weekly` / `d4e0m0ceusl5q48jbgbi` 使用运行账号 `onzo-wordstat-worker` / `aje3hkir5flhraps1u6k` 的 metadata IAM；不使用 `YANDEX_API_KEY`、静态 S3 密钥、Seller Cookie 或飞书秘密。对象存储桶 `onzo-wordstat-reports-20261114` 为私有；ONZO 既有 `onzo-yandex-api` 账号只增加 `storage.viewer`，飞书通知继续留在 ONZO 服务端。
+- 已先以 `storage-probe-20261114` 验证 `X-YaCloud-SubjectToken` 的 PUT/GET 和 SHA-256 回读，再由 ONZO 服务器真实读取同一对象。正式 `weekly-20261114-v3` 报告为 `run_2026-11-14_794bb43d`，62 份原始回执、164625 字节，SHA-256 为 `6e92ca641db27662e9ff6663e7e4d348466bb5b053551ea98a6c02b06e4f0580`。同成功事件重放返回 `skippedDuplicateEvent=true`、`upstreamRequestsSent=false`，不得用新事件掩盖不明结果。
+- 周窗口必须完整对齐周一至周日；第一次非对齐请求已得到官方 HTTP 400 `The from field value should be Monday`，修复后以真实 API 对照通过。`weekly/monthly` 只支持 `+`，精确语法另走 daily 口径。周序列实际截止 `2026-09-28`，尾部缺周、缺月和空响应均不补0，过期时冻结评分且不伪造 Top10。
+- 扩词仅取 `topRequests.results`，每种子最多3个、每报告最多20个；`associations` 仅留原始回执，不自动成为需求。现有 TPMS、已终止方向、品牌/平台词与非购买噪声不参与评分。分数只作观察排队，仍须 Seller 购买意图、竞争、供货、准确变体、真实经济、合规、8图双视频及独立复核；季节性只提示补证与内容准备，不是提前备货指令。
+- ONZO 使用 `wordstat_weekly_reports` 幂等入库，并实时读取 Seller 表计算原生批次和自建 7/28 天覆盖，不能沿用报告里的静态配置数。接口：`GET /api/yandex-cloud/wordstat/weekly/latest`、`POST .../preview`（不写库、不发通知）、`POST .../sync`（仅新报告发送一次，未知通知结果不自动重试）。前端路径 `/wordstat-weekly`。Compose 开关 `WORDSTAT_CLOUD_SYNC_ENABLED=true`，每10分钟回读对象存储；GitHub Actions 只允许手动离线测试，不承担生产调度。
+- 云端部署脚本为 `tools/yandex-wordstat-monitor/deploy/yc_deploy_and_bind_timer.sh`。必须提供 folder、桶、运行账号、Timer 调用账号和固定 `RELEASE_TAG`；默认不调用采集、不创建 Timer。存储探针需同时显式设置 `FUNCTION_ENTRYPOINT=src.storage_probe.handler` 与 `CONFIRM_WORDSTAT_PROBE=true`；真实周报需 `CONFIRM_WORDSTAT_LIVE_RUN=true`；生产 Timer 需 `CONFIRM_WORDSTAT_TIMER=true`，并确认生产读取、失败账本、ONZO 入库与通知幂等全部通过。
+- Timer v2 使用官方 CLI `help-action --invoke-function` 确认的 `invokeFunction` 和 `retryPolicy`，计划为 `0 1 ? * MON *`（UTC 每周一01:00，即北京时间09:00），固定 `weekly-20261114-v3`，不使用 `$latest`，不删除旧触发器。DLQ 未配置，不能宣称已有 DLQ；失败经函数报告与 ONZO 告警呈现。**当前 ONZO 生产回读与 Timer 创建尚待本次部署后验收，不能把云端单次成功写成定时上线完成。** 证据目录 `temp/ops-exec/wordstat-cloud-migration-20261114/`。Ozon 商品、价格、库存、广告与 `PROMO_AUTO_DECISION=false` 不变。

@@ -107,6 +107,8 @@ services:
       - OZON_PERF_CLIENT_SECRET=${OZON_PERF_CLIENT_SECRET:-}
       - COMPETITOR_COMPARABILITY_FILE=/app/competitor-scans/competitor-comparability.json
       - YANDEX_CLOUD_PROXY_URL=${YANDEX_CLOUD_PROXY_URL:-http://172.28.0.1:10809}
+      - WORDSTAT_CLOUD_BUCKET=${WORDSTAT_CLOUD_BUCKET:-onzo-wordstat-reports-20261114}
+      - WORDSTAT_CLOUD_SYNC_ENABLED=${WORDSTAT_CLOUD_SYNC_ENABLED:-true}
     volumes:
       - app_uploads:/app/uploads
       - app_dead_letter:/app/dead-letter

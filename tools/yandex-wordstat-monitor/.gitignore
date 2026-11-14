@@ -1,0 +1,7 @@
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.local_wordstat_store/
+.venv/
+.env
+.env.*

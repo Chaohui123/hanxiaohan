@@ -1,0 +1,167 @@
+schemaVersion: "1.0.0"
+algoVersion: "2026.11-obs-v1"
+
+wordstat:
+  baseUrl: "https://searchapi.api.cloud.yandex.net/v2/wordstat"
+  translateUrl: "https://translate.api.cloud.yandex.net/translate/v2/translate"
+  enableCloudTranslateDraft: false
+  countryRegionId: 225
+  referenceCities:
+    - id: 213
+      nameRu: "Москва"
+      nameZh: "莫斯科"
+    - id: 2
+      nameRu: "Санкт-Петербург"
+      nameZh: "圣彼得堡"
+    - id: 54
+      nameRu: "Екатеринбург"
+      nameZh: "叶卡捷琳堡"
+  devices:
+    - "all"
+  topNumPhrases: 50
+  maxExpansionCandidatesPerReport: 20
+  maxExpansionCandidatesPerSeed: 3
+  weeklyLookbackWeeks: 53
+  dailyStrictLookbackDays: 30
+  strictOperatorStrategy: "separate_daily_caliber"
+
+quotaAndRate:
+  maxRequestsPerSecond: 5.0
+  dailyRequestBudget: 600
+  requestTimeoutSeconds: 15.0
+  maxRetries429: 3
+  maxRetries503: 2
+  unknownOutcomeCooldownSeconds: 3.0
+  maxUnknownOutcomeProbes: 0
+
+observationThresholds:
+  minWeeklyVolumeBand: 2000
+  maxWeeklyVolumeBand: 80000
+  minValidWeeksForScoring: 4
+  freshMaxLagDays: 14
+  laggingWarnMaxLagDays: 35
+  staleHoldAfterLagDays: 35
+  synonymClusterSimilarity: 0.72
+  topObservationLimit: 10
+
+scoring:
+  weights:
+    trendMomentum: 0.50
+    referenceCityAffinity: 0.30
+    demandStability: 0.20
+  maxSingleComponentContributionRatio: 0.55
+  partialComponentCapMultiplier: 0.85
+  wowClipMin: -0.50
+  wowClipMax: 1.50
+
+seasonality:
+  minHistoricalWeeksRequired: 44
+  minWindowCoverageRatio: 0.85
+  peakProminenceMultiplier: 1.35
+  targetPeakLeadWeeksMin: 8
+  targetPeakLeadWeeksMax: 14
+
+sellerContextNotice:
+  nativeWindowDays: 7
+  nativeBatchPages: 199
+  nativeBatchRows: 9949
+  selfBuiltAccumulatedDays: 7
+  selfBuiltTargetDays: 28
+  promoAutoDecision: false
+
+seedPhrases:
+  - phrase: "вакуумные пакеты для одежды"
+    category: "home_storage"
+    seedStatus: "verified_seed_for_observation"
+    zhHint: "衣物真空压缩收纳袋"
+  - phrase: "наматрасник 160х200 непромокаемый"
+    category: "home_storage"
+    seedStatus: "verified_seed_for_observation"
+    zhHint: "160x200防水床垫保护套"
+  - phrase: "кофр для хранения вещей на молнии"
+    category: "home_storage"
+    seedStatus: "pending_verification_example"
+    zhHint: "拉链衣物防尘收纳箱（待核示例）"
+  - phrase: "органайзер для белья в ящик"
+    category: "home_storage"
+    seedStatus: "pending_verification_example"
+    zhHint: "抽屉内衣分格收纳盒（待核示例）"
+  - phrase: "полка для обуви в прихожую узкая"
+    category: "home_storage"
+    seedStatus: "pending_verification_example"
+    zhHint: "玄关窄款多层鞋架（待核示例）"
+  - phrase: "органайзер в багажник автомобиля складной"
+    category: "car_accessories"
+    seedStatus: "pending_verification_example"
+    zhHint: "车载后备箱折叠收纳箱（待核示例）"
+  - phrase: "солнцезащитная шторка на лобовое стекло"
+    category: "car_accessories"
+    seedStatus: "pending_verification_example"
+    zhHint: "汽车前挡风玻璃遮阳帘（待核示例）"
+  - phrase: "защитная накидка на спинку сиденья автомобиля"
+    category: "car_accessories"
+    seedStatus: "pending_verification_example"
+    zhHint: "汽车座椅靠背防踢垫（待核示例）"
+  - phrase: "когтеточка лежанка картонная для кошек"
+    category: "pet_supplies"
+    seedStatus: "pending_verification_example"
+    zhHint: "猫咪瓦楞纸猫抓板窝（待核示例）"
+  - phrase: "поилка дорожная для собак складная"
+    category: "pet_supplies"
+    seedStatus: "pending_verification_example"
+    zhHint: "狗狗便携外出折叠随行杯（待核示例）"
+
+governanceRules:
+  terminatedDirections:
+    - pattern: "обогрев зеркал"
+      reason: "历史已终止方向（后视镜加热垫 FAIL），禁止通过周报复活"
+    - pattern: "подогрев зеркал"
+      reason: "历史已终止方向（后视镜加热垫 FAIL），禁止通过周报复活"
+    - pattern: "нагревательный элемент зеркала"
+      reason: "历史已终止方向（后视镜加热垫 FAIL），禁止通过周报复活"
+    - pattern: "термобелье женское"
+      reason: "历史已终止方向（女士本季保暖内衣 FAIL），禁止复活"
+  existingPortfolioExclusions:
+    - pattern: "датчик давления в шинах"
+      reason: "现有已运营 TPMS 品线，不重复计为新选品成果"
+    - pattern: "датчики давления в шинах"
+      reason: "现有已运营 TPMS 品线，不重复计为新选品成果"
+    - pattern: "система контроля давления в шинах"
+      reason: "现有已运营 TPMS 品线，不重复计为新选品成果"
+    - pattern: "tpms"
+      reason: "现有已运营 TPMS 品线，不重复计为新选品成果"
+  nonPurchaseNoiseTokens:
+    - "своими руками"
+    - "бесплатно"
+    - "бу"
+    - "авито"
+    - "ремонт"
+    - "инструкция"
+    - "отзывы"
+    - "форум"
+    - "скачать"
+    - "фото"
+    - "видео"
+  commercialIntentBoostTokens:
+    - "купить"
+    - "для"
+    - "непромокаемый"
+    - "складной"
+    - "комплект"
+    - "набор"
+    - "размер"
+    - "160х200"
+    - "автомобиля"
+  brandWatchTokens:
+    - "ikea"
+    - "икеа"
+    - "xiaomi"
+    - "сяоми"
+    - "dyson"
+    - "bosch"
+    - "baseus"
+    - "70mai"
+    - "ozon"
+    - "озон"
+    - "wildberries"
+    - "вайлдберриз"

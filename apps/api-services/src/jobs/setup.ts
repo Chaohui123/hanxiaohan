@@ -150,6 +150,18 @@ export function registerCoreJobs(deps: CoreJobDeps): void {
     }
   });
 
+  if (process.env.WORDSTAT_CLOUD_SYNC_ENABLED === "true") {
+    registerJob("wordstat-weekly-sync", 10 * 60_000, async () => {
+      const { YandexCloudClient } = await import("@onzo/yandex-cloud");
+      const { getDb } = await import("../db/connection.js");
+      const { syncWordstatWeekly } = await import("../services/wordstat-weekly.js");
+      const database = await getDb();
+      if (!database) throw new Error("Wordstat weekly sync requires an available database");
+      const result = await syncWordstatWeekly({ client: new YandexCloudClient(), db: database });
+      logger.info({ status: result.status, reportId: result.reportId, idempotent: result.idempotent }, "Wordstat weekly cloud sync completed");
+    }, { timeoutMs: 120_000 });
+  }
+
   registerJob("token-monitor", 6 * 3600_000, async () => {
     const used = tokenTracker.getTodayUsage();
     const limit = parseInt(process.env.LLM_DAILY_TOKEN_LIMIT || "0", 10);
