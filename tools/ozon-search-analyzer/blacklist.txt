@@ -1,0 +1,7 @@
+dyson
+xiaomi
+apple
+bosch
+makita
+bork
+ikea

@@ -1,0 +1,31 @@
+profile: days_7_calibrated
+thresholds:
+  count_days7_valid_floor: 3774
+  count_days7_niche_min: 5000
+  count_days7_sweet_spot_max: 35000
+  count_days7_broad_head_warn: 50000
+  no_interaction_gap_min_pct: 45.0
+  no_interaction_dead_bounce_max_pct: 85.0
+  ca_high_demand_min_pct: 35.0
+  ca_viable_floor_pct: 15.0
+  top30_min_search_to_ord_pct: 2.0
+  ca_high_ticket_min_pct: 18.0
+  ord_conv_rigid_min_pct: 10.0
+  ord_commercial_proof_min_buyers: 50
+  ord_rigid_demand_min_buyers: 300
+  avg_price_fbs_viable_floor_rub: 1500
+  avg_price_high_conversion_floor_rub: 1200
+  avg_price_high_ticket_min_rub: 2500
+  avg_price_cross_border_safe_max_rub: 25000
+  avg_price_extreme_outlier_rub: 100000
+  uniq_sellers_low_density_max: 20
+  zr_share_signal_min_pct: 2.0
+  robust_scale_quantiles: [0.05, 0.95]
+governanceRules:
+  existingPortfolioExclusions:
+    - pattern: "ремень"
+      reason: "店铺既有皮带品线，所有皮带词先隔离复核，不作为新选品候选"
+    - pattern: "ремень вариатора"
+      reason: "店铺既有变速器皮带品线，不重复计为新选品成果"
+    - pattern: "ремень снегохода"
+      reason: "店铺既有雪地车皮带品线，不重复计为新选品成果"
