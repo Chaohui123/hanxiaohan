@@ -3,6 +3,8 @@ from __future__ import annotations
 from typing import Any, Dict, List, Literal, Optional
 from pydantic import BaseModel, Field
 
+from src import PIPELINE_VERSION
+
 
 FreshnessStatus = Literal["fresh", "lagging_notice", "lagging_significant", "stale_expired", "no_data"]
 GovernanceDisposition = Literal[
@@ -216,6 +218,7 @@ class FailedRequestDiagnostic(BaseModel):
 class WeeklyObservationReport(BaseModel):
     schemaVersion: str
     algoVersion: str
+    pipelineVersion: str = PIPELINE_VERSION
     reportId: str
     idempotencyKey: str
     eventId: str

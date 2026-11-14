@@ -381,7 +381,7 @@ def test_corrupted_readback_hash_aborts_and_preserves_previous_report(tmp_path: 
 
 def test_deploy_script_pins_non_latest_tag_and_utc_monday_cron() -> None:
     deploy_sh = (PROJECT_DIR / "deploy" / "yc_deploy_and_bind_timer.sh").read_text(encoding="utf-8")
-    assert 'CRON_EXPRESSION="0 1 ? * MON *"' in deploy_sh
+    assert 'CRON_EXPRESSION="${TIMER_CRON_EXPRESSION:-0 1 ? * MON *}"' in deploy_sh
     assert "--action" in deploy_sh
     assert '"invokeFunction"' in deploy_sh
     assert '"retryPolicy"' in deploy_sh

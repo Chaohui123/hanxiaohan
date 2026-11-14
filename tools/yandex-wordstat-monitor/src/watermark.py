@@ -5,7 +5,7 @@ import os
 from pathlib import Path
 from typing import Any, Dict, Optional
 
-from src import ALGO_VERSION, SCHEMA_VERSION
+from src import ALGO_VERSION, PIPELINE_VERSION, SCHEMA_VERSION
 from src.iam_metadata import MetadataIamTokenProvider, assert_no_forbidden_static_credentials
 from src.index import execute_weekly_pipeline, load_yaml_config
 from src.storage_ledger import VerifiedWordstatStore, YandexIamObjectStorageBackend, LocalDirectoryStorageBackend
@@ -141,6 +141,9 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     elif previous_as_of and source_as_of < previous_as_of:
         status = "REGRESSION_BLOCKED"
         trigger_reason = "observed_watermark_older_than_accepted"
+    elif previous and previous.get("pipelineVersion") != PIPELINE_VERSION:
+        status = "FULL_REPORT_REQUIRED"
+        trigger_reason = "pipeline_upgrade"
     elif previous and source_as_of == previous_as_of and response_hash == previous.get("responseHash"):
         status = "NO_UPSTREAM_CHANGE"
         trigger_reason = "same_source_and_raw_response_hash"
@@ -168,6 +171,7 @@ def handler(event: Dict[str, Any], context: Any) -> Dict[str, Any]:
     watermark = {
         "schemaVersion": SCHEMA_VERSION,
         "algoVersion": ALGO_VERSION,
+        "pipelineVersion": PIPELINE_VERSION,
         "benchmark": {
             "phrase": phrase,
             "period": "weekly",

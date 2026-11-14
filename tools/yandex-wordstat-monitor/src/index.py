@@ -11,7 +11,7 @@ from typing import Any, Callable, Dict, List, Optional
 import httpx
 import yaml
 
-from src import ALGO_VERSION, SCHEMA_VERSION
+from src import ALGO_VERSION, PIPELINE_VERSION, SCHEMA_VERSION
 from src.daily_gap import fill_daily_gap
 from src.iam_metadata import MetadataIamTokenProvider, assert_no_forbidden_static_credentials
 from src.models import KeywordObservation, SellerValidationContext, WeeklyObservationReport
@@ -255,7 +255,7 @@ def execute_weekly_pipeline(
         "failures": [item.model_dump(mode="json") for item in fetcher.failed_diagnostics],
     }
     content_revision = hashlib.sha256(VerifiedWordstatStore.canonical_json_bytes(revision_payload)).hexdigest()
-    idempotency_key = f"{iso_week_str}:{cfg_hash}:{ALGO_VERSION}:{revision_token or content_revision}"
+    idempotency_key = f"{iso_week_str}:{cfg_hash}:{PIPELINE_VERSION}:{revision_token or content_revision}"
     scored_count = sum(1 for item in top10 if item.score.observationPriorityScore is not None)
     primary_failures = [item for item in fetcher.failed_diagnostics if item.stage != "daily_gap"]
     daily_failures = [item for item in fetcher.failed_diagnostics if item.stage == "daily_gap"]
@@ -297,6 +297,7 @@ def execute_weekly_pipeline(
     report = WeeklyObservationReport(
         schemaVersion=SCHEMA_VERSION,
         algoVersion=ALGO_VERSION,
+        pipelineVersion=PIPELINE_VERSION,
         reportId=run_id,
         idempotencyKey=idempotency_key,
         eventId=event_id,
