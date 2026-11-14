@@ -14,16 +14,41 @@ if [[ "${RELEASE_TAG}" == "\$latest" || "${RELEASE_TAG}" == "latest" ]]; then
   echo "严禁将生产 Timer 直接绑定到未经验证的 \$latest 标签" >&2
   exit 1
 fi
-PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
-BUILD_DIR="$(mktemp -d /tmp/onzo-wordstat-build.XXXXXX)"
-trap 'rm -rf "${BUILD_DIR}"' EXIT
-PACKAGE_DIR="${BUILD_DIR}/package"
-ZIP_FILE="${BUILD_DIR}/wordstat-${RELEASE_TAG}.zip"
+if ! yc serverless function get --name "${FUNCTION_NAME}" --folder-id "${YANDEX_CLOUD_FOLDER_ID}" >/dev/null 2>&1; then
+  if [[ "${BIND_EXISTING_VERSION_ONLY:-false}" == "true" ]]; then
+    echo "只绑定现有版本时目标函数必须已存在" >&2
+    exit 1
+  fi
+  yc serverless function create --name "${FUNCTION_NAME}" --folder-id "${YANDEX_CLOUD_FOLDER_ID}" --description "ONZO Wordstat只读观察周报"
+fi
+FUNCTION_ID="$(yc serverless function get --name "${FUNCTION_NAME}" --folder-id "${YANDEX_CLOUD_FOLDER_ID}" --format=json | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+if [[ "${BIND_EXISTING_VERSION_ONLY:-false}" == "true" ]]; then
+  VERSION_ID="$(yc serverless function version list --function-id "${FUNCTION_ID}" --format=json | python3 -c '
+import json
+import os
+import sys
+rows = json.load(sys.stdin)
+tag = os.environ["RELEASE_TAG"]
+matched = [row for row in rows if tag in row.get("tags", [])]
+if len(matched) != 1:
+    raise SystemExit("固定标签必须唯一对应现有版本")
+version = matched[0]
+if version.get("status") != "ACTIVE" or version.get("entrypoint") != os.environ.get("FUNCTION_ENTRYPOINT", "main.handler") or version.get("service_account_id") != os.environ["FN_RUNNER_SA_ID"]:
+    raise SystemExit("现有版本状态、入口或运行账号与验收目标不一致")
+print(version["id"])
+')"
+  echo "使用已验收的现有版本 ${VERSION_ID}，不重新创建版本"
+else
+  PROJECT_ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+  BUILD_DIR="$(mktemp -d /tmp/onzo-wordstat-build.XXXXXX)"
+  trap 'rm -rf "${BUILD_DIR}"' EXIT
+  PACKAGE_DIR="${BUILD_DIR}/package"
+  ZIP_FILE="${BUILD_DIR}/wordstat-${RELEASE_TAG}.zip"
 
-mkdir -p "${PACKAGE_DIR}"
-cp "${PROJECT_ROOT}/main.py" "${PROJECT_ROOT}/config.yaml" "${PROJECT_ROOT}/requirements.txt" "${PACKAGE_DIR}/"
-cp -r "${PROJECT_ROOT}/src" "${PACKAGE_DIR}/src"
-python3 - "${PACKAGE_DIR}" "${ZIP_FILE}" <<'PY'
+  mkdir -p "${PACKAGE_DIR}"
+  cp "${PROJECT_ROOT}/main.py" "${PROJECT_ROOT}/config.yaml" "${PROJECT_ROOT}/requirements.txt" "${PACKAGE_DIR}/"
+  cp -r "${PROJECT_ROOT}/src" "${PACKAGE_DIR}/src"
+  python3 - "${PACKAGE_DIR}" "${ZIP_FILE}" <<'PY'
 from pathlib import Path
 import sys
 import zipfile
@@ -40,24 +65,25 @@ with zipfile.ZipFile(sys.argv[2], "w", zipfile.ZIP_DEFLATED) as archive:
         archive.write(file, str(relative))
 PY
 
-if ! yc serverless function get --name "${FUNCTION_NAME}" --folder-id "${YANDEX_CLOUD_FOLDER_ID}" >/dev/null 2>&1; then
-  yc serverless function create --name "${FUNCTION_NAME}" --folder-id "${YANDEX_CLOUD_FOLDER_ID}" --description "ONZO Wordstat只读观察周报"
+  if ! yc serverless function get --name "${FUNCTION_NAME}" --folder-id "${YANDEX_CLOUD_FOLDER_ID}" >/dev/null 2>&1; then
+    yc serverless function create --name "${FUNCTION_NAME}" --folder-id "${YANDEX_CLOUD_FOLDER_ID}" --description "ONZO Wordstat只读观察周报"
+    FUNCTION_ID="$(yc serverless function get --name "${FUNCTION_NAME}" --folder-id "${YANDEX_CLOUD_FOLDER_ID}" --format=json | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
+  fi
+  VERSION_JSON="$(yc serverless function version create \
+    --function-name "${FUNCTION_NAME}" \
+    --folder-id "${YANDEX_CLOUD_FOLDER_ID}" \
+    --runtime=python311 \
+    --entrypoint="${FUNCTION_ENTRYPOINT:-main.handler}" \
+    --memory=256m \
+    --execution-timeout=300s \
+    --service-account-id="${FN_RUNNER_SA_ID}" \
+    --source-path="${ZIP_FILE}" \
+    --environment="YANDEX_CLOUD_FOLDER_ID=${YANDEX_CLOUD_FOLDER_ID},WORDSTAT_STORAGE_BACKEND=s3_iam,WORDSTAT_BUCKET_NAME=${WORDSTAT_BUCKET_NAME},WORDSTAT_STORAGE_PREFIX=wordstat-weekly,WORDSTAT_DRY_RUN=false" \
+    --format=json)"
+  VERSION_ID="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])' <<<"${VERSION_JSON}")"
+  echo "已创建待验版本 ${VERSION_ID}"
+  yc serverless function version set-tag --id "${VERSION_ID}" --tag "${RELEASE_TAG}"
 fi
-FUNCTION_ID="$(yc serverless function get --name "${FUNCTION_NAME}" --folder-id "${YANDEX_CLOUD_FOLDER_ID}" --format=json | python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])')"
-VERSION_JSON="$(yc serverless function version create \
-  --function-name "${FUNCTION_NAME}" \
-  --folder-id "${YANDEX_CLOUD_FOLDER_ID}" \
-  --runtime=python311 \
-  --entrypoint="${FUNCTION_ENTRYPOINT:-main.handler}" \
-  --memory=256m \
-  --execution-timeout=300s \
-  --service-account-id="${FN_RUNNER_SA_ID}" \
-  --source-path="${ZIP_FILE}" \
-  --environment="YANDEX_CLOUD_FOLDER_ID=${YANDEX_CLOUD_FOLDER_ID},WORDSTAT_STORAGE_BACKEND=s3_iam,WORDSTAT_BUCKET_NAME=${WORDSTAT_BUCKET_NAME},WORDSTAT_STORAGE_PREFIX=wordstat-weekly,WORDSTAT_DRY_RUN=false" \
-  --format=json)"
-VERSION_ID="$(python3 -c 'import json,sys; print(json.load(sys.stdin)["id"])' <<<"${VERSION_JSON}")"
-echo "已创建待验版本 ${VERSION_ID}"
-yc serverless function version set-tag --id "${VERSION_ID}" --tag "${RELEASE_TAG}"
 
 if [[ "${CONFIRM_WORDSTAT_PROBE:-false}" == "true" ]]; then
   if [[ "${FUNCTION_ENTRYPOINT:-main.handler}" != "src.storage_probe.handler" ]]; then

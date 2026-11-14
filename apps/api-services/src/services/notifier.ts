@@ -169,7 +169,7 @@ export class Notifier {
       logger.warn({ correlationId }, "Feishu webhook is not configured");
       return false;
     }
-    const body: Record<string, unknown> = { msg_type: "interactive", card };
+    const body: Record<string, unknown> = card.msg_type === "interactive" && card.card && typeof card.card === "object" ? card : { msg_type: "interactive", card };
     if (FEISHU_SECRET) {
       const timestamp = Math.floor(Date.now() / 1000).toString();
       body.timestamp = timestamp;

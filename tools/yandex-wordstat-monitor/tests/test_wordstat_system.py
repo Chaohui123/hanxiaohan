@@ -386,6 +386,8 @@ def test_deploy_script_pins_non_latest_tag_and_utc_monday_cron() -> None:
     assert '"invokeFunction"' in deploy_sh
     assert '"retryPolicy"' in deploy_sh
     assert "trigger v2 create timer" in deploy_sh
+    assert "BIND_EXISTING_VERSION_ONLY" in deploy_sh
+    assert "固定标签必须唯一对应现有版本" in deploy_sh
     assert "严禁将生产 Timer 直接绑定到未经验证的" in deploy_sh
     assert "functions.functionInvoker" in deploy_sh
 

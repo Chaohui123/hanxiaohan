@@ -172,6 +172,8 @@ describe("Feishu interactive card delivery", () => {
     const request = fetchMock.mock.calls[0][1];
     const body = JSON.parse(request.body);
     expect(body.msg_type).toBe("interactive");
+    expect(body.card.header.template).toBe("blue");
+    expect(body.card.msg_type).toBeUndefined();
     expect(body.timestamp).toBeDefined();
     expect(body.sign).toBeDefined();
   });
